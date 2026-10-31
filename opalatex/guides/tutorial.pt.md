@@ -15,9 +15,9 @@ memória desta conversa.
 O OpalaTex tem três partes trabalhando juntas:
 
 1. **O editor** — editor de código-fonte com pré-visualização do PDF lado a lado,
-   SyncTeX para pular entre o PDF e a linha `.tex` que o gerou, além de um modo rich
-   text, pré-visualização de Markdown, pré-visualização de HTML e um explorador de
-   arquivos.
+   SyncTeX para pular entre o PDF e a linha `.tex` que o gerou, além de modo rich text,
+   modo WYSIWYG de LaTeX baseado em modelo, pré-visualização de Markdown, pré-visualização
+   de HTML e explorador de arquivos.
 2. **O assistente de IA** — um orquestrador de chat que lê e edita seus arquivos, roda
    comandos, pesquisa na web, gera documentos de escritório (.docx, .pptx), faz
    perguntas interativas para tirar dúvidas e delega trabalho especializado para skills
@@ -54,6 +54,11 @@ assistente ou abrir outro shell dentro do app não remove essas restrições.
 Para uma instalação pontual, abra o **terminal do sistema pelo menu do desktop** e
 execute o comando ali. Instalar uma ferramenta no sistema não garante que a edição
 Snap consiga acessá-la.
+
+Nota sobre o sandbox Docker experimental no Snap: o confinamento estrito bloqueia o
+socket do daemon Docker por padrão. Para usar o sandbox Docker na edição Snap, libere o
+acesso executando `sudo snap connect opalatex:docker` no terminal do sistema
+(seu usuário também precisa estar no grupo `docker`).
 
 ### Instalar diretamente no Linux para ter mais liberdade
 
@@ -134,7 +139,7 @@ então atualizar uma chave nas Configurações atualiza todos os projetos automa
 ## project-settings :: O que significa cada configuração e parâmetro de projeto?
 
 As opções de projeto são editadas no diálogo de Configurações do Projeto (ícone de
-engrenagem na barra lateral) e estão organizadas em três abas:
+engrenagem na barra lateral) e estão organizadas em quatro abas:
 
 ### 1. Aba Geral (`geral`)
 
@@ -201,6 +206,13 @@ O projeto configura modelos e parâmetros de execução separados para o **Orque
     (manter o turno aberto sem agir) antes de o OpalaTex exigir a resposta.
   - `debug` — ativa logs detalhados de execução.
   - Limites específicos do Worker: `max_iterations` e `max_tool_calls`.
+
+### 3. Aba Prefixo de Prompt (`prefixo`)
+
+- **Prefixo de Prompt do Usuário (`user_prompt_prefix`)** — instruções personalizadas
+  adicionadas antes da primeira mensagem do usuário em cada conclusão do chat (por exemplo,
+  idioma de preferência, regras de estilo ou orientações gerais). Modifica as respostas do
+  assistente sem alterar o histórico de conversas gravado nem ocupar a memória central.
 
 ## providers :: Como cadastro um provedor e um modelo?
 
@@ -355,6 +367,21 @@ ative `empty_response_reasoning_fallback` nas Configurações do Projeto.
 **Skills** — ative só o que você precisa. Cada skill ativa acrescenta a sua descrição ao
 prompt de sistema, o que custa contexto em todos os turnos.
 
+### Configurações Globais do IDE (ícone de engrenagem no canto inferior esquerdo)
+
+- **Aparência e Editor** — escala da interface (UI Scale), tema claro/escuro, tamanho da
+  fonte, tamanho da tabulação, quebra de linha e minimapa.
+- **Ferramentas Externas** — instalador e verificador de status com um clique para
+  Tectonic e Pandoc.
+- **Produtividade e Mídia**:
+  - Idioma de destino para tradução de trechos selecionados.
+  - Leitura em voz alta / TTS com vozes locais Piper ou OpenAI.
+  - Ditado de áudio por voz com modelos Whisper locais.
+  - Configurações de modelo e pasta para geração de imagens (`generate_image`).
+- **Sandbox Docker (Experimental)** — executa comandos e scripts do assistente dentro
+  de um contêiner Docker isolado em vez do sistema operacional hospedeiro. Por ser um
+  recurso **experimental**, vem desativado por padrão.
+
 ## asset-store :: Como funcionam a Asset Store, as skills e os templates?
 
 A **Asset Store** (ícone de Loja na barra de atividades) é a central para estender o
@@ -470,8 +497,97 @@ avançadas:
 - **Anexos e Entrada Multimodal** — arraste e solte imagens, PDFs, textos ou arquivos de
   dados no chat. O OpalaTex extrai o texto dos documentos ou repassa as imagens a modelos
   com capacidade de visão.
+- **Geração de Imagens por IA (`generate_image`)** — gera figuras, ilustrações e
+  diagramas a partir de descrições textuais diretamente na pasta do projeto (ex.: `figures/`).
+- **Apresentações e Slides (`create_presentation`, `edit_presentation`, `check_presentation`)** —
+  cria e edita apresentações no formato nativo de slides do OpalaTex (`.jpt`), com editor
+  visual e modo de apresentação interativo.
+- **Ações Rápidas na Seleção de Texto** — selecione qualquer trecho no PDF ou no preview
+  para traduzir, ouvir a pronúncia em voz alta ou consultar a IA com um card explicativo.
+- **Ditado por Voz** — dite instruções diretamente na caixa do chat usando reconhecimento
+  de voz local com Whisper.
 - **Painel de Atividades e Pensamentos** — blocos expansíveis "AI Thoughts" nas
   mensagens permitem inspecionar o raciocínio da IA sem poluir o texto final.
+- **Sandbox Docker (Experimental)** — execução opcional e isolada de comandos e scripts
+  dentro de um contêiner Docker montado na pasta do seu projeto.
+
+## docker-sandbox :: O que é o sandbox Docker e como ele funciona?
+
+> **IMPORTANTE: O sandbox Docker é atualmente um recurso EXPERIMENTAL.** Ele vem
+> desativado por padrão e é voltado para quem deseja que os comandos e scripts executados
+> pela IA rodem dentro de um contêiner em vez de diretamente na sua máquina.
+
+### O que ele faz
+
+Quando ativado, os comandos de terminal do assistente (`run_command`), scripts Python
+(`run_python_script`), comandos interativos (`run_interactive_command`) e comandos em
+segundo plano (`run_background_command`) rodam dentro de um **contêiner Docker**, em vez
+de executar diretamente no sistema operacional hospedeiro. Isso vale tanto para o agente
+**Orquestrador** quanto para os sub-agentes **Worker**. O seu próprio terminal integrado
+continua rodando na sua máquina.
+
+Principais características:
+
+- **O que fica isolado** — os processos que o assistente inicia. A pasta do projeto é
+  montada com leitura e escrita em `/workspace`, então arquivos criados ou modificados ali
+  refletem diretamente no seu projeto, e as ferramentas de arquivo do assistente continuam
+  editando o projeto na sua máquina como antes. O sandbox não protege a pasta do projeto
+  em si.
+- **Seus arquivos continuam seus** — no Linux, os comandos rodam com o seu usuário e
+  grupo, então os arquivos que eles criam no projeto pertencem a você (com Docker rootless
+  ou no Windows/macOS o usuário da imagem é mantido, e o Docker já o mapeia para você).
+- **Ambiente persistente** — o OpalaTex mantém um contêiner persistente por projeto
+  (`opalatex-sandbox-<hash>`). Pacotes instalados com `pip` (no diretório do usuário, já
+  que os comandos não rodam como root) continuam disponíveis nos turnos seguintes até o
+  contêiner ser recriado. Execute as ferramentas instaladas com `python3 -m <ferramenta>`.
+  Pacotes do sistema (`apt-get`) exigem uma imagem personalizada que já os contenha.
+- **Modos de rede** — `bridge` (padrão, permite baixar pacotes e acessar APIs externas)
+  ou `none` (sem acesso à internet).
+- **Skills** — as pastas de skills fora do projeto são montadas somente leitura, então os
+  scripts das skills continuam funcionando. Scripts em qualquer outro lugar fora do projeto
+  são recusados: copie-os para o projeto antes.
+- **Ferramentas que não estão na imagem** — Tectonic e Pandoc não ficam dentro do
+  contêiner; a compilação e a exportação da própria IDE continuam usando os da sua máquina.
+
+### Como configurar
+
+Abra as **Configurações** (ícone de engrenagem no canto inferior esquerdo) e role até a
+seção **Sandbox Docker** em Preferências:
+
+1. **Ativar sandbox** — marque "Executar comandos do agente em sandbox Docker".
+2. **Imagem Docker** — escolha a imagem (o padrão é `python:3.12-slim`). Se precisar de
+   ferramentas específicas (como TeX Live completo ou compiladores), você pode indicar uma
+   imagem personalizada.
+3. **Rede** — escolha `bridge` ou `none`.
+4. **Verificação e status**:
+   - Clique em **Verificar Docker** para testar se a CLI do Docker está disponível, se o
+     daemon está respondendo, se as permissões estão corretas e se a imagem já foi baixada.
+   - Se a imagem ainda não tiver sido baixada, clique em **Baixar Imagem Docker**. O
+     sandbox nunca a baixa sozinho no meio de um comando.
+   - Trocar a imagem ou a rede recria o contêiner no próximo comando, descartando o que
+     foi instalado nele.
+   - Se o contêiner estiver em mau estado, ou um comando deixou algo rodando nele, clique
+     em **Recriar Sandbox do Projeto** para recriá-lo do zero.
+
+### Requisitos e resolução de problemas
+
+- **Docker Engine / Desktop** precisa estar instalado e em execução na máquina:
+  - No Linux: seu usuário precisa estar no grupo `docker`
+    (`sudo usermod -aG docker $USER`). **O grupo só passa a valer em uma nova sessão de
+    login**: saia da sessão e entre de novo (ou reinicie o computador). Reiniciar apenas o
+    OpalaTex não basta, porque ele herda os grupos da sessão em que foi aberto.
+  - No Windows/macOS: garanta que o Docker Desktop está em execução e integrado ao WSL2.
+- **Edição Snap**: ao rodar o OpalaTex via Snap, o confinamento estrito bloqueia o socket
+  do Docker por padrão. Execute o comando abaixo em um terminal do sistema para liberar o
+  acesso:
+  ```bash
+  sudo snap connect opalatex:docker
+  ```
+  O snap continua exigindo que seu usuário esteja no grupo `docker`, como acima.
+
+Como esse recurso é **experimental**, a execução local padrão continua sendo o padrão.
+Se encontrar problemas de permissão ou não necessitar de isolamento em contêiner, você pode
+mantê-lo tranquilamente desativado.
 
 ## cloud-for-big-data :: Quando devo usar modelos em nuvem?
 

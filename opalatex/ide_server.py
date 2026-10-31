@@ -6219,6 +6219,61 @@ class AsyncHTTPServer:
                 "translate_target_lang": target_lang,
             }).encode('utf-8'), "application/json")
 
+        elif path == '/api/settings/sandbox' and method == 'GET':
+            from opalatex.sandbox_config import load_config
+            from opalatex.docker_sandbox import verify_docker
+            try:
+                cfg = load_config()
+                status = await asyncio.to_thread(verify_docker)
+                self.send_response(writer, 200, json.dumps({**cfg, "status": status}).encode('utf-8'), "application/json")
+            except Exception as e:
+                self.send_response(writer, 500, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
+
+        elif path == '/api/settings/sandbox' and method == 'POST':
+            from opalatex.sandbox_config import load_config, save_config
+            from opalatex.docker_sandbox import verify_docker
+            try:
+                save_config(data)
+                cfg = load_config()
+                status = await asyncio.to_thread(verify_docker)
+                self.send_response(writer, 200, json.dumps({"success": True, **cfg, "status": status}).encode('utf-8'), "application/json")
+            except Exception as e:
+                self.send_response(writer, 500, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
+
+        elif path == '/api/settings/sandbox/verify' and method == 'POST':
+            from opalatex.docker_sandbox import verify_docker
+            try:
+                status = await asyncio.to_thread(verify_docker)
+                self.send_response(writer, 200, json.dumps({"success": True, "status": status}).encode('utf-8'), "application/json")
+            except Exception as e:
+                self.send_response(writer, 500, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
+
+        elif path == '/api/settings/sandbox/pull' and method == 'POST':
+            from opalatex.docker_sandbox import pull_sandbox_image, verify_docker
+            image = data.get("image")
+            try:
+                ok, msg = await asyncio.to_thread(pull_sandbox_image, image)
+                status = await asyncio.to_thread(verify_docker)
+                self.send_response(writer, 200 if ok else 400, json.dumps({
+                    "success": ok,
+                    "message": msg,
+                    "status": status,
+                }).encode('utf-8'), "application/json")
+            except Exception as e:
+                self.send_response(writer, 500, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
+
+        elif path == '/api/settings/sandbox/recreate' and method == 'POST':
+            from opalatex.docker_sandbox import recreate_project_container
+            project_path = data.get("projectPath") or ""
+            try:
+                ok, msg = await asyncio.to_thread(recreate_project_container, project_path)
+                self.send_response(writer, 200 if ok else 400, json.dumps({
+                    "success": ok,
+                    "message": msg,
+                }).encode('utf-8'), "application/json")
+            except Exception as e:
+                self.send_response(writer, 500, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
+
         elif path == '/api/translate' and method == 'POST':
             from opalatex.translation import execute_translation, resolve_target_language
             from opalatex.ui_settings import load_ui_settings

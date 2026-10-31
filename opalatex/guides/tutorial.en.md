@@ -15,8 +15,8 @@ memory for this conversation.
 OpalaTex has three parts working together:
 
 1. **The editor** — source editor with a PDF preview side by side, SyncTeX to jump
-   between the PDF and the `.tex` line that produced it, plus a rich-text mode, a
-   markdown preview, an HTML preview, and a file explorer.
+   between the PDF and the `.tex` line that produced it, plus rich-text mode, a
+   model-based LaTeX WYSIWYG mode, a markdown preview, an HTML preview, and a file explorer.
 2. **The AI assistant** — a chat orchestrator that reads and edits your files, runs
    commands, searches the web, generates office documents (.docx, .pptx), asks
    interactive clarifying questions, and delegates specialised tasks to skills and
@@ -53,6 +53,11 @@ mode or opening another shell inside the app does not remove these restrictions.
 For an occasional installation, open your **system terminal from the desktop menu**
 and run the command there. Installing a tool on the host does not guarantee that the
 Snap edition will be able to access it.
+
+Note on the experimental Docker sandbox under Snap: strict confinement blocks access to
+the Docker daemon socket by default. To use the Docker sandbox from the Snap edition,
+grant access by running `sudo snap connect opalatex:docker` in your system terminal
+(your user must also be in the `docker` group).
 
 ### Install directly on Linux for more freedom
 
@@ -133,7 +138,7 @@ API key in Settings updates every project automatically without re-entering cred
 ## project-settings :: What are all the project settings and parameters?
 
 Project settings are edited through the Project Settings dialog (gear icon in the
-sidebar) and are organised into three tabs:
+sidebar) and are organised into four tabs:
 
 ### 1. General Tab (`geral`)
 
@@ -195,6 +200,13 @@ Both tabs offer:
     (keep the turn open without acting) before OpalaTex asks it for the answer outright.
   - `debug` — enables verbose agent execution logs.
   - Worker-specific limits: `max_iterations` and `max_tool_calls`.
+
+### 3. Prompt Prefix Tab (`prefixo`)
+
+- **User Prompt Prefix (`user_prompt_prefix`)** — optional custom instructions
+  prepended to the first user message of every chat completion (for example, preferred
+  language, formatting guidelines, project personas). It shapes the assistant's behavior
+  without altering persisted conversation history or consuming core memory space.
 
 ## providers :: How do I register a provider and a model?
 
@@ -340,6 +352,20 @@ thinking variants) and find that it sometimes leaves the response blank, enable
 **Skills** — activate only what you need. Every active skill adds its description to the
 system prompt, which costs context on every single turn.
 
+### Global IDE Settings (gear icon in the bottom-left ActivityBar)
+
+- **Appearance & Editor** — UI scaling, light/dark theme, editor font sizes, tab size,
+  word wrap, and minimap.
+- **External Tools** — one-click installer and status checker for Tectonic and Pandoc.
+- **Productivity & Media**:
+  - Target language for selection translation.
+  - Text-to-speech voice selection (in-process Piper voice models or OpenAI TTS).
+  - Voice dictation via local Whisper models.
+  - Image generation model and output directory settings (`generate_image`).
+- **Docker Sandbox (Experimental)** — execute agent shell commands and scripts inside
+  an isolated Docker container instead of the host machine. Because it is **experimental**,
+  it is disabled by default.
+
 ## asset-store :: How do the Asset Store, skills, and templates work?
 
 The **Asset Store** (Store icon in the ActivityBar) is your hub for extending OpalaTex
@@ -451,8 +477,94 @@ Beyond basic LaTeX file editing, OpalaTex includes powerful built-in tools and c
 - **Attachments & Multimodal Input** — drag and drop images, PDFs, text, or data files
   into the chat. OpalaTex automatically extracts text from documents or forwards images to
   vision-capable models.
+- **AI Image Generation (`generate_image`)** — generate figures, diagrams, and illustrations
+  directly into your project folder from text descriptions.
+- **Presentation Decks (`create_presentation`, `edit_presentation`, `check_presentation`)** —
+  create and edit native OpalaTex presentation slides (`.jpt`) with a visual slide editor
+  and presentation mode.
+- **Selection Snippet Actions** — highlight any passage in the PDF or preview to
+  translate it, pronounce it aloud, or look it up with an instant AI explanation card.
+- **Voice Dictation** — dictate prompts directly into the chat composer using local Whisper
+  speech-to-text.
 - **Diagnostic Activity & Thoughts** — expandable "AI Thoughts" blocks on assistant
   messages let you inspect the model's reasoning trace without cluttering the final text.
+- **Docker Sandbox (Experimental)** — opt-in execution of commands and scripts within an
+  isolated Docker container mounted to your project folder.
+
+## docker-sandbox :: What is the Docker sandbox and how does it work?
+
+> **IMPORTANT: The Docker sandbox is currently an EXPERIMENTAL feature.** It is
+> disabled by default and intended for users who want the commands and scripts the AI
+> runs to execute inside a container instead of directly on their machine.
+
+### What it does
+
+When enabled, the assistant's terminal commands (`run_command`), Python scripts
+(`run_python_script`), interactive commands (`run_interactive_command`) and background
+commands (`run_background_command`) execute inside a **Docker container** instead of
+directly on your host operating system. This applies to both the **Orchestrator** agent
+and **Worker** sub-agents. Your own integrated terminal keeps running on your machine.
+
+Key characteristics:
+
+- **What is isolated** — the processes the assistant starts. Your project directory is
+  mounted read-write at `/workspace`, so files created or modified there reflect directly
+  in your project, and the assistant's file tools keep editing the project on your machine
+  as before. The sandbox does not protect the project folder itself.
+- **Your files stay yours** — on Linux, commands run with your user and group IDs, so
+  files they create in the project belong to you (with rootless Docker or on
+  Windows/macOS the image's user is kept, which Docker already maps to you).
+- **Persistent environment** — OpalaTex maintains a persistent container per project
+  (`opalatex-sandbox-<hash>`). Packages installed with `pip` (into the user site, since
+  commands do not run as root) remain available in later turns until the container is
+  reset. Run installed tools with `python3 -m <tool>`. System packages (`apt-get`) need a
+  custom image that already contains them.
+- **Network modes** — `bridge` (default, allows downloading packages and accessing
+  external APIs) or `none` (no internet access).
+- **Skills** — skill folders outside the project are mounted read-only, so skill scripts
+  still run. Scripts anywhere else outside the project are refused: copy them into the
+  project first.
+- **Tools not in the image** — Tectonic and Pandoc are not inside the container; the
+  IDE's own compile and export keep using the ones on your machine.
+
+### How to configure it
+
+Open **Settings** (gear icon in the lower left) and scroll to the **Docker Sandbox**
+section under Preferences:
+
+1. **Enable toggle** — check "Execute agent commands in Docker sandbox".
+2. **Docker Image** — choose the image (defaults to `python:3.12-slim`). If you need
+   specific tools (like full TeX Live or compilers), you can specify a custom image.
+3. **Network** — select `bridge` or `none`.
+4. **Verification & Status**:
+   - Click **Verify Docker** to test CLI availability, daemon reachability, permissions
+     and whether the image is downloaded.
+   - If the image has not been downloaded yet, click **Pull Docker Image**. The sandbox
+     never downloads it on its own in the middle of a command.
+   - Changing the image or the network recreates the container at the next command,
+     discarding what was installed in it.
+   - If a container gets into a bad state, or a command left something running in it,
+     click **Reset Project Container** to recreate it cleanly.
+
+### Requirements & Troubleshooting
+
+- **Docker Engine / Desktop** must be installed and running on your machine:
+  - On Linux: your user must be in the `docker` group (`sudo usermod -aG docker $USER`).
+    **The group only takes effect in a new login session**: log out and back in (or
+    restart the computer). Restarting OpalaTex alone is not enough, because it inherits
+    the groups of the session it was started from.
+  - On Windows/macOS: make sure Docker Desktop is running and WSL2 backend integration is
+    enabled.
+- **Snap edition**: strict confinement blocks access to the Docker daemon socket by
+  default. Run this command in a system terminal to grant access:
+  ```bash
+  sudo snap connect opalatex:docker
+  ```
+  The snap still needs your user to be in the `docker` group, as above.
+
+Because this feature is **experimental**, standard local execution remains the default.
+If you encounter permission issues or do not need container isolation, you can safely
+leave it disabled.
 
 ## cloud-for-big-data :: When should I use cloud models?
 

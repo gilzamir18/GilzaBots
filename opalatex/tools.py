@@ -1818,46 +1818,71 @@ def _kill_process_tree(proc: subprocess.Popen) -> None:
 
 
 def _run_captured(command: str, timeout_seconds) -> str:
-    """Run *command* in the project through the shell and report it as the command tools do."""
+    """Run *command* in the project through the shell and report it as the command tools do.
+
+    With the Docker sandbox enabled the command runs in the project's container.
+    """
+    from .sandbox_config import is_enabled as sandbox_is_enabled
+
     timeout = _command_timeout(timeout_seconds)
-    group = (
-        {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
-        if os.name == "nt" else {"start_new_session": True}
-    )
-    proc = subprocess.Popen(
-        command,
-        shell=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        stdin=subprocess.DEVNULL,
-        cwd=get_project_path(),
-        env=environment_with_managed_tools(),
-        **utf8_text_kwargs(),
-        **group,
-    )
-    try:
-        out, err = proc.communicate(timeout=timeout)
-    except subprocess.TimeoutExpired:
-        _kill_process_tree(proc)
+    stop_error = None
+    if sandbox_is_enabled():
+        from .docker_sandbox import run_in_sandbox
+
+        res = run_in_sandbox(command, get_project_path(), timeout)
+        out, err, returncode = res["stdout"], res["stderr"], res["exit_code"]
+        timed_out = res.get("error") == "TimeoutExpired"
+        stop_error = res.get("stop_error")
+    else:
+        group = (
+            {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+            if os.name == "nt" else {"start_new_session": True}
+        )
+        proc = subprocess.Popen(
+            command,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            cwd=get_project_path(),
+            env=environment_with_managed_tools(),
+            **utf8_text_kwargs(),
+            **group,
+        )
+        timed_out = False
         try:
-            out, err = proc.communicate(timeout=10)
+            out, err = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            out, err = "", ""
+            timed_out = True
+            _kill_process_tree(proc)
+            try:
+                out, err = proc.communicate(timeout=10)
+            except subprocess.TimeoutExpired:
+                out, err = "", ""
+        returncode = proc.returncode
+    if timed_out:
         partial = ""
         if (out or "").strip():
             partial += "\nstdout before the timeout:\n" + _fit_command_output(out, "stdout")
         if (err or "").strip():
             partial += "\nstderr before the timeout:\n" + _fit_command_output(err, "stderr")
+        if stop_error:
+            stopped = (
+                ". Its processes inside the Docker sandbox could not be stopped "
+                f"({stop_error}) and may still be running; resetting the project "
+                "container in Settings ends them."
+            )
+        else:
+            stopped = " and was stopped, together with every process it started."
         raise ValueError(
-            f"Error: Command timed out after {timeout} seconds and was stopped, together with "
-            "every process it started. Pass a larger timeout_seconds (up to "
-            f"{_COMMAND_TIMEOUT_MAX}) for a long build or test run; start a server or watcher "
-            "with run_background_command instead." + partial
+            f"Error: Command timed out after {timeout} seconds{stopped} Pass a larger "
+            f"timeout_seconds (up to {_COMMAND_TIMEOUT_MAX}) for a long build or test run; "
+            "start a server or watcher with run_background_command instead." + partial
         )
     result = {
         "stdout": _fit_command_output(out, "stdout"),
         "stderr": _fit_command_output(err, "stderr"),
-        "exit_code": proc.returncode,
+        "exit_code": returncode,
     }
     return json.dumps({"result": json.dumps(result, indent=2)})
 
@@ -1883,8 +1908,18 @@ async def run_background_command(command: str) -> str:
     # A front-end without the IDE's terminal runs the command itself.
     from opalatex.agent_stdin import background_command_runner
     runner = background_command_runner()
+
+    command_line = command
+    from .sandbox_config import is_enabled as sandbox_is_enabled
+    if sandbox_is_enabled():
+        from .docker_sandbox import sandbox_terminal_command
+        # Only the IDE's terminal is a TTY; the CLI's runner has no input at all.
+        command_line, _script = await asyncio.to_thread(
+            sandbox_terminal_command, command, cwd, runner is None
+        )
+
     if runner is not None:
-        return await runner(command, cwd)
+        return await runner(command_line, cwd)
 
     def send():
         from .local_auth import local_api_connection
@@ -1892,7 +1927,7 @@ async def run_background_command(command: str) -> str:
         req = urllib.request.Request(
             base_url + "/api/terminal/input",
             data=json.dumps({
-                "action": "input", "text": f"{command}\r",
+                "action": "input", "text": f"{command_line}\r",
                 "term_id": "main", "projectPath": cwd,
             }).encode("utf-8"),
             headers={"Content-Type": "application/json", "Cookie": cookie},
@@ -1923,7 +1958,14 @@ def run_python_script(script_path: str, args: str = "", timeout_seconds: int = _
     except Exception as e:
         raise ValueError(f"Error resolving path: {e}")
 
-    cmd = f'"{sys.executable}" "{resolved}" {args}'.strip()
+    from .sandbox_config import is_enabled as sandbox_is_enabled
+    if sandbox_is_enabled():
+        from .docker_sandbox import container_path
+        # python3 is the name every image with Python has; Debian's has no `python`.
+        cmd = f'python3 "{container_path(resolved, get_project_path())}" {args}'.strip()
+    else:
+        cmd = f'"{sys.executable}" "{resolved}" {args}'.strip()
+
     AGENT_PROGRESS.update("run_python_script", f"$ {_preview(cmd)}")
     try:
         return _run_captured(cmd, timeout_seconds)
@@ -1940,13 +1982,28 @@ async def run_interactive_command(command: str) -> str:
     AGENT_PROGRESS.update("interactive_cmd", _preview(command))
     term_id = "temp_" + str(uuid.uuid4())[:8]
 
+    actual_command = command
+    script = None
+    from .sandbox_config import is_enabled as sandbox_is_enabled
+    if sandbox_is_enabled():
+        from .docker_sandbox import sandbox_terminal_command
+        actual_command, script = await asyncio.to_thread(
+            sandbox_terminal_command, command, get_project_path(), True
+        )
+
     # Trigger the interactive terminal modal in the UI
-    res = await T.a_interactive_terminal(command, term_id)
-    
+    try:
+        res = await T.a_interactive_terminal(actual_command, term_id)
+    finally:
+        # The script removes itself when it runs; this covers a cancelled terminal.
+        if script and os.path.exists(script):
+            os.remove(script)
+
     if res and res.lower() not in ("cancel", "no", "false"):
         return f"SUCCESS: The interactive command '{command}' finished successfully according to the user."
     else:
         return f"FAILURE: The user indicated that the interactive command '{command}' failed or was cancelled. Please ask the user for details if needed."
+
 
 @opalatex_tool(
     name="search_code",

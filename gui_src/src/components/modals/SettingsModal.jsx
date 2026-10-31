@@ -99,6 +99,14 @@ export default function SettingsModal({
   const [dictationBusy, setDictationBusy] = React.useState('');
   const [isRestarting, setIsRestarting] = React.useState(false);
   const [runtimeInfo, setRuntimeInfo] = React.useState({ platform: '', running_in_snap: false, version: '0.2.26' });
+  const [sandbox, setSandbox] = React.useState({
+    enabled: false,
+    image: 'python:3.12-slim',
+    network: 'bridge',
+  });
+  const [sandboxStatus, setSandboxStatus] = React.useState(null);
+  const [sandboxBusy, setSandboxBusy] = React.useState(false);
+  const [sandboxMessage, setSandboxMessage] = React.useState('');
 
   const activeTab = (settingsTab === 'preferences' || !['general', 'dependencies', 'about'].includes(settingsTab))
     ? 'general'
@@ -204,6 +212,16 @@ export default function SettingsModal({
       .then(r => r.ok ? r.json() : null)
       .then(info => {
         if (info) setRuntimeInfo(previous => ({ ...previous, ...info }));
+      })
+      .catch(() => { });
+
+    fetch('/api/settings/sandbox')
+      .then(r => r.ok ? r.json() : null)
+      .then(cfg => {
+        if (!cfg) return;
+        const { status, ...rest } = cfg;
+        setSandbox(prev => ({ ...prev, ...rest }));
+        if (status) setSandboxStatus(status);
       })
       .catch(() => { });
   }, []);
@@ -348,6 +366,76 @@ export default function SettingsModal({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt_evolution_iterations: numIterations, prompt_evolution_max_tokens: numMaxTokens }),
     }).catch(() => { });
+  };
+
+  const saveSandboxSettings = (next) => {
+    setSandbox(next);
+    fetch('/api/settings/sandbox', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(next),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.status) setSandboxStatus(data.status);
+      })
+      .catch(() => { });
+  };
+
+  const handleVerifySandbox = async () => {
+    setSandboxBusy(true);
+    setSandboxMessage('');
+    try {
+      const res = await fetch('/api/settings/sandbox/verify', { method: 'POST' });
+      const data = await res.json();
+      if (data?.status) {
+        setSandboxStatus(data.status);
+        if (data.status.ready) {
+          setSandboxMessage(t('settingsModal.sandboxReady', 'Docker sandbox is verified and operational.'));
+        }
+      }
+    } catch (err) {
+      setSandboxMessage(t('settingsModal.sandboxVerifyFailed', 'Verification failed: ') + String(err));
+    } finally {
+      setSandboxBusy(false);
+    }
+  };
+
+  const handlePullSandboxImage = async () => {
+    setSandboxBusy(true);
+    setSandboxMessage('');
+    try {
+      const res = await fetch('/api/settings/sandbox/pull', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: sandbox.image }),
+      });
+      const data = await res.json();
+      if (data?.status) setSandboxStatus(data.status);
+      if (data?.message) setSandboxMessage(data.message);
+    } catch (err) {
+      setSandboxMessage(t('settingsModal.sandboxPullFailed', 'Pull failed: ') + String(err));
+    } finally {
+      setSandboxBusy(false);
+    }
+  };
+
+  const handleRecreateSandbox = async () => {
+    setSandboxBusy(true);
+    setSandboxMessage('');
+    try {
+      const res = await fetch('/api/settings/sandbox/recreate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectPath: '' }),
+      });
+      const data = await res.json();
+      if (data?.message) setSandboxMessage(data.message);
+    } catch (err) {
+      setSandboxMessage(String(err));
+    } finally {
+      setSandboxBusy(false);
+    }
   };
 
   // Saving OPALATEX_HOME only takes effect on the next launch, so the user is
@@ -991,6 +1079,142 @@ export default function SettingsModal({
                 )}
                 <span style={{ fontSize: '11px', color: 'var(--vscode-descriptionForeground)' }}>
                   {t('settingsModal.imageGenerationHint')}
+                </span>
+              </div>
+
+              {/* Docker Sandbox */}
+              <div className="flex flex-col" style={{ gap: '8px', borderTop: '1px solid var(--vscode-border)', paddingTop: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <label className="vscode-sidebar-section-title" style={{ padding: 0 }}>{t('settingsModal.sandboxTitle', 'Docker Sandbox')}</label>
+                  {sandboxStatus && (
+                    <span style={{
+                      fontSize: '11px',
+                      padding: '2px 8px',
+                      borderRadius: '10px',
+                      fontWeight: 600,
+                      backgroundColor: sandboxStatus.ready ? 'rgba(78, 201, 176, 0.15)' : 'rgba(244, 71, 71, 0.15)',
+                      color: sandboxStatus.ready ? 'var(--battery-good, #4ec9b0)' : 'var(--battery-critical, #f44747)',
+                    }}>
+                      {sandboxStatus.ready ? t('settingsModal.sandboxStatusReady', 'Ready') : t('settingsModal.sandboxStatusIssue', 'Needs Attention')}
+                    </span>
+                  )}
+                </div>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--vscode-text-fg)' }}>
+                  <input
+                    type="checkbox"
+                    checked={!!sandbox.enabled}
+                    onChange={(e) => saveSandboxSettings({ ...sandbox, enabled: e.target.checked })}
+                  />
+                  {t('settingsModal.sandboxEnabled', 'Execute agent commands in Docker sandbox (Orchestrator & Worker)')}
+                </label>
+
+                <div className="flex" style={{ gap: '8px' }}>
+                  <div className="flex flex-col" style={{ gap: '4px', flex: 2 }}>
+                    <label style={{ fontSize: '11px', color: 'var(--vscode-text-subtle)' }}>
+                      {t('settingsModal.sandboxImage', 'Docker Image')}
+                    </label>
+                    <input
+                      type="text"
+                      className="vscode-settings-input"
+                      value={sandbox.image || ''}
+                      placeholder="python:3.12-slim"
+                      onChange={(e) => setSandbox({ ...sandbox, image: e.target.value })}
+                      onBlur={() => saveSandboxSettings(sandbox)}
+                    />
+                  </div>
+                  <div className="flex flex-col" style={{ gap: '4px', flex: 1 }}>
+                    <label style={{ fontSize: '11px', color: 'var(--vscode-text-subtle)' }}>
+                      {t('settingsModal.sandboxNetwork', 'Network')}
+                    </label>
+                    <select
+                      className="vscode-settings-input"
+                      value={sandbox.network || 'bridge'}
+                      onChange={(e) => saveSandboxSettings({ ...sandbox, network: e.target.value })}
+                    >
+                      <option value="bridge">bridge (Internet)</option>
+                      <option value="none">none (Isolated)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
+                  <button
+                    type="button"
+                    className="vscode-button"
+                    disabled={sandboxBusy}
+                    onClick={handleVerifySandbox}
+                  >
+                    {sandboxBusy ? t('settingsModal.sandboxChecking', 'Checking...') : t('settingsModal.sandboxVerifyBtn', 'Verify Docker')}
+                  </button>
+
+                  {sandboxStatus && !sandboxStatus.image_found && sandboxStatus.daemon_running && (
+                    <button
+                      type="button"
+                      className="vscode-button"
+                      disabled={sandboxBusy}
+                      onClick={handlePullSandboxImage}
+                    >
+                      {sandboxBusy ? t('settingsModal.sandboxPulling', 'Pulling...') : t('settingsModal.sandboxPullBtn', 'Pull Docker Image')}
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    className="vscode-button secondary"
+                    style={{ background: 'transparent', border: '1px solid var(--vscode-border)', color: 'var(--vscode-text-fg)' }}
+                    disabled={sandboxBusy}
+                    onClick={handleRecreateSandbox}
+                  >
+                    {t('settingsModal.sandboxRecreateBtn', 'Reset Project Container')}
+                  </button>
+                </div>
+
+                {sandboxStatus && sandboxStatus.problem && (
+                  <div style={{
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    backgroundColor: 'rgba(244, 71, 71, 0.12)',
+                    border: '1px solid rgba(244, 71, 71, 0.3)',
+                    fontSize: '11px',
+                    color: 'var(--vscode-text-fg)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                  }}>
+                    <span>{sandboxStatus.problem}</span>
+                    {sandboxStatus.action_command && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <code style={{
+                          backgroundColor: 'var(--vscode-input-bg, #1e1e2e)',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          userSelect: 'all',
+                        }}>
+                          {sandboxStatus.action_command}
+                        </code>
+                        <button
+                          type="button"
+                          className="vscode-button"
+                          style={{ padding: '2px 8px', fontSize: '11px' }}
+                          onClick={() => writeClipboard(sandboxStatus.action_command)}
+                        >
+                          {t('common.copy', 'Copy')}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {sandboxMessage && (
+                  <span role="status" style={{ fontSize: '11px', color: 'var(--battery-good)' }}>
+                    {sandboxMessage}
+                  </span>
+                )}
+
+                <span style={{ fontSize: '11px', color: 'var(--vscode-descriptionForeground)' }}>
+                  {t('settingsModal.sandboxHint', 'When enabled, the commands and scripts the Orchestrator and Worker run execute inside a persistent Docker container with the project mounted at /workspace. Changing the image or network recreates the container on the next command, discarding what was installed in it.')}
                 </span>
               </div>
 

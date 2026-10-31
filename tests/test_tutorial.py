@@ -74,8 +74,17 @@ def test_guide_covers_the_topics_the_tutorial_promises(lang):
     assert {
         "providers", "models", "settings", "projects",
         "project-settings", "asset-store", "tools-features",
-        "local-models", "local-skills", "cloud-for-big-data",
+        "docker-sandbox", "local-models", "local-skills", "cloud-for-big-data",
     } <= ids
+
+
+@pytest.mark.parametrize("lang", ["en", "pt"])
+def test_docker_sandbox_topic_clarifies_experimental_status(lang):
+    """The user requires making it clear that Docker sandbox is experimental."""
+    topic = get_topic("docker-sandbox", lang)
+    assert topic is not None, f"[{lang}] topic 'docker-sandbox' missing"
+    answer = topic["answer"]
+    assert "experimental" in answer.lower(), f"[{lang}] 'docker-sandbox' answer must state it is experimental"
 
 
 @pytest.mark.parametrize("lang", ["en", "pt"])

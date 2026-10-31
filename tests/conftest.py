@@ -41,3 +41,17 @@ def _english_backend_messages():
     set_lang("en")
     yield
     set_lang("en")
+
+
+@pytest.fixture(autouse=True)
+def _isolated_sandbox_config(monkeypatch, tmp_path_factory):
+    """Read the Docker sandbox settings from an empty home in every test.
+
+    `opalatex.sandbox_config` reads `<opalatex home>/sandbox.json` on every
+    command, so a machine whose real settings enable the sandbox sent every
+    `run_command` test into Docker (or failed it where Docker is unreachable).
+    """
+    from opalatex import sandbox_config
+
+    home = str(tmp_path_factory.mktemp("sandbox-home"))
+    monkeypatch.setattr(sandbox_config, "get_opalatex_home", lambda: home)
