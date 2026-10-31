@@ -59,12 +59,13 @@ def fake_compiler(monkeypatch):
 # registration and authority
 # ---------------------------------------------------------------------------
 
-def test_compile_latex_is_a_workspace_action_for_workers_and_custom_agents():
+def test_compile_latex_is_a_workspace_action_for_the_main_agent_and_custom_agents():
     from opalatex.agent_stdin import ALL_TOOLS_MAP
-    from opalatex.tools import get_available_tools, get_workspace_action_tools
+    from opalatex.tools import get_helper_tools, get_workspace_action_tools
 
     assert "compile_latex" in {t.name for t in get_workspace_action_tools()}
-    assert "compile_latex" in {t.name for t in get_available_tools()}
+    # Compiling checks a change, and changes are the main agent's.
+    assert "compile_latex" not in {t.name for t in get_helper_tools()}
     assert "compile_latex" in ALL_TOOLS_MAP
 
 
@@ -301,8 +302,6 @@ def _read(*parts):
     [
         ("skills", "chat-orchestrator", "SKILL.md"),
         ("skills", "chat-orchestrator", "SKILL.light.md"),
-        ("skills", "chat-orchestrator", "SKILL.delegate.md"),
-        ("skills", "chat-orchestrator", "SKILL.light-delegate.md"),
         ("skills", "command-line", "SKILL.md"),
         ("skills", "command-line", "SKILL.light.md"),
         ("skills", "latex-assistant", "SKILL.md"),

@@ -1,17 +1,20 @@
 """MemGPT runtime for the skills-oriented architecture (docs/specs/02, 06).
 
-This module assembles the fixed **MemGPT chat-orchestrator** and the machinery it
-uses to delegate work to skills:
+This module assembles the **main agent** -- the fixed MemGPT chat-orchestrator,
+which does the user's task -- and the two ways skills extend it (PROJECT_DESIGN
+2.23):
 
+  - ``build_load_skill_tool(project_path)`` returns a ``load_skill`` tool: the
+    instructions of a skill the main agent carries out itself, with its own tools.
   - ``build_run_skill_tool(memgpt, project_path)`` returns a ``run_skill`` tool
-    bound to a MemGPT instance. When the MemGPT calls it, an ephemeral sub-agent
-    (LLMAgentBlock) is spawned with the skill's SKILL.md body as its system prompt
-    and the workflow tools available. The worker reports back as normal text,
-    which ``run_skill`` buffers into its tool result.
+    bound to a MemGPT instance. When the MemGPT calls it, an ephemeral helper
+    (LLMAgentBlock) is spawned with the helper skill's SKILL.md body as its system
+    prompt and the helper toolset. The helper returns data as normal text, which
+    ``run_skill`` hands back with the tool calls that failed on the way.
   - ``build_chat_orchestrator(project, store)`` builds the MemGPT itself: the
     framework ``MemGPTAgentBlock`` primed with the ``chat-orchestrator`` SKILL.md,
-    the Level-1 metadata of the active skills, the ``run_skill`` tool, and the
-    memory tools.
+    the catalog of the active skills, the workspace tools, ``load_skill``,
+    ``run_skill``, and the memory tools.
 
 The module is additive: the legacy intent-routing path in cli.py is untouched
 until the REPL is switched over (Phase 4).
@@ -57,6 +60,9 @@ from .config import (
     get_project_agent_params,
 )
 from .skills import (
+    HELPER_ROLE,
+    INSTRUCTIONS_ROLE,
+    skill_role,
     active_skills,
     find_skill_dir,
     level1_metadata,
@@ -64,7 +70,7 @@ from .skills import (
     MANDATORY_SKILLS,
 )
 
-from .tools import get_available_tools
+from .tools import get_helper_tools
 from .project import tutorial_chat_id
 from .prompt_profiles import ACHIEVEMENTS_POLICY
 from .think_stream import InlineReasoningStreamSplitter
@@ -227,6 +233,54 @@ def _is_broken_serialization(text: str) -> bool:
     return False
 
 
+#: Opens the helper's report inside a run_skill result. `agent_stdin` extracts
+#: the report by it, and also accepts LEGACY_WORKER_REPORT_MARKER, which the
+#: results stored in chats from before helpers existed carry.
+HELPER_REPORT_MARKER = "Helper's report:"
+LEGACY_WORKER_REPORT_MARKER = "Worker's summary/report:"
+
+#: How many failed tool calls a run_skill result lists before summarising.
+MAX_REPORTED_TOOL_ERRORS = 5
+
+
+def _helper_tool_error_notes(records, limit: int = MAX_REPORTED_TOOL_ERRORS) -> str:
+    """The tool calls of a helper run that failed, and what the helper did next.
+
+    The helper's report is its own account, and the error it received told it
+    to correct the error silently, so a recovered error is usually missing from
+    it -- and an unrecovered one may be too. This lists the facts the runtime
+    recorded (`AgentOutput.tool_calls`): each failure, then how many calls the
+    helper made after it and how many of those were successful calls of the same
+    tool. It does not judge whether the helper recovered; that is the report's
+    to say, and the main agent weighs the two.
+    """
+    records = list(records or [])
+    failures = [r for r in records if not getattr(r, "ok", True)]
+    if not failures:
+        return ""
+    lines = []
+    for record in failures[:limit]:
+        later = [r for r in records if r.index > record.index]
+        same_ok = sum(1 for r in later if r.ok and r.tool == record.tool)
+        error = " ".join(str(record.error or "").split())
+        if len(error) > 240:
+            error = error[:240] + "..."
+        if later:
+            after = (
+                f"the helper made {len(later)} more tool call(s) after it, "
+                f"{same_ok} of them a successful {record.tool}"
+            )
+        else:
+            after = "it was the helper's last tool call"
+        lines.append(f"- call {record.index} {record.tool} failed: {error} -- {after}")
+    if len(failures) > limit:
+        lines.append(f"- and {len(failures) - limit} more failed tool call(s)")
+    return (
+        "\n\n[Tool errors in this helper run -- recorded facts, not a verdict; the report above "
+        "says what the helper achieved]\n" + "\n".join(lines)
+    )
+
+
 def _is_failed_worker_result(result: Any) -> bool:
     text = str(result or "")
     if not text.strip():
@@ -236,6 +290,7 @@ def _is_failed_worker_result(result: Any) -> bool:
         "[critical worker crash]" in lowered
         or "[aviso: o worker terminou sem um resumo claro" in lowered
         or "tools used by worker: 0" in lowered
+        or "tool calls made by the helper: 0" in lowered
         or "0 chamadas de ferramenta" in lowered
         or "tool-call json parsing failed" in lowered
         or "worker protocol error" in lowered
@@ -351,6 +406,96 @@ def resolve_skill_model(skill_meta: dict, project_model: str | None,
     return raw
 
 
+def _helper_vision_params(project, model: str) -> dict:
+    """The parameters that declare *model*'s vision for a helper running on it.
+
+    `force_vision` is the user's statement about one model, so it is read from
+    the parameters that belong to that model: the project's main ones when the
+    helper runs on the main model (a skill with `model: default`), its worker
+    ones otherwise -- falling back to the main ones exactly as
+    `get_agent_llm_kwargs` does for the "worker" role when a project has no
+    worker parameters.
+    """
+    main_params = dict(getattr(project, "model_params", None) or {})
+    if model and model == (getattr(project, "model", "") or ""):
+        return main_params
+    worker_params = getattr(project, "worker_model_params", None) or {}
+    return dict(worker_params) if worker_params else main_params
+
+
+def _helper_model_for(skill_meta: dict, project_model: str | None,
+                      project_worker: str | None) -> str:
+    """The model a helper skill runs on, before provider routing.
+
+    One resolution for the catalog the main agent reads and for `run_skill`,
+    so the model -- and the vision -- it is told about is the one that runs.
+    """
+    return get_agent_model("worker", resolve_skill_model(skill_meta, project_model, project_worker))
+
+
+def _skill_catalog(skills: list[dict], project_model: str | None,
+                   project_worker: str | None, project) -> str:
+    """The two skill lists of the main agent's prompt (PROJECT_DESIGN 2.23).
+
+    Helpers carry their model and whether it accepts images, so the main agent
+    sends image work only where it can be seen. A skill whose `role` is neither
+    value is listed as unusable, with the reason, instead of being dropped: a
+    skill the user enabled that silently vanishes is harder to diagnose than one
+    that says what is wrong with it.
+    """
+    from .config import model_supports_vision
+
+    helpers, instructions, invalid = [], [], []
+    for skill in skills:
+        role = skill_role(skill)
+        description = str(skill.get("description", "") or "").strip()
+        if role == HELPER_ROLE:
+            model = _helper_model_for(skill, project_model, project_worker)
+            vision = "yes" if model_supports_vision(model, _helper_vision_params(project, model)) else "no"
+            helpers.append(f"- {skill['name']}: {description} [model: {model or '(none)'}; vision: {vision}]")
+        elif role == INSTRUCTIONS_ROLE:
+            instructions.append(f"- {skill['name']}: {description}".rstrip())
+        else:
+            invalid.append(
+                f"- {skill['name']}: unusable -- its SKILL.md declares role '{role}', and only "
+                f"'{HELPER_ROLE}' or '{INSTRUCTIONS_ROLE}' is accepted."
+            )
+    blocks = [
+        "## Helpers (delegate with run_skill)\n"
+        "Each helper is an ephemeral agent that does an auxiliary job and returns data; it never "
+        "changes project files. Its model is shown, and whether that model can see images: send "
+        "image work only to a helper with `vision: yes`, or look at the image yourself with "
+        "`analyze_image`.\n"
+        + ("\n".join(helpers) if helpers else "(none active)"),
+        "## Skills you carry out yourself (load with load_skill)\n"
+        "`load_skill(name)` returns the skill's instructions; you then do the work with your own tools.\n"
+        + ("\n".join(instructions) if instructions else "(none active)"),
+    ]
+    if invalid:
+        blocks.append("## Skills that cannot be used\n" + "\n".join(invalid))
+    return "\n\n".join(blocks) + "\n"
+
+
+#: How much auxiliary work the main agent hands to helpers, by policy
+#: (`config.model_orchestrator_policy`). Both policies hold the same tools.
+_HELPER_POLICY_BLOCKS = {
+    "direct": (
+        "## Your helper policy: direct\n"
+        "You read and search with your own tools. Call a helper when an auxiliary job will not fit "
+        "your context or a helper is built for it: full coverage of a file too large to read, "
+        "condensing a large log, research across several web sources.\n"
+    ),
+    "delegate": (
+        "## Your helper policy: delegate\n"
+        "Hand auxiliary work to helpers by default and keep your own context for the task: reading "
+        "or summarising long documents, extracting parts of a file, condensing logs, researching "
+        "the web. Helpers usually run on a smaller model, so this saves your tokens. Read yourself "
+        "only the exact passages you are about to change or quote. Every change to the project is "
+        "still yours to make: helpers return data, never edits.\n"
+    ),
+}
+
+
 # ---------------------------------------------------------------------------
 # run_skill tool
 # ---------------------------------------------------------------------------
@@ -411,11 +556,12 @@ def build_run_skill_tool(
     @as_tool(
         name="run_skill",
         description=(
-            "Delegate the current task to a registered skill AFTER requirements and user intent are clear. "
-            "DO NOT call run_skill on broad, generic, or open-ended user requests (such as 'analise o log', 'melhore o texto', 'processe o arquivo') "
-            "before asking the user for their desired focus/preferences via ask_question first. "
-            "Pass the skill name (matching one of the active skills under 'Available skills') and a context string. "
-            "CRITICAL: You must ONLY call run_skill with a skill name explicitly listed in 'Available skills'. Do NOT invent skill names."
+            "Delegate an auxiliary job to a helper listed under 'Helpers' AFTER requirements and user intent are clear: "
+            "reading or summarising a long document, extracting parts of a file, condensing a log, researching the web. "
+            "The helper is an ephemeral agent that returns data and never changes project files; you act on what it returns. "
+            "Pass the helper's name and a context string with everything it needs (paths, the exact question, the format to return). "
+            "DO NOT call run_skill on broad, generic, or open-ended user requests before asking the user for their focus via ask_question. "
+            "CRITICAL: Only names listed under 'Helpers' are accepted. A skill listed for load_skill is carried out by you, not delegated."
         ),
     )
     async def run_skill(skill_name: str, context: str) -> str:
@@ -428,7 +574,7 @@ def build_run_skill_tool(
         if getattr(_project_ref, "mode", "auto") == "plan":
             return (
                 "[BLOCKED] run_skill is not available while the project is in plan mode. "
-                "Do not delegate to a worker or edit files yet. Gather any remaining context "
+                "Do not delegate to a helper or edit files yet. Gather any remaining context "
                 "with safe read-only tools, then call create_plan with the proposed plan. "
                 "Only after the user approves the plan may you execute it."
             )
@@ -439,47 +585,33 @@ def build_run_skill_tool(
         #print(f"{'-'*75}\n")
 
         # Delegating to yourself is not delegation: it would spawn a sub-agent
-        # carrying this same orchestrator body, with a worker toolset and no
-        # run_skill of its own. It is never what the caller meant.
-        if skill_name == CHAT_ORCHESTRATOR_SKILL:
-            targets = [
+        # carrying this same body, with a helper toolset and no run_skill of its
+        # own. It is never what the caller meant.
+        def _active_helpers() -> list[str]:
+            return [
                 s["name"] for s in active_skills(project_path)
-                if s["name"] != CHAT_ORCHESTRATOR_SKILL
+                if s["name"] != CHAT_ORCHESTRATOR_SKILL and skill_role(s) == HELPER_ROLE
             ]
+
+        if skill_name == CHAT_ORCHESTRATOR_SKILL:
             return (
-                f"[ERROR] '{CHAT_ORCHESTRATOR_SKILL}' is you, not a delegation target. "
-                f"Do the work with your own tools, or delegate to one of: {targets}."
+                f"[ERROR] '{CHAT_ORCHESTRATOR_SKILL}' is you, not a helper. "
+                f"Do the work with your own tools, or delegate an auxiliary job to one of: {_active_helpers()}."
             )
 
         skill_dir = find_skill_dir(skill_name, project_path)
         if skill_dir is None:
-            active = [
-                s["name"] for s in active_skills(project_path)
-                if s["name"] != CHAT_ORCHESTRATOR_SKILL
-            ]
-            # The closing advice has to match this orchestrator's real toolset
-            # (PROJECT_DESIGN 2.6): under "direct" it can write and run commands
-            # itself, so sending it to 'command-line' for that would be a
-            # needless round-trip; under "delegate" that skill is its only route.
-            from .tools import caller_has_terminal
-            fallback = (
-                "If you need to list, search, read, write, or run something directly, use your "
-                "own direct tools (e.g. get_project_overview, search_code, read_file, "
-                "write_file, run_command)."
-                if caller_has_terminal() else
-                "If you need to list, search, or read files directly, use your own direct tools "
-                "(e.g. get_project_overview, search_code, read_file), and delegate anything that "
-                "writes or runs to the 'command-line' skill."
-            )
             return (
                 f"[ERROR] Skill '{skill_name}' was not found / is not active. "
-                # No create_plan here: plan mode returned [BLOCKED] above, so this
-                # message is only ever read in modes where create_plan is absent.
                 f"You MUST NOT invent skill names. Your own tools (read_file, search_code, "
                 f"get_project_overview, web_search, ...) are tools you call "
-                f"directly — they are never skill names. The only active skills you can "
-                f"delegate to are: {active}. "
-                f"{fallback}"
+                f"directly — they are never skill names. The only helpers you can "
+                f"delegate to are: {_active_helpers()}. "
+                # No create_plan here: plan mode returned [BLOCKED] above, so this
+                # message is only ever read in modes where the main agent writes
+                # and runs commands itself.
+                "To list, search, read, write, or run something, use your own tools "
+                "(e.g. get_project_overview, search_code, read_file, edit_file, write_file, run_command)."
             )
         meta = parse_skill_md(skill_dir)
         if meta is None:
@@ -500,7 +632,24 @@ def build_run_skill_tool(
                     meta["body"] = parent_meta["body"] + "\n\n" + meta["body"]
         # >> INHERITANCE LOGIC END <<
 
-        model = resolve_skill_model(meta, project_model, project_worker)
+        # Only a helper runs here; an instructions skill is the main agent's to
+        # carry out (PROJECT_DESIGN 2.23). Refused with the route that works,
+        # never run anyway as a helper with the wrong toolset.
+        role = skill_role(meta)
+        if role == INSTRUCTIONS_ROLE:
+            return (
+                f"[ERROR] '{skill_name}' is not a helper: it is a skill you carry out yourself. "
+                f"Call load_skill('{skill_name}') to read its instructions, then do the work "
+                "with your own tools."
+            )
+        if role != HELPER_ROLE:
+            return (
+                f"[ERROR] '{skill_name}' cannot run: its SKILL.md declares role '{role}', and only "
+                f"'{HELPER_ROLE}' or '{INSTRUCTIONS_ROLE}' is accepted. Tell the user the skill's "
+                "SKILL.md needs fixing."
+            )
+
+        model = _helper_model_for(meta, project_model, project_worker)
 
         # Write the request to a fixed temp file so the sub-agent never has to
         # shell-quote a complex request (parens/quotes in the request would break
@@ -563,7 +712,10 @@ def build_run_skill_tool(
         # isolated reasoning channel to publish.
         worker_publishes_reasoning = bool(worker_kwargs.get("think"))
 
-        model = get_agent_model("worker", model)
+        # Decided on the catalog name, before provider routing, exactly as the
+        # catalog the main agent read decided it (`_skill_catalog`).
+        from .config import model_supports_vision
+        helper_vision = model_supports_vision(model, _helper_vision_params(_project_ref, model))
 
         # Resolved before the ollama_chat/ remap below, so the models_store lookup
         # (keyed on the stored "ollama/<name>" id) still matches.
@@ -600,25 +752,25 @@ def build_run_skill_tool(
             _NATIVE_TOOL_CALL_REMINDER if _needs_native_tool_call_reminder(model) else ""
         )
 
-        # Workers receive action tools only and return their final report as normal text.
+        # Helpers get the helper toolset and return their report as normal text.
         # Resolved before the prompt, which lists exactly these tools -- including
-        # the front-end filter, so the worker's prompt and its toolset agree.
+        # the front-end filter, so the helper's prompt and its toolset agree.
         from .prompt_surface import tools_for_surface
-        tools = tools_for_surface(list(get_available_tools()))
+        tools = tools_for_surface(list(get_helper_tools(vision=helper_vision)))
 
         system = (
             worker_profile_spec["worker_intro"]()
             + worker_profile_spec["worker_tools_block"](tools)
             + "# Metadata: "
             + f"{meta['body']}\n\n"
-            + f"You are executing the '{skill_name}' skill. "
-            + f"Work inside the project directory: {project_path}\n"
+            + f"You are carrying out the '{skill_name}' helper skill. "
+            + f"The project directory is: {project_path}\n"
+            + f"Your scratch area is: {os.path.join(project_path, '.opalatex')}\n"
             + f"The skill directory is: {skill_dir}\n"
             + f"{scripts_hint}"
             + f"{request_hint}"
-            + "IMPORTANT: Write file content (HTML, JSON, code, Markdown, etc.) only through the file tools, "
-            + "never by echoing it through run_command: write_file to create a file or replace a small one, "
-            + "edit_file (an exact passage, found by its text), replace_content_range or write_content_pos to change part of an existing file. "
+            + "IMPORTANT: Write scratch files (notes, plans, JSON) only through the file tools, "
+            + "never by echoing them through run_command. "
             + worker_profile_spec["worker_recommendations"]()
             + worker_profile_spec["achievements_instructions"]()
             + f"{native_tool_instruction}"
@@ -748,7 +900,7 @@ def build_run_skill_tool(
         if previous_runs:
             previous_runs_block = f"\n[PREVIOUS ATTEMPTS HISTORY]\nYou have been called before in this session for the '{skill_name}' skill. Do NOT repeat failed approaches. Here are your previous attempts:\n{previous_runs}"
 
-        prompt = f"RECENT CHAT HISTORY:\n{recent_history}{achievements_block}{previous_runs_block}\n\nMEMGPT CONTEXT/INSTRUCTIONS:\n{context}"
+        prompt = f"RECENT CHAT HISTORY:\n{recent_history}{achievements_block}{previous_runs_block}\n\nMAIN AGENT'S REQUEST:\n{context}"
         worker_checkpoint = None
         try:
             from opalatex.config import get_git_strategy
@@ -762,11 +914,13 @@ def build_run_skill_tool(
         except Exception:
             worker_checkpoint = None
         from .tools import set_worker_context
-        set_worker_context(True)
+        set_worker_context(True, model)
+        tool_records = []
         try:
             out = await sub_agent.run(AgentInput(prompt=prompt))
             out_text = out.response if hasattr(out, "response") else str(out)
             tool_calls = getattr(out, "tool_calls_made", "?")
+            tool_records = list(getattr(out, "tool_calls", None) or [])
             #print(f"\n{'-'*25} [DIAGNOSTIC: WORKER FINISHED] {'-'*25}")
             #print(f"[DIAGNOSTIC] Worker '{skill_name}' tool calls made: {tool_calls}")
             #print(f"[DIAGNOSTIC] Worker output preview ({len(out_text)} chars):\n{out_text[:300]}...")
@@ -843,9 +997,108 @@ def build_run_skill_tool(
             "result": worker_summary
         })
 
-        return f"[skill '{skill_name}' finished] Worker's summary/report:\n(Tools used by worker: {tool_calls})\n{worker_summary}"
+        # The report is the helper's own account; the tool errors are what the
+        # runtime saw. Kept apart: the failure classification above reads only
+        # the report, so an error the helper recovered from cannot turn a
+        # successful run into a "failed" one for the loop breakers.
+        return (
+            f"[helper '{skill_name}' finished] {HELPER_REPORT_MARKER}\n"
+            f"(Tool calls made by the helper: {tool_calls})\n{worker_summary}"
+            f"{_helper_tool_error_notes(tool_records)}"
+        )
 
     return run_skill
+
+
+def _skill_script_paths(skill_dirs: list[str]) -> list[str]:
+    """The `.py` scripts bundled with *skill_dirs*, in order, as absolute paths."""
+    paths = []
+    for directory in skill_dirs:
+        scripts_dir = os.path.join(directory, "scripts")
+        if os.path.isdir(scripts_dir):
+            paths.extend(
+                os.path.join(scripts_dir, f)
+                for f in sorted(os.listdir(scripts_dir)) if f.endswith(".py")
+            )
+    return paths
+
+
+def build_load_skill_tool(project_path: str, profile: str = "full"):
+    """Return a ``load_skill`` tool: the instructions of a skill the main agent
+    carries out itself (PROJECT_DESIGN 2.23).
+
+    The body is rendered for the main agent's prompt *profile* (a skill may ship
+    a condensed ``SKILL.<profile>.md``), with its parent's body first when it
+    ``extends`` one, followed by the skill directory and its scripts. Loading
+    only reads, so it is offered in every mode.
+    """
+
+    @as_tool(
+        name="load_skill",
+        description=(
+            "Load the instructions of a skill listed under 'Skills you carry out yourself', then do the "
+            "work with your own tools. Call it before starting a task that skill covers. Helpers are not "
+            "loaded: delegate to them with run_skill."
+        ),
+    )
+    async def load_skill(skill_name: str) -> str:
+        active = [s for s in active_skills(project_path) if s["name"] != CHAT_ORCHESTRATOR_SKILL]
+        loadable = [s["name"] for s in active if skill_role(s) == INSTRUCTIONS_ROLE]
+        helpers = [s["name"] for s in active if skill_role(s) == HELPER_ROLE]
+        if skill_name == CHAT_ORCHESTRATOR_SKILL:
+            return f"[ERROR] '{CHAT_ORCHESTRATOR_SKILL}' is you; its instructions are already your own."
+        meta_by_name = {s["name"]: s for s in active}
+        if skill_name not in meta_by_name:
+            return (
+                f"[ERROR] Skill '{skill_name}' was not found / is not active. Skills you can load: "
+                f"{loadable}. Helpers, delegated with run_skill: {helpers}. Never invent skill names, "
+                "and never pass one of your own tools as one."
+            )
+        role = skill_role(meta_by_name[skill_name])
+        if role == HELPER_ROLE:
+            return (
+                f"[ERROR] '{skill_name}' is a helper, not a skill you carry out: delegate the job "
+                f"with run_skill('{skill_name}', context)."
+            )
+        if role != INSTRUCTIONS_ROLE:
+            return (
+                f"[ERROR] '{skill_name}' cannot be loaded: its SKILL.md declares role '{role}', and only "
+                f"'{HELPER_ROLE}' or '{INSTRUCTIONS_ROLE}' is accepted. Tell the user the skill's "
+                "SKILL.md needs fixing."
+            )
+
+        skill_dir = meta_by_name[skill_name]["dir"]
+        meta = parse_skill_md(skill_dir, profile=profile)
+        if meta is None or not meta.get("body"):
+            return f"[ERROR] skill '{skill_name}' has no valid SKILL.md."
+        body = meta["body"]
+        dirs = [skill_dir]
+        parent_name = meta.get("extends")
+        if parent_name:
+            parent_dir = find_skill_dir(parent_name, project_path)
+            if parent_name not in meta_by_name or parent_dir is None:
+                return f"[ERROR] skill '{skill_name}' requires parent '{parent_name}', which is not active."
+            parent = parse_skill_md(parent_dir, profile=profile)
+            if parent and parent.get("body"):
+                body = parent["body"] + "\n\n" + body
+            dirs.insert(0, parent_dir)
+
+        scripts = _skill_script_paths(dirs)
+        scripts_block = (
+            "Scripts bundled with it (absolute paths; keep the double quotes, paths may contain spaces):\n"
+            + "\n".join(f'  "{p}"' for p in scripts) + "\n"
+            if scripts else ""
+        )
+        return (
+            f"[skill '{skill_name}' loaded] Carry out these instructions yourself, with your own tools. "
+            "Where they speak of the orchestrator's or a worker's context, that is the user's request "
+            "in this conversation; where they speak of a report, that is your answer to the user.\n"
+            f"Skill directory: {skill_dir}\n"
+            f"{scripts_block}\n"
+            f"{body}"
+        )
+
+    return load_skill
 
 
 # ---------------------------------------------------------------------------
@@ -1116,80 +1369,50 @@ def _needs_native_tool_call_reminder(model: str) -> bool:
     return model.startswith("openai/") and "/" in model[len("openai/"):]
 
 
-def _orchestrator_body_variant(skill_dir: str, profile: str, policy: str) -> str:
-    """Pick which `SKILL.<variant>.md` body the orchestrator should load.
+def _orchestrator_body_variant(skill_dir: str, profile: str) -> str:
+    """Pick which `SKILL.<variant>.md` body the main agent should load.
 
-    Two independent axes select the body: the prompt *profile* (full/light) and
-    the tool *policy* (direct/delegate). Candidates are tried most-specific
-    first and must exist on disk, so shipping only some of the combinations is
-    fine -- a missing `SKILL.light-delegate.md` falls back to
-    `SKILL.delegate.md`, whose delegation rules matter more than the
-    condensation. "full" is the canonical `SKILL.md` body and has no variant
-    file of its own.
+    Only the prompt *profile* (full/light) selects the body. The helper policy
+    used to select a body too, when "delegate" withheld the write tools and the
+    whole prompt had to say so; both policies now hold the same tools, and what
+    differs between them is rendered as one block of the prompt
+    (`_HELPER_POLICY_BLOCKS`). A missing variant file falls back to `SKILL.md`.
     """
-    candidates = []
-    if policy == "delegate":
-        candidates.append(f"{profile}-delegate")
-        candidates.append("delegate")
-    candidates.append(profile)
-    for name in candidates:
-        if name == "full":
-            return "full"
-        if os.path.isfile(os.path.join(skill_dir, f"SKILL.{name}.md")):
-            return name
+    if profile and profile != "full" and os.path.isfile(os.path.join(skill_dir, f"SKILL.{profile}.md")):
+        return profile
     return "full"
 
 
-def _chat_orchestrator_body(project_path: str, profile: str = "full", policy: str = "direct") -> str:
-    """Return the chat-orchestrator SKILL.md body for *profile*/*policy*, or a fallback.
+def _chat_orchestrator_body(project_path: str, profile: str = "full") -> str:
+    """Return the chat-orchestrator SKILL.md body for *profile*, or a fallback.
 
-    *profile* and *policy* together select an optional `SKILL.<variant>.md` file
-    next to the canonical `SKILL.md` (see `_orchestrator_body_variant` and
+    *profile* selects an optional `SKILL.<profile>.md` file next to the
+    canonical `SKILL.md` (see `_orchestrator_body_variant` and
     `opalatex/prompt_profiles.py`). The fallback text below also doubles as the
     light profile's safety net when no `SKILL.light.md` is bundled yet.
-
-    The delegate body is a replacement, not an appendix: the full body actively
-    instructs the orchestrator to make small edits itself, so a delegate policy
-    that merely appended an override would leave two contradictory rules in the
-    same prompt.
     """
     skill_dir = find_skill_dir(CHAT_ORCHESTRATOR_SKILL, project_path)
     if skill_dir:
-        variant = _orchestrator_body_variant(skill_dir, profile, policy)
+        variant = _orchestrator_body_variant(skill_dir, profile)
         meta = parse_skill_md(skill_dir, profile=variant)
         if meta and meta["body"]:
             return meta["body"]
-    if policy == "delegate":
-        tools_rule = (
-            "3. You have NO file-writing tools: write_file, edit_file, write_content_pos and replace_content_range exist only inside skill workers. "
-            "Use your read tools (search_code, find_symbol, code_outline, read_file, read_content_pos, get_editor_state, get_project_overview, web_search, search_conversation_history) to locate the exact path and line range, then delegate every create/edit/rename/delete with run_skill. Never claim you edited a file yourself. "
-            "Compiling is also a worker's job: tell it to verify LaTeX with compile_latex (Tectonic), not pdflatex.\n"
-        )
-    else:
-        tools_rule = (
-            "3. You CAN and SHOULD use your tools (like search_code, find_symbol, code_outline, read_file, read_content_pos, get_editor_state, write_file, edit_file, replace_content_range, write_content_pos, web_search, get_project_overview, search_conversation_history) to investigate the user's request and handle precise text edits directly. "
-            "write_file is the only tool that creates a new file; edit_file, write_content_pos and replace_content_range require the file to already exist. "
-            "To change existing text, prefer edit_file: it finds the passage by its exact text, so an earlier edit cannot shift it the way line numbers shift. "
-            "You also run commands yourself with run_command (non-interactive), run_python_script, run_interactive_command (commands that prompt the user) and run_background_command (servers and other long-running processes): build, test, rename and delete directly instead of delegating a single command to a worker. "
-            "Compile LaTeX with compile_latex (Tectonic, the IDE's engine), never by looking for pdflatex in the shell.\n"
-        )
     return (
         "Execute actions only through native tool calls.\n"
         "1. The runtime prepends today's date to this prompt. You MUST use web_search before answering, refusing, or delegating whenever (a) the request is time-sensitive (recent, latest, current, future-dated), (b) it names a concept, entity, acronym, paper or product you do not confidently recognize or that looks misspelled, or (c) it needs exact external data you cannot recall verbatim. You MUST NOT hallucinate dates or assume something did not happen without first searching the web.\n"
         "2. Return the final user-facing answer as normal text. JSON and Markdown in text are answers, never tool calls; use native tool calls only when executing an action.\n"
-        + tools_rule +
+        "3. You are the main agent: you do the user's task yourself. Use your tools (search_code, find_symbol, code_outline, read_file, read_content_pos, get_editor_state, write_file, edit_file, replace_content_range, write_content_pos, web_search, get_project_overview, search_conversation_history) to investigate and to make every change. "
+        "write_file is the only tool that creates a new file; edit_file, write_content_pos and replace_content_range require the file to already exist. "
+        "To change existing text, prefer edit_file: it finds the passage by its exact text, so an earlier edit cannot shift it the way line numbers shift. "
+        "You also run commands yourself with run_command (non-interactive), run_python_script, run_interactive_command (commands that prompt the user) and run_background_command (servers and other long-running processes). "
+        "Compile LaTeX with compile_latex (Tectonic, the IDE's engine), never by looking for pdflatex in the shell.\n"
         "4. If the user asks about something you do not know, search for it with web_search instead of guessing or replying that you have no information about it - a term missing from your training data is a reason to search, not a reason to refuse. If the user asks for something in the project, use get_project_overview to explore the project structure and read_file to read files.\n"
         "5. Whenever the user asks a question involving dates, time, recent events, latest events, sports, news, public figures, APIs, niche terminology, or potentially anachronistic information, you must search the web for updated information. Search public/external knowledge only: workspace questions go to the project read tools, and anything depending on the user's preference goes to ask_question.\n"
-        "6. You can call run_skill to execute tasks. CRITICAL: You must ONLY delegate to skills explicitly listed under 'Available skills'. NEVER invent skill names like 'search_files', 'list_files', 'modify_file', or 'run_cmd'. "
-        + (
-            "To list, search or read directly, use get_project_overview, search_code, read_file or read_content_pos; every edit goes to a worker.\n"
-            if policy == "delegate" else
-            "If you need to list, search, read, make a precise line edit, or run a command directly, use get_project_overview, search_code, read_file, read_content_pos, write_file, edit_file, replace_content_range, write_content_pos, or run_command.\n"
-        ) +
-        "7. AFTER the worker finishes, you will receive its summary. Use a <think> block to reflect on whether the task was fully resolved. If the worker changed files, verify the changed location with read_file/read_content_pos before reporting success. If it was NOT resolved or if the worker failed, you MAY call run_skill again with a revised plan unless a worker loop breaker tells you to stop. If the task IS complete, return a non-empty final result for the user.\n"
-        "8. Every invocation of run_skill spawns a completely stateless, ephemeral sub-agent. The worker starts fresh with no memory of prior runs. You MUST NOT try to converse/coordinate with the worker across multiple turns or promise to provide details in a 'next step'. Provide all instructions and details in a single run_skill call.\n"
-        "9. If you need to edit or write a large file (more than ~100-200 lines), do NOT instruct the worker to use write_file with the entire content, as LLM output limits will truncate the tool call. Instead, instruct it to use search_code to locate markers, edit_file for an exact passage, replace_content_range for specific line ranges, write_content_pos only for insertion before a specific line, or a small Python search-and-replace script executed with run_command for bulk transformations.\n"
-        "10. When handling, inspecting, comparing, or processing large structured data or log files (.jsonl, .csv, .tsv, .log), check your active 'Available skills' list for a specialized data/log skill and delegate to it. If no specialized skill is active, never attempt whole-file read_file; inspect small samples using read_content_pos or run a quick streaming Python script via command-line.\n"
+        "6. Skills come in two kinds, listed below. A skill under 'Skills you carry out yourself' is loaded with load_skill and then done by you. A helper under 'Helpers' is an ephemeral agent you call with run_skill for an auxiliary job -- reading or summarising a long document, extracting, condensing a log, researching the web; it returns data and never changes project files. CRITICAL: use only names printed in those lists. NEVER invent skill names like 'search_files', 'list_files', 'modify_file', or 'run_cmd'.\n"
+        "7. AFTER a helper finishes, you receive its report and, when any of its tool calls failed, the runtime's list of those failures and what the helper did next. The report says what the helper achieved; weigh the failures against it, and check anything you will act on. If the job was NOT done, you MAY call run_skill again with a revised context unless a loop breaker tells you to stop.\n"
+        "8. Every invocation of run_skill spawns a completely stateless, ephemeral helper with no memory of prior runs. Provide all instructions and details in a single run_skill call.\n"
+        "9. To edit a large file (more than ~100-200 lines), never rewrite it whole with write_file: output limits truncate the tool call. Locate the passage with search_code, then use edit_file, replace_content_range, write_content_pos, or a small Python search-and-replace script run with run_python_script.\n"
+        "10. For large structured data or log files (.jsonl, .csv, .tsv, .log), delegate to a data/log helper if one is listed. If none is, never attempt whole-file read_file; sample with read_content_pos or run a short streaming Python script yourself.\n"
         "NEVER assume something didn't happen without first searching the web using the web_search tool.\n"
         "CRITICAL: If you use a <think> block to plan your actions, continue until you either make a native tool call or provide a non-empty final text response.\n\n"
         "ACHIEVEMENTS MEMORY INSTRUCTION:\n"
@@ -1226,32 +1449,17 @@ def chat_orchestrator_system_prompt(project, store=None) -> str:
     # refuses the terminal commands, and the terminal has no editor for
     # `get_editor_state` (opalatex/prompt_surface.py).
     from .prompt_surface import body_for_surface
-    body = body_for_surface(
-        _chat_orchestrator_body(project_path, orchestrator_profile, orchestrator_policy)
+    body = body_for_surface(_chat_orchestrator_body(project_path, orchestrator_profile))
+
+    # The catalog lists what run_skill and load_skill actually accept: never the
+    # main agent's own entry, which is not a target -- listing it once rendered
+    # a bare "- chat-orchestrator:" that a model filled in by guessing.
+    catalog = _skill_catalog(
+        [s for s in skills if s.get("name") != CHAT_ORCHESTRATOR_SKILL],
+        project_model,
+        getattr(project, "worker_model", "") or "",
+        project,
     )
-
-    # A delegate orchestrator has no writing tools of its own, so without a skill
-    # to send the work to it cannot change anything. The orchestrator's own entry
-    # does not count -- it is not a delegation target -- while `command-line` is
-    # mandatory and normally fills this role, so an empty result here means skill
-    # discovery itself came up short (an unbundled install, say). Say so in the
-    # prompt instead of quietly downgrading the configured policy to "direct":
-    # the user picked delegate, and a silent substitution would hide the real
-    # blocker behind writes that mysteriously start working again.
-    delegate_targets = [s for s in skills if s.get("name") != CHAT_ORCHESTRATOR_SKILL]
-    delegate_without_target = orchestrator_policy == "delegate" and not delegate_targets
-
-    # The catalog lists what run_skill will actually accept, which is the same set:
-    # the orchestrator cannot delegate to itself. Listing its own entry offered a
-    # target that does nothing, and its SKILL.md carries no frontmatter, so the
-    # entry rendered as a bare "- chat-orchestrator:" with an empty description --
-    # a blank in a list of what is available, which models fill in by guessing
-    # (one enumerated its own tools as skills). An empty catalog says so in words
-    # rather than trailing off after the heading.
-    metadata = level1_metadata(delegate_targets) or (
-        "(none — no skill is available to delegate to; do the work with your own tools)"
-    )
-
     project_name = getattr(project, "project_name", "") or getattr(project, "name", "(unknown)")
     project_desc = getattr(project, "description", "") or ""
     project_mode = getattr(project, "mode", "auto") or "auto"
@@ -1275,7 +1483,7 @@ def chat_orchestrator_system_prompt(project, store=None) -> str:
         f"- **Name**: {project_name}\n"
         f"- **Path**: {project_path}\n"
         f"- **Model**: {project_model}\n"
-        f"- **Worker Model**: {project_worker}\n"
+        f"- **Helper Model** (helpers that do not name their own): {project_worker}\n"
         f"- **Mode**: {project_mode}\n"
         f"{mode_instructions}"
     )
@@ -1307,18 +1515,6 @@ def chat_orchestrator_system_prompt(project, store=None) -> str:
         except Exception:
             tutorial_block = ""
 
-    blocked_block = ""
-    if delegate_without_target:
-        blocked_block = (
-            "\n## Writing is currently impossible\n"
-            "You are configured to delegate every file change, but this project has no "
-            "active skill to delegate to, so nothing can be written or edited right now. "
-            "Do not attempt a write tool — you have none. If the user asks for a file "
-            "change, say plainly that no skill is active and ask them to enable one with "
-            "`/addskill <name>` (`/skills` lists what is available). Reading, searching "
-            "and answering questions still work normally.\n"
-        )
-
     # The orchestrator's own model decides this, not the worker's: an Ollama-served
     # orchestrator that prints a tool call as text sends that JSON straight to the
     # user, since nothing downstream can turn it back into an action.
@@ -1330,15 +1526,15 @@ def chat_orchestrator_system_prompt(project, store=None) -> str:
     from .agent_stdin import REPLY_SURFACE_TERMINAL, reply_surface
     surface_block = (
         _TERMINAL_REPLY_BLOCK if reply_surface() == REPLY_SURFACE_TERMINAL
-        else desktop_workspace_block(orchestrator_policy)
+        else desktop_workspace_block()
     )
 
     system_prompt = (
         f"{_current_date_instruction()}\n\n"
         f"{body}\n\n"
         f"{project_block}\n"
-        f"## Available skills (call run_skill with the skill name)\n{metadata}\n"
-        f"{blocked_block}"
+        f"{catalog}\n"
+        f"{_HELPER_POLICY_BLOCKS[orchestrator_policy]}\n"
         f"{native_tool_block}"
         f"{tutorial_block}"
         f"{surface_block}"
@@ -1406,19 +1602,17 @@ _DESKTOP_WORKSPACE_PARTS = (
 )
 
 
-def desktop_workspace_block(orchestrator_policy: str) -> str:
-    """The map of the desktop window, for the tools this orchestrator holds.
+def desktop_workspace_block() -> str:
+    """The map of the desktop window, for the tools the main agent holds.
 
-    Rendered only on the desktop surface, and only with the parts the policy
-    leaves in reach: a delegate orchestrator has no `compile_latex` or terminal
-    of its own, so naming them would send it after tools it was not given.
+    Rendered only on the desktop surface. The main agent holds every part under
+    both policies (PROJECT_DESIGN 2.23).
     """
     from .prompt_surface import GUI_ONLY_TOOLS
     from .tools import get_workspace_action_tools
 
     held = set(GUI_ONLY_TOOLS)
-    if orchestrator_policy != "delegate":
-        held |= {str(getattr(tool, "name", "")) for tool in get_workspace_action_tools()}
+    held |= {str(getattr(tool, "name", "")) for tool in get_workspace_action_tools()}
     parts = [f"- {line}" for tool, line in _DESKTOP_WORKSPACE_PARTS if tool in held]
     return (
         "\n## The IDE you work in\n"
@@ -1479,10 +1673,11 @@ def build_chat_orchestrator(project, store=None) -> MemGPTAgentBlock:
     from .agent_stdin import wrap_tool
     from .tools import create_plan, ask_question, get_code_navigation_tools, get_diagnostic_tools, get_ide_control_tools
 
-    # Read/answer tools the orchestrator keeps under every policy. The memory
-    # tools write, but only to core memory -- never to the user's files -- so
-    # they are not part of what "delegate" withholds. Neither do the IDE
-    # control tools: they move the window, not the project.
+    # Read/answer tools the main agent holds in every mode. The memory tools
+    # write, but only to core memory -- never to the user's files. Neither do
+    # the IDE control tools: they move the window, not the project. `load_skill`
+    # only reads a skill's instructions, so planning can use it too.
+    from .config import model_prompt_profile
     orchestrator_tools = [
         wrap_tool(ask_question),
         wrap_tool(read_core_memory),
@@ -1498,6 +1693,7 @@ def build_chat_orchestrator(project, store=None) -> MemGPTAgentBlock:
         wrap_tool(analyze_image),
         *(wrap_tool(tool) for tool in get_diagnostic_tools()),
         *(wrap_tool(tool) for tool in get_ide_control_tools()),
+        wrap_tool(build_load_skill_tool(project_path, model_prompt_profile(model))),
     ]
 
     # The terminal has no editor to report, and the snapshot a desktop session
@@ -1515,37 +1711,24 @@ def build_chat_orchestrator(project, store=None) -> MemGPTAgentBlock:
     # for it anyway in `auto` answered a request to *show* a plan by opening an
     # approval dialog and then summarising what it had shown. Withheld by
     # composing the list, for the reason given below: the shared mode gate in
-    # `opalatex_tool` wraps the same function object the worker uses.
+    # `opalatex_tool` wraps the same function object the helper uses.
     planning_tools = [*orchestrator_tools, wrap_tool(create_plan)]
 
-    # Enforced by composing the tool list per role, not by the mode gate in
-    # `opalatex_tool`: that gate reads the shared project mode and wraps the very
-    # same function objects the worker calls, so blocking writes there would
-    # disarm the worker too and leave the delegate policy with no way to write at
-    # all. Withholding the tools here scopes the restriction to this agent.
+    # The main agent does the task, so it holds the workspace action tools under
+    # both policies (PROJECT_DESIGN 2.23); the policy only decides how much
+    # auxiliary work goes to helpers, which is a matter for its prompt. The list
+    # comes from `tools.get_workspace_action_tools()` so it cannot drift from
+    # what the tools module calls an action. The command-execution tools are
+    # `is_safe=False`, so plan mode still blocks them and edit mode still asks
+    # the user.
     #
-    # What "direct" grants is the worker's own action toolset, taken from the
-    # single list in `tools.get_workspace_action_tools()` rather than restated
-    # here: an orchestrator authorized to rewrite `main.tex` but not to run
-    # `pdflatex` on it holds half an authority and has to delegate mid-task
-    # anyway, which is the round-trip the policy exists to avoid. Composing both
-    # roles from one list also keeps them from drifting apart as tools are added.
-    #
-    # The command-execution tools are `is_safe=False`, so plan mode still blocks
-    # them and edit mode still asks the user -- the gate is role-independent, and
-    # granting the tools here does not weaken it.
-    from .config import model_orchestrator_policy
-    orchestrator_policy = model_orchestrator_policy(model)
-    # Recovery advice in tools.py branches on whether the caller can run commands
-    # (PROJECT_DESIGN 2.6), so it is recorded from the same policy decision that
-    # composes the tool list and can never contradict it.
-    from .tools import set_orchestrator_terminal_access
-    set_orchestrator_terminal_access(orchestrator_policy != "delegate" and project.mode != "plan")
-    if orchestrator_policy != "delegate":
-        from .tools import get_workspace_action_tools
-        orchestrator_tools.extend(
-            wrap_tool(tool) for tool in get_workspace_action_tools()
-        )
+    # Recovery advice in tools.py branches on whether the caller can run
+    # commands (PROJECT_DESIGN 2.6): the main agent can in every mode but plan.
+    from .tools import set_orchestrator_terminal_access, get_workspace_action_tools
+    set_orchestrator_terminal_access(project.mode != "plan")
+    orchestrator_tools.extend(
+        wrap_tool(tool) for tool in get_workspace_action_tools()
+    )
     if enable_achievements:
         from .tools import update_achievements_memory
         orchestrator_tools.append(wrap_tool(update_achievements_memory))
@@ -1685,7 +1868,7 @@ def build_chat_orchestrator(project, store=None) -> MemGPTAgentBlock:
             memgpt.system_prompt = chat_orchestrator_system_prompt(project, store)
             prompt_mode = mode
         planning = mode == "plan"
-        set_orchestrator_terminal_access(not planning and orchestrator_policy != "delegate")
+        set_orchestrator_terminal_access(not planning)
         return planning_tools if planning else execution_tools
 
     memgpt.tools_provider = available_tools

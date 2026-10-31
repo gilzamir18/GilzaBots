@@ -458,13 +458,14 @@ def test_generate_image_rejects_empty_prompt(tmp_path, monkeypatch):
 
 # ─── OpalaTex: registration ──────────────────────────────────────────────────
 
-def test_generate_image_is_registered_for_every_agent_that_may_write(monkeypatch):
+def test_generate_image_is_registered_for_the_main_agent_not_helpers(monkeypatch):
     from opalatex.agent_stdin import ALL_TOOLS_MAP
-    from opalatex.tools import get_available_tools, get_workspace_action_tools
+    from opalatex.tools import get_helper_tools, get_workspace_action_tools
 
     assert "generate_image" in ALL_TOOLS_MAP
     assert any(getattr(t, "name", "") == "generate_image" for t in get_workspace_action_tools())
-    assert any(getattr(t, "name", "") == "generate_image" for t in get_available_tools())
+    # A helper returns data; an image is a deliverable, made by the main agent.
+    assert not any(getattr(t, "name", "") == "generate_image" for t in get_helper_tools())
 
 
 def test_generate_image_is_not_safe_in_plan_mode(monkeypatch):

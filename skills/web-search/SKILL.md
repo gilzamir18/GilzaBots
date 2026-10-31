@@ -2,6 +2,7 @@
 name: web-search
 description: Searches the web for current information, documentation, APIs, or news. Use when the user needs recent or external data that may not be in the model's training data.
 model: default
+role: helper
 ---
 
 # Web Search Skill

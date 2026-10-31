@@ -113,29 +113,39 @@ _PROJECT_PATH: str = ""
 _PROJECT_SESSION = None
 _PROJECT_STORE = None
 
-# Toggled by run_skill() around a worker sub-agent's execution. Skill workers
-# don't have the run_skill tool (only the orchestrator does), so read_file's
-# large-file guidance must not tell a worker to "delegate via run_skill" —
-# that advice is a dead end for it.
+# Toggled by run_skill() around a helper agent's execution (PROJECT_DESIGN
+# 2.23). A helper has no run_skill tool, so recovery advice must not tell it to
+# delegate; it does not change project files, so the write tools confine it to
+# the scratch area; and it sees images through its own model, not the main
+# agent's.
 _IN_SKILL_WORKER: bool = False
+_HELPER_MODEL: str = ""
 
-# Whether the chat orchestrator currently holds the command-execution tools.
-# Set from its model's policy when it is built: "direct" grants the workspace
-# action tools (writes *and* execution), "delegate" withholds all of them. Kept
-# next to _IN_SKILL_WORKER because both exist for the same reason -- recovery
-# advice must name a route the caller can actually take (PROJECT_DESIGN 2.6) --
-# but they answer different questions: one is "can I delegate?", the other is
-# "can I run a command myself?".
+# Whether the main agent currently holds the command-execution tools. It always
+# does, under both policies, except in plan mode, where the mode withholds them.
+# Kept next to _IN_SKILL_WORKER because both exist for the same reason --
+# recovery advice must name a route the caller can actually take
+# (PROJECT_DESIGN 2.6).
 _ORCHESTRATOR_HAS_TERMINAL: bool = True
 
+#: Where a helper may write: notes, plans and intermediate files it needs for
+#: its job. Everything else in the project is the main agent's to change.
+HELPER_SCRATCH_DIR = ".opalatex"
 
-def set_worker_context(active: bool) -> None:
-    global _IN_SKILL_WORKER
-    _IN_SKILL_WORKER = active
+
+def set_worker_context(active: bool, model: str = "") -> None:
+    """Mark the window in which a helper agent runs, and the model it runs on."""
+    global _IN_SKILL_WORKER, _HELPER_MODEL
+    _IN_SKILL_WORKER = bool(active)
+    _HELPER_MODEL = str(model or "") if active else ""
+
+
+def in_helper_context() -> bool:
+    return _IN_SKILL_WORKER
 
 
 def set_orchestrator_terminal_access(active: bool) -> None:
-    """Record whether the built orchestrator got the command-execution tools."""
+    """Record whether the main agent got the command-execution tools."""
     global _ORCHESTRATOR_HAS_TERMINAL
     _ORCHESTRATOR_HAS_TERMINAL = bool(active)
 
@@ -143,11 +153,33 @@ def set_orchestrator_terminal_access(active: bool) -> None:
 def caller_has_terminal() -> bool:
     """True when whoever is running right now can execute commands itself.
 
-    A skill worker always can; the orchestrator only under the "direct" policy.
-    Guidance branches on this instead of on the role, because after the direct
-    policy started granting run_command the role no longer implies the answer.
+    A helper always can; the main agent can in every mode but plan.
     """
     return True if _IN_SKILL_WORKER else _ORCHESTRATOR_HAS_TERMINAL
+
+
+def _refuse_helper_project_write(resolved: str) -> None:
+    """Fail fast when a helper tries to change a project file.
+
+    A helper returns data; the main agent makes the changes and sees each of
+    their results (PROJECT_DESIGN 2.23). Its own notes go under the scratch area.
+    """
+    if not _IN_SKILL_WORKER:
+        return
+    scratch = os.path.realpath(os.path.join(get_project_path(), HELPER_SCRATCH_DIR))
+    target = os.path.realpath(resolved)
+    try:
+        inside = os.path.commonpath([scratch, target]) == scratch
+    except ValueError:
+        inside = False
+    if inside:
+        return
+    raise ValueError(
+        f"Error: helpers do not change project files, and '{_preview(resolved)}' is outside "
+        f"the scratch area. Put notes and intermediate files under '{HELPER_SCRATCH_DIR}/' "
+        "inside the project. If the task needs this file changed, say so in your report "
+        "and give the exact change (path, passage, new text): the main agent applies it."
+    )
 
 def set_project_context(session, store=None) -> None:
     global _PROJECT_PATH, _PROJECT_SESSION, _PROJECT_STORE
@@ -578,10 +610,9 @@ def _binary_read_error(resolved: str) -> str | None:
             conversion = "a conversion to text"
 
         # Naming a route the caller cannot take is a dead end that pushes models
-        # into improvising (PROJECT_DESIGN 2.6). A worker always has run_command
-        # and so does a "direct" orchestrator; only a "delegate" orchestrator has
-        # to route this through a worker, which plan mode blocks outright --
-        # leaving asking the user as its only move.
+        # into improvising (PROJECT_DESIGN 2.6). A helper and the main agent both
+        # have run_command, except the main agent in plan mode, where commands and
+        # helpers are both blocked -- leaving asking the user as its only move.
         if caller_has_terminal():
             how = (
                 f"You have run_command: convert it yourself with {conversion} into a text file "
@@ -589,10 +620,9 @@ def _binary_read_error(resolved: str) -> str | None:
             )
         else:
             how = (
-                f"You have no terminal tool, so you cannot convert it yourself. Delegate {conversion} "
-                "to the 'command-line' skill with run_skill and then read the converted file. If you "
-                "are in plan mode, run_skill is blocked: ask the user to attach the file to the chat "
-                "or to provide the converted text instead of planning around content you cannot read."
+                "Commands are unavailable in plan mode, so it cannot be converted now: ask the "
+                "user to attach the file to the chat or to provide the converted text instead of "
+                "planning around content you cannot read."
             )
         route = f"{what} {how} Do not retry read_file on this path."
 
@@ -655,25 +685,22 @@ def read_file(path: str) -> str:
             raise ValueError(f"Error: '{_preview(resolved)}' is a directory, not a file. Use get_project_overview() to view contents.")
         if not os.path.exists(resolved):
             # Same rule as the binary-file route below: name only tools the caller
-            # holds (PROJECT_DESIGN 2.6). A "delegate" orchestrator has no
-            # write_file, and pointing it there sent a small model into a
-            # web_search loop on "how to use write_file" instead of delegating.
-            # Name only the route of the current mode: a small model given a
-            # conditional "if you are in plan mode, use create_plan" while in auto
-            # called run_skill("create_plan") -- a tool that does not exist there.
-            mode = str(getattr(_PROJECT_SESSION, "mode", "") or "auto").strip().lower()
-            if caller_has_terminal():
+            # holds (PROJECT_DESIGN 2.6), and only the route of the current mode: a
+            # small model given a conditional "if you are in plan mode, use
+            # create_plan" while in auto called run_skill("create_plan") -- a tool
+            # that does not exist there. Without a terminal the caller is the main
+            # agent in plan mode; a helper writes only to its scratch area.
+            if _IN_SKILL_WORKER:
+                create = (
+                    f"If you are trying to create it: helpers write only under '{HELPER_SCRATCH_DIR}/'; "
+                    "for a project file, put its path and content in your report."
+                )
+            elif caller_has_terminal():
                 create = "If you are trying to create it, use 'write_file' instead."
-            elif mode == "plan":
+            else:
                 create = (
                     "If you are trying to create it: nothing is written in plan mode; include the "
                     "file in the plan you propose with create_plan."
-                )
-            else:
-                create = (
-                    "If you are trying to create it: you cannot write files yourself. Call run_skill "
-                    "with skill_name 'command-line' and put the target path and the content to write "
-                    "in context."
                 )
             # search_code matches file *contents*, so it cannot find a file by
             # name; get_project_overview is the listing route.
@@ -780,21 +807,27 @@ def read_file(path: str) -> str:
         ext = os.path.splitext(resolved)[1].lower()
         if ext in _DATA_EXTS:
             if _IN_SKILL_WORKER:
-                # You are the worker, not the orchestrator: you have no run_skill
-                # tool, so telling you to "delegate via run_skill" is a dead end.
+                # A helper has no run_skill tool, so telling it to "delegate via
+                # run_skill" is a dead end.
                 routing_hint = (
-                    "IMPORTANT: You are a skill worker and do NOT have a run_skill tool. "
+                    "IMPORTANT: You are a helper and do NOT have a run_skill tool. "
                     "Use the processing script or command listed in your skill instructions "
                     "(via run_command) to inspect or condense this file instead of reading it "
                     "directly. If your skill has no such script, report back that the file is "
                     "too large to process directly."
                 )
+            elif caller_has_terminal():
+                routing_hint = (
+                    "IMPORTANT: Check your helpers list for a log/data processing helper and "
+                    "delegate to it with run_skill. If none is listed, write a small streaming "
+                    "Python script with write_file that prints a short digest, and run it "
+                    "yourself with run_python_script."
+                )
             else:
                 routing_hint = (
-                    "IMPORTANT: Check your Available skills list for a specialized "
-                    "log/data processing skill and delegate to it with run_skill. "
-                    "If no such skill is active, use the command-line skill to run "
-                    "a small streaming Python script that processes the file."
+                    "IMPORTANT: In plan mode, helpers and scripts are unavailable. Sample the "
+                    "file with read_content_pos or search_code, and put the processing step "
+                    "in the plan you propose with create_plan."
                 )
             raise ValueError(
                 f"Error: '{_preview(resolved)}' is a large data/log file "
@@ -847,14 +880,22 @@ def analyze_image(file_path: str, prompt: str = "Describe this image in detail")
             with open(resolved, "rb") as f:
                 encoded_img = base64.b64encode(f.read()).decode("utf-8")
             
-        kwargs = get_agent_llm_kwargs("memgpt")
-        
-        # Use the orchestrator's model by default (since it's the one using the tool)
-        model = get_agent_model("memgpt")
-        if _PROJECT_SESSION:
-            project_override = getattr(_PROJECT_SESSION, "model", None)
-            if project_override:
-                model = project_override
+        if _IN_SKILL_WORKER and _HELPER_MODEL:
+            # A helper looks through its own model: that is the model whose
+            # vision the main agent was told about when it chose the helper
+            # (PROJECT_DESIGN 2.23), and the helper only holds this tool when
+            # that model accepts images.
+            kwargs = get_agent_llm_kwargs("worker")
+            model = _HELPER_MODEL
+        else:
+            kwargs = get_agent_llm_kwargs("memgpt")
+
+            # The main agent's model, since it is the one using the tool.
+            model = get_agent_model("memgpt")
+            if _PROJECT_SESSION:
+                project_override = getattr(_PROJECT_SESSION, "model", None)
+                if project_override:
+                    model = project_override
                 
         kwargs.pop("stream", None)
         
@@ -1073,6 +1114,7 @@ def write_file(path: str, content: str) -> str:
         resolved = _resolve_path(path)
     except Exception as e:
         raise ValueError(f"Error resolving path: {e}")
+    _refuse_helper_project_write(resolved)
 
     AGENT_PROGRESS.update("write_file", f"path={_preview(resolved)}")
     
@@ -2011,6 +2053,8 @@ async def run_interactive_command(command: str) -> str:
     description=(
         "Search for text or a regular expression in project files using Python, "
         "returning relative file paths, 1-indexed line numbers, and matching lines. "
+        "query is matched as literal text unless use_regex=true, so '|' and '.*' are only "
+        "regex syntax with use_regex=true; in a regex, double a LaTeX backslash (\\\\label). "
         "query is mandatory; to read a known file without searching, call read_file(path) "
         "or read_content_pos(path, start_pos, end_pos) instead. "
         "Use offset to page matches, context_lines for surrounding text, include_logs for build logs, "
@@ -2044,6 +2088,18 @@ def search_code(
     if offset < 0 or not 0 <= context_lines <= 20:
         raise ValueError("offset must be non-negative and context_lines must be between 0 and 20.")
 
+    # Compiled before any file is walked, so a bad pattern fails with what is
+    # wrong with the pattern rather than as an error "searching" some file.
+    flags = 0 if case_sensitive else re.IGNORECASE
+    try:
+        pattern = re.compile(query if use_regex else re.escape(query), flags)
+    except re.error as e:
+        raise ValueError(
+            f"Error: invalid regular expression (use_regex=true): {e}. In a regular expression "
+            "a backslash starts an escape, so a LaTeX command needs it doubled (\\\\label matches "
+            "\\label); or pass use_regex=false to match the query as literal text."
+        )
+
     root = Path(get_project_path()).resolve()
     target = Path(resolved).resolve()
     skipped_dirs = {".git", ".opalatex", "node_modules", "__pycache__", ".venv", "venv", "dist", "build"}
@@ -2076,8 +2132,6 @@ def search_code(
         else:
             raise ValueError(f"Error: path does not exist: {_preview(resolved)}.")
 
-        flags = 0 if case_sensitive else re.IGNORECASE
-        pattern = re.compile(query if use_regex else re.escape(query), flags)
         matches: list[str] = []
         matches_seen_file = None
         searched = 0
@@ -2113,7 +2167,17 @@ def search_code(
                         )
 
         if not matches:
-            return f"No matches for {query!r} in {_preview(os.path.relpath(target, root))}."
+            result = f"No matches for {query!r} in {_preview(os.path.relpath(target, root))}."
+            if not use_regex and "|" in query:
+                # Observed: models write `a|b|c` without use_regex, get no
+                # matches, and conclude the text is absent. Say how the query was
+                # read; the search itself is not changed.
+                result += (
+                    " The query was matched as literal text (use_regex=false), so '|' matched "
+                    "only a literal '|' character, not alternatives. To find any of several "
+                    "alternatives, search again with use_regex=true."
+                )
+            return result
         return "\n".join(matches) + f"\n[search_code] Searched {searched} files."
     except Exception as e:
         raise ValueError(f"Error searching code in {_preview(resolved)}: {e}")
@@ -2259,6 +2323,7 @@ def write_content_pos(path: str, content: str, pos: int) -> str:
         resolved = _resolve_path(path)
     except Exception as e:
         raise ValueError(f"Error resolving path: {e}")
+    _refuse_helper_project_write(resolved)
 
     AGENT_PROGRESS.update("write_content_pos", f"path={_preview(resolved)} pos={pos}")
     
@@ -2324,6 +2389,7 @@ def replace_content_range(path: str, start_pos: int, end_pos: int, content: str)
         resolved = _resolve_path(path)
     except Exception as e:
         raise ValueError(f"Error resolving path: {e}")
+    _refuse_helper_project_write(resolved)
 
     AGENT_PROGRESS.update(
         "replace_content_range",
@@ -2683,6 +2749,7 @@ def edit_file(path: str, old_string: str, new_string: str, replace_all: bool = F
         resolved = _resolve_path(path)
     except Exception as e:
         raise ValueError(f"Error resolving path: {e}")
+    _refuse_helper_project_write(resolved)
 
     AGENT_PROGRESS.update("edit_file", f"path={_preview(resolved)}")
 
@@ -3255,13 +3322,9 @@ def get_diagnostic_tools():
 def get_workspace_action_tools():
     """Tools that act on the workspace: file writes and command execution.
 
-    Single source for what a skill worker can do to the project and for what the
-    "direct" orchestrator policy grants (`memgpt_runtime.build_chat_orchestrator`),
-    so the two roles cannot drift apart -- the orchestrator used to get the write
-    tools listed by hand here and no terminal at all, which left a "direct" model
-    able to rewrite `main.tex` but unable to run `pdflatex` on it: half an
-    authority, forcing a delegation round-trip mid-task. "delegate" withholds
-    exactly this list.
+    The main agent holds all of them under every policy (PROJECT_DESIGN 2.23):
+    it is the agent that does the task. A helper gets only the part of this list
+    its job needs (`get_helper_tools`).
 
     Every execution tool here is declared `is_safe=False`, so the `opalatex_tool`
     gate still blocks it in plan mode and asks the user in edit mode no matter
@@ -3287,9 +3350,27 @@ def get_workspace_action_tools():
     ]
 
 
-def get_available_tools():
-    """Tools handed to a skill worker (`memgpt_runtime.build_run_skill_tool`)."""
-    return [
+#: The write tools a helper keeps: confined to the scratch area by
+#: `_refuse_helper_project_write`, they hold its notes and plans.
+_HELPER_SCRATCH_WRITE_TOOLS = ("write_file", "edit_file", "write_content_pos", "replace_content_range")
+#: The execution a helper keeps: the skills' own processor scripts.
+_HELPER_EXECUTION_TOOLS = ("run_command", "run_python_script")
+
+
+def get_helper_tools(vision: bool = False):
+    """Tools handed to a helper agent (`memgpt_runtime.build_run_skill_tool`).
+
+    A helper gathers and returns data -- reads, searches, extracts, condenses,
+    researches the web -- so it gets the read tools, `web_search`, scratch-area
+    writes and the commands that run a skill's scripts. It does not get the
+    tools that produce deliverables (documents, presentations, images, a
+    compile) or that drive the user's terminal: those belong to the main agent.
+
+    `analyze_image` is included only when the helper's own model accepts images
+    (*vision*), since that is the model the tool asks inside a helper.
+    """
+    action_by_name = {getattr(tool, "name", ""): tool for tool in get_workspace_action_tools()}
+    tools = [
         search_conversation_history,
         update_achievements_memory,
         get_project_overview,
@@ -3298,13 +3379,17 @@ def get_available_tools():
         read_file,
         read_content_pos,
         diff_files,
-        analyze_image,
         ask_question,
         *get_diagnostic_tools(),
         get_editor_state,
         read_terminal,
-        *get_workspace_action_tools(),
+        web_search,
+        *(action_by_name[name] for name in _HELPER_SCRATCH_WRITE_TOOLS),
+        *(action_by_name[name] for name in _HELPER_EXECUTION_TOOLS),
     ]
+    if vision:
+        tools.append(analyze_image)
+    return tools
 
 
 # ─── Editor State ─────────────────────────────────────────────────────────────
@@ -3751,10 +3836,10 @@ async def read_terminal(lines: int = _TERMINAL_DEFAULT_LINES) -> str:
 
 
 def get_ide_control_tools():
-    """Tools that drive or read the desktop window. The orchestrator's: a worker
+    """Tools that drive or read the desktop window. The main agent's: a helper
     runs out of sight of the user, so there is nothing for it to show them.
-    `read_terminal` only reads, and workers that start a background command get
-    it too (`get_available_tools`)."""
+    `read_terminal` only reads, and a helper asked about what the user's terminal
+    printed gets it too (`get_helper_tools`)."""
     return [open_file, close_file, reveal_in_pdf, set_layout, get_problems, read_terminal]
 
 

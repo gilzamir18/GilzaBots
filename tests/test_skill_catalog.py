@@ -1,7 +1,8 @@
-"""The skill catalog must list exactly what run_skill will accept.
+"""The skill catalog must list exactly what run_skill and load_skill accept.
 
-The orchestrator's prompt carries a `## Available skills` section built from the
-active skills. It used to include the orchestrator's own entry, which is not a
+The main agent's prompt carries two lists built from the active skills: the
+helpers `run_skill` accepts and the skills `load_skill` returns (PROJECT_DESIGN
+2.23). The catalog used to be one `## Available skills` section. It used to include the orchestrator's own entry, which is not a
 delegation target -- and since `skills/chat-orchestrator/SKILL.md` carries no
 frontmatter, that entry rendered as a bare `- chat-orchestrator:` with nothing
 after the colon. A blank slot in a list of what is available is an invitation to
@@ -21,24 +22,36 @@ from opalatex.project import ProjectData
 from opalatex.skills import active_skills, level1_metadata, MANDATORY_SKILLS
 
 
+_CATALOG_HEADINGS = (
+    "\n## Helpers (delegate with run_skill)\n",
+    "\n## Skills you carry out yourself (load with load_skill)\n",
+)
+
+
+def _enable_helper(project_path, name="staged-reader"):
+    import os
+    import yaml
+
+    with open(os.path.join(project_path, "skills.yaml"), "w", encoding="utf-8") as f:
+        yaml.safe_dump({"skills": [name]}, f)
+
+
 def _catalog_section(tmp_path) -> str:
-    """Return the `## Available skills` block of the real system prompt."""
+    """Return the entries of both catalog lists of the real system prompt."""
     project = ProjectData(
         name="t", project_name="t",
         project_path=str(tmp_path), model="ollama/some-model", mode="auto",
     )
     prompt = chat_orchestrator_system_prompt(project, None)
-    # The body text quotes the heading ("the `## Available skills` section of this
-    # prompt is..."), so match the heading line itself, not the first mention.
-    heading = "\n## Available skills (call run_skill with the skill name)\n"
-    start = prompt.index(heading)
-    body = prompt[start + len(heading):]
     lines = []
-    for line in body.splitlines():
-        if line.startswith("##") or (line.strip() and not line.startswith(("- ", "("))):
-            break
-        if line.strip():
-            lines.append(line)
+    for heading in _CATALOG_HEADINGS:
+        # Match the heading line itself: the body text names the lists too.
+        body = prompt[prompt.index(heading) + len(heading):]
+        for line in body.splitlines():
+            if line.startswith("##"):
+                break
+            if line.startswith("- "):
+                lines.append(line)
     return "\n".join(lines)
 
 
@@ -107,24 +120,26 @@ def _run_skill(project_path, mode="auto"):
 
 def test_delegating_to_itself_is_refused_with_a_usable_alternative(tmp_path):
     tool = _run_skill(str(tmp_path))
+    _enable_helper(str(tmp_path))
     out = asyncio.run(tool._func(CHAT_ORCHESTRATOR_SKILL, "do something"))
 
     assert "[ERROR]" in out
-    assert "is you, not a delegation target" in out
+    assert "is you, not a helper" in out
     # It must still say where the work can go instead.
-    assert "command-line" in out
+    assert "staged-reader" in out and "your own tools" in out
     # And never list itself among those targets.
     assert out.count(CHAT_ORCHESTRATOR_SKILL) == 1
 
 
 def test_an_invented_skill_name_is_told_that_tools_are_not_skills(tmp_path):
     tool = _run_skill(str(tmp_path))
+    _enable_helper(str(tmp_path))
     out = asyncio.run(tool._func("read_file", "read the calendar"))
 
     assert "[ERROR]" in out
     assert "was not found / is not active" in out
     assert "are tools you call" in out
-    assert "command-line" in out
+    assert "staged-reader" in out
     assert CHAT_ORCHESTRATOR_SKILL not in out
 
 
@@ -141,7 +156,7 @@ def test_delegating_to_create_plan_outside_plan_mode_does_not_offer_create_plan(
 
 
 @pytest.mark.parametrize("variant", [
-    "SKILL.md", "SKILL.delegate.md", "SKILL.light.md", "SKILL.light-delegate.md",
+    "SKILL.md", "SKILL.light.md",
 ])
 def test_every_orchestrator_prompt_says_the_catalog_is_not_its_toolset(variant):
     import os
@@ -151,5 +166,5 @@ def test_every_orchestrator_prompt_says_the_catalog_is_not_its_toolset(variant):
     )
     with open(os.path.join(base, variant), encoding="utf-8") as f:
         text = f.read()
-    assert "not a delegation target" in text, variant
+    assert "`chat-orchestrator` is you" in text, variant
     assert "create_plan" in text, variant

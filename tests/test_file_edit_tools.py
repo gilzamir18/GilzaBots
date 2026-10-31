@@ -172,10 +172,10 @@ def test_search_code_filters_by_file_pattern(tmp_path):
     assert "notes.txt" not in result
 
 
-def test_get_available_tools_includes_search_code():
-    from opalatex.tools import get_available_tools
+def test_get_helper_tools_includes_search_code():
+    from opalatex.tools import get_helper_tools
 
-    names = {getattr(tool, "name", None) for tool in get_available_tools()}
+    names = {getattr(tool, "name", None) for tool in get_helper_tools()}
 
     assert "search_code" in names
 

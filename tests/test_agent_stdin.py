@@ -13,7 +13,7 @@ from types import SimpleNamespace
 from opalatex.agent_stdin import (
     print_event,
     wrap_tool,
-    patched_get_available_tools,
+    patched_get_helper_tools,
     handle_load_project,
     _empty_response_failure_message,
     _auxiliary_tool_call_thought,
@@ -164,9 +164,9 @@ async def test_wrap_tool_async():
     assert res == 12
 
 
-def test_patched_get_available_tools():
-    """Verify that patched_get_available_tools returns wrapped tools."""
-    tools = patched_get_available_tools()
+def test_patched_get_helper_tools():
+    """Verify that patched_get_helper_tools returns wrapped tools."""
+    tools = patched_get_helper_tools()
     assert len(tools) > 0
     # Every tool returned should be wrapped (which can be checked if its function is wrapped)
     # The wrapped function will have the wrapped decorators applied.

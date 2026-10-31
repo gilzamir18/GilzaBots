@@ -955,12 +955,12 @@
       "light": "Light",
       "lightHint": "A condensed system prompt (core rules + tool/skill list only). Use for models where shorter prompts save tokens/latency without hurting reliability."
     },
-    "orchestratorPolicyLabel": "Orchestrator actions",
+    "orchestratorPolicyLabel": "Auxiliary work (helpers)",
     "orchestratorPolicy": {
       "direct": "Direct",
-      "directHint": "The orchestrator acts on the project itself: it creates and edits files (write_file, edit_file, write_content_pos, replace_content_range) and runs commands (run_command, run_python_script) with the same tools a skill worker has. Fewer round-trips; the file content passes through the orchestrator's context. Plan mode still blocks these tools and edit mode still asks you to confirm.",
+      "directHint": "The main agent reads, searches and does the task itself, and calls a helper only for an auxiliary job too large for its own context: full coverage of a huge file, condensing a large log, research across several web sources. Under both options the main agent makes every change to the project; plan mode still blocks writes and commands, and edit mode still asks you to confirm.",
       "delegate": "Delegate",
-      "delegateHint": "The orchestrator only reads, and every file change or command goes to a skill worker via run_skill. Keeps large write payloads out of the orchestrator's context. Requires at least one active skill to be usable."
+      "delegateHint": "The main agent hands auxiliary work to helpers by default (reading or summarising long documents, extracting parts of a file, condensing logs, researching the web) and keeps its own context for the task. Helpers run on the project's worker model, so pointing that at a smaller model saves tokens. The main agent still makes every change itself: helpers return data, never edits."
     },
     "supportsThinkingLabel": "This model supports thinking/reasoning",
     "supportsThinkingHint": "Keep this off unless the model documentation explicitly says it supports thinking or reasoning parameters.",

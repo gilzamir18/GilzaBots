@@ -1,19 +1,17 @@
-"""Tests for the orchestrator tool policy (direct/delegate).
+"""Tests for the main agent's helper policy (direct/delegate).
 
-The policy decides whether the chat orchestrator gets the workspace action
-tools -- file writes *and* command execution, the same set a skill worker gets
--- or has to route every change through `run_skill`. It is a per-model catalog field
-(`opalatex/models_store.py`) resolved by `config.model_orchestrator_policy`, and
-it is deliberately separate from `prompt_profile`: the profile controls prompt
-verbosity, the policy controls write authority, and "light prompt + delegate
-writes" has to remain expressible.
+The main agent does the user's task, so it holds the workspace action tools --
+file writes *and* command execution -- under both policies (PROJECT_DESIGN
+2.23). The policy decides only how much auxiliary work it hands to helpers
+through `run_skill`, and that is a block of its prompt. It is a per-model catalog
+field (`opalatex/models_store.py`) resolved by `config.model_orchestrator_policy`,
+deliberately separate from `prompt_profile`: "light prompt + delegate" has to
+remain expressible.
 
-Enforcement is tool-list composition in `build_chat_orchestrator`, not the mode
-gate in `opalatex_tool` -- that gate wraps the same function objects the worker
-calls, so restricting writes there would disarm the worker too.
+What the mode withholds (writes and commands in plan mode) is still enforced by
+tool-list composition in `build_chat_orchestrator` and by the `opalatex_tool`
+gate, independently of the policy.
 """
-
-import os
 
 import pytest
 
@@ -31,21 +29,16 @@ WRITE_TOOLS = {
     "replace_content_range",
     "create_docx_file",
     "create_pptx_file",
-    # Authoring and editing a .jpt presentation writes a project file, so both
-    # sit with the other writers: a direct orchestrator gets them, a delegate
-    # one hands them to the worker.
+    # Authoring and editing a .jpt presentation writes a project file.
     "create_presentation",
     "edit_presentation",
     "set_presentation_theme",
-    # Generating an image produces a project file like any other write, so it
-    # belongs to the same authority: a direct orchestrator gets it, a delegate
-    # one hands it to the worker.
+    # Generating an image produces a project file like any other write.
     "generate_image",
 }
 
-# Command execution is part of the same authority as writing: an orchestrator
-# allowed to rewrite main.tex but not to run pdflatex on it holds half an
-# authority and has to delegate mid-task anyway.
+# Command execution is part of the same authority as writing: an agent allowed
+# to rewrite main.tex but not to run pdflatex on it holds half an authority.
 EXEC_TOOLS = {
     # Runs Tectonic and writes the PDF: execution authority, like a shell command.
     "compile_latex",
@@ -112,78 +105,51 @@ def test_unregistered_model_defaults_to_direct_with_write_file(tmp_path, monkeyp
     assert WRITE_TOOLS <= _tool_names(project)
 
 
-# ── Tool composition per policy ──────────────────────────────────────────────
+# ── Tool composition: the same under both policies ───────────────────────────
 
-def test_direct_policy_keeps_every_write_tool(tmp_path, monkeypatch):
-    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="direct")
-    assert WRITE_TOOLS <= _tool_names(project)
-
-
-def test_delegate_policy_withholds_every_write_tool(tmp_path, monkeypatch):
-    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="delegate")
+@pytest.mark.parametrize("policy", ["direct", "delegate"])
+def test_every_policy_keeps_every_write_and_execution_tool(tmp_path, monkeypatch, policy):
+    """The main agent does the task, so delegate no longer withholds anything."""
+    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy=policy)
     names = _tool_names(project)
-    assert not (WRITE_TOOLS & names), f"delegate orchestrator still holds {WRITE_TOOLS & names}"
+    assert (WRITE_TOOLS | EXEC_TOOLS) <= names
 
 
-def test_delegate_policy_keeps_reading_and_delegation(tmp_path, monkeypatch):
-    """Withholding writes must not cost the orchestrator its ability to work."""
-    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="delegate")
+@pytest.mark.parametrize("policy", ["direct", "delegate"])
+def test_every_policy_keeps_reading_skills_and_helpers(tmp_path, monkeypatch, policy):
+    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy=policy)
     names = _tool_names(project)
     assert {
-        "run_skill", "read_file", "read_content_pos", "search_code",
+        "run_skill", "load_skill", "read_file", "read_content_pos", "search_code",
         "get_project_overview", "ask_question",
     } <= names
     # Core-memory writes are not file writes and stay available.
     assert {"read_core_memory", "append_core_memory"} <= names
 
 
-def test_the_two_gates_are_independent(tmp_path, monkeypatch):
-    """Policy decides who may write; mode decides whether a plan is proposed.
-
-    `create_plan` used to be listed above as a non-write tool the delegate policy
-    keeps. It is absent from this project not because writes were withheld but
-    because the project is in `auto`, so the assertion would have conflated the
-    two gates the moment either one moved.
-    """
-    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="delegate")
+@pytest.mark.parametrize("policy", ["direct", "delegate"])
+def test_plan_mode_withholds_writes_under_every_policy(tmp_path, monkeypatch, policy):
+    """The mode decides whether writes exist; the policy never does."""
+    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy=policy)
     assert "create_plan" not in _tool_names(project)
 
     project.mode = "plan"
     names = _tool_names(project)
     assert "create_plan" in names
-    assert "write_file" not in names, "the delegate policy still withholds writes"
+    assert "load_skill" in names, "loading instructions only reads"
+    assert not ((WRITE_TOOLS | EXEC_TOOLS) & names)
 
 
-def test_direct_policy_grants_command_execution(tmp_path, monkeypatch):
-    """Regression: a direct orchestrator could write files but not run anything.
-
-    Compiling, testing, renaming and deleting all needed a run_skill round-trip
-    to `command-line`, which is exactly the delegation loop the policy exists to
-    avoid for a model capable of doing the work itself.
-    """
-    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="direct")
-    assert EXEC_TOOLS <= _tool_names(project)
-
-
-def test_direct_policy_matches_the_worker_action_set(tmp_path, monkeypatch):
-    """Both roles compose from `tools.get_workspace_action_tools()`.
-
-    Asserted as a set identity rather than a list of names so a tool added to
-    the worker can never silently skip the direct orchestrator again.
-    """
+def test_the_main_agent_holds_the_whole_action_set(tmp_path, monkeypatch):
+    """Composed from `tools.get_workspace_action_tools()`, asserted as a set
+    identity so a tool added there can never silently skip the main agent."""
     from opalatex.tools import get_workspace_action_tools
 
-    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="direct")
+    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="delegate")
     action_names = {t.name for t in get_workspace_action_tools()}
 
     assert action_names == WRITE_TOOLS | EXEC_TOOLS | {"export_tex_to_docx"}
     assert action_names <= _tool_names(project)
-
-
-def test_delegate_policy_withholds_command_execution(tmp_path, monkeypatch):
-    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="delegate")
-    names = _tool_names(project)
-    assert not (EXEC_TOOLS & names), f"delegate orchestrator still holds {EXEC_TOOLS & names}"
 
 
 @pytest.mark.parametrize("tool_name,args", [
@@ -213,11 +179,12 @@ def test_execution_tools_stay_unsafe_for_the_orchestrator(tmp_path, tool_name, a
 
 # ── Recovery advice follows the toolset, not the role ────────────────────────
 
-def test_direct_orchestrator_is_told_to_convert_documents_itself(tmp_path, monkeypatch):
+@pytest.mark.parametrize("policy", ["direct", "delegate"])
+def test_main_agent_is_told_to_convert_documents_itself(tmp_path, monkeypatch, policy):
     """Guidance must name a route this caller can take (PROJECT_DESIGN 2.6)."""
     from opalatex.tools import _binary_read_error
 
-    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="direct")
+    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy=policy)
     build_chat_orchestrator(project, None)
 
     message = _binary_read_error(str(tmp_path / "data.xls"))
@@ -225,22 +192,25 @@ def test_direct_orchestrator_is_told_to_convert_documents_itself(tmp_path, monke
     assert "command-line" not in message
 
 
-def test_delegate_orchestrator_is_still_sent_to_the_command_line_skill(tmp_path, monkeypatch):
+def test_main_agent_in_plan_mode_is_not_sent_to_a_skill(tmp_path, monkeypatch):
+    """In plan mode commands and helpers are both blocked: asking is the route."""
     from opalatex.tools import _binary_read_error
 
-    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="delegate")
+    project = _catalog(tmp_path, monkeypatch, "ollama/m")
+    project.mode = "plan"
     build_chat_orchestrator(project, None)
 
     message = _binary_read_error(str(tmp_path / "data.xls"))
-    assert "'command-line'" in message
-    assert "no terminal tool" in message
+    assert "plan mode" in message
+    assert "run_skill" not in message and "command-line" not in message
 
 
-def test_worker_advice_ignores_the_orchestrator_policy(tmp_path, monkeypatch):
-    """A worker always has run_command, whatever the orchestrator was granted."""
+def test_helper_advice_ignores_the_main_agent_mode(tmp_path, monkeypatch):
+    """A helper always has run_command, whatever the main agent holds now."""
     import opalatex.tools as tools
 
-    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="delegate")
+    project = _catalog(tmp_path, monkeypatch, "ollama/m")
+    project.mode = "plan"
     build_chat_orchestrator(project, None)
     tools.set_worker_context(True)
     try:
@@ -251,23 +221,10 @@ def test_worker_advice_ignores_the_orchestrator_policy(tmp_path, monkeypatch):
     assert "You have run_command" in message
 
 
-def test_delegate_policy_does_not_disarm_the_worker(tmp_path, monkeypatch):
-    """The policy is orchestrator-scoped: workers must still be able to write.
-
-    A worker has no run_skill and nothing to delegate to, so if the delegate
-    policy leaked into the shared tool registry nothing could write at all.
-    """
-    _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="delegate")
-    from opalatex.tools import get_available_tools
-
-    worker_names = {t.name for t in get_available_tools()}
-    assert (WRITE_TOOLS | EXEC_TOOLS) <= worker_names
-
-
 # ── The two axes stay independent ────────────────────────────────────────────
 
 def test_policy_and_profile_are_independent(tmp_path, monkeypatch):
-    """"light prompt + delegate writes" is the combination worth protecting."""
+    """"light prompt + delegate" is the combination worth protecting."""
     project = _catalog(
         tmp_path, monkeypatch, "ollama/small-local",
         prompt_profile="light", orchestrator_policy="delegate",
@@ -275,7 +232,8 @@ def test_policy_and_profile_are_independent(tmp_path, monkeypatch):
     agent = build_chat_orchestrator(project, None)
     names = {getattr(t, "name", None) for t in agent.tools}
 
-    assert not (WRITE_TOOLS & names)
+    assert WRITE_TOOLS <= names
+    assert "Your helper policy: delegate" in agent.system_prompt
     assert "Mode: auto." in agent.system_prompt  # light mode-instructions
     assert "\U0001F6A8 **SYSTEM ALERT" not in agent.system_prompt
 
@@ -284,6 +242,7 @@ def test_light_profile_still_writes_directly_by_default(tmp_path, monkeypatch):
     """Choosing the light profile must not imply delegation."""
     project = _catalog(tmp_path, monkeypatch, "ollama/m", prompt_profile="light")
     assert WRITE_TOOLS <= _tool_names(project)
+    assert "Your helper policy: direct" in build_chat_orchestrator(project, None).system_prompt
 
 
 # ── Body variant selection ───────────────────────────────────────────────────
@@ -297,49 +256,36 @@ def _orchestrator_skill_dir():
     return skill_dir
 
 
-@pytest.mark.parametrize(
-    "profile,policy,expected",
-    [
-        ("full", "direct", "full"),
-        ("light", "direct", "light"),
-        ("full", "delegate", "delegate"),
-        ("light", "delegate", "light-delegate"),
-    ],
-)
-def test_body_variant_selection(profile, policy, expected):
-    assert _orchestrator_body_variant(_orchestrator_skill_dir(), profile, policy) == expected
+@pytest.mark.parametrize("profile,expected", [("full", "full"), ("light", "light")])
+def test_body_variant_selection(profile, expected):
+    assert _orchestrator_body_variant(_orchestrator_skill_dir(), profile) == expected
 
 
-def test_body_variant_falls_back_when_the_specific_file_is_missing(tmp_path):
-    """A missing light-delegate body falls back to the delegate one.
+def test_the_policy_no_longer_selects_a_body():
+    """Both policies hold the same tools, so no policy-specific body ships."""
+    import os
 
-    Delegation rules matter more than condensation, so the policy-specific body
-    outranks the profile-specific one on the way down.
-    """
+    skill_dir = _orchestrator_skill_dir()
+    assert not os.path.exists(os.path.join(skill_dir, "SKILL.delegate.md"))
+    assert not os.path.exists(os.path.join(skill_dir, "SKILL.light-delegate.md"))
+
+
+def test_body_variant_falls_back_when_the_profile_file_is_missing(tmp_path):
     (tmp_path / "SKILL.md").write_text("canonical", encoding="utf-8")
+    assert _orchestrator_body_variant(str(tmp_path), "light") == "full"
     (tmp_path / "SKILL.light.md").write_text("condensed", encoding="utf-8")
-    (tmp_path / "SKILL.delegate.md").write_text("no writing", encoding="utf-8")
-
-    assert _orchestrator_body_variant(str(tmp_path), "light", "delegate") == "delegate"
-    # With no delegate body at all it degrades to the profile body; the prompt
-    # still carries the policy statement built in chat_orchestrator_system_prompt.
-    os.remove(tmp_path / "SKILL.delegate.md")
-    assert _orchestrator_body_variant(str(tmp_path), "light", "delegate") == "light"
+    assert _orchestrator_body_variant(str(tmp_path), "light") == "light"
 
 
-def test_delegate_body_forbids_direct_editing(tmp_path, monkeypatch):
-    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="delegate")
+@pytest.mark.parametrize("policy", ["direct", "delegate"])
+def test_each_policy_renders_its_own_block_and_only_it(tmp_path, monkeypatch, policy):
+    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy=policy)
     prompt = build_chat_orchestrator(project, None).system_prompt
+    other = "direct" if policy == "delegate" else "delegate"
 
-    assert "no file-writing tools" in prompt
-    # The instruction the full body carries must not survive into the delegate one.
-    assert "Do not spawn a worker for a one-line change" not in prompt
-
-
-def test_direct_body_documents_write_file(tmp_path, monkeypatch):
-    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="direct")
-    prompt = build_chat_orchestrator(project, None).system_prompt
-
+    assert f"Your helper policy: {policy}" in prompt
+    assert f"Your helper policy: {other}" not in prompt
+    assert "Writing is currently impossible" not in prompt
     assert "write_file" in prompt
 
 
@@ -366,57 +312,21 @@ def test_every_orchestrator_prompt_understands_packaged_jpt(
     assert "line-position" in prompt
 
 
-# ── The no-delegation-target guard ───────────────────────────────────────────
-
-def test_delegate_without_any_target_says_so(tmp_path, monkeypatch):
-    """With no delegatable skill, the prompt must state the blocker.
-
-    `command-line` is mandatory and normally fills this role, so this only
-    happens when skill discovery comes up short. The policy is not silently
-    downgraded to "direct" -- that would hide the real cause.
-    """
-    import opalatex.memgpt_runtime as runtime
-
-    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="delegate")
-    monkeypatch.setattr(runtime, "active_skills", lambda _p: [{"name": "chat-orchestrator", "description": ""}])
-
-    prompt = build_chat_orchestrator(project, None).system_prompt
-    assert "Writing is currently impossible" in prompt
-    assert "/addskill" in prompt
-
-
-def test_delegate_with_a_target_has_no_blocker_notice(tmp_path, monkeypatch):
-    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="delegate")
-    prompt = build_chat_orchestrator(project, None).system_prompt
-    assert "Writing is currently impossible" not in prompt
-
-
-def test_direct_policy_never_shows_the_blocker_notice(tmp_path, monkeypatch):
-    import opalatex.memgpt_runtime as runtime
-
-    project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="direct")
-    monkeypatch.setattr(runtime, "active_skills", lambda _p: [{"name": "chat-orchestrator", "description": ""}])
-
-    prompt = build_chat_orchestrator(project, None).system_prompt
-    assert "Writing is currently impossible" not in prompt
-
-
-def test_fallback_body_is_policy_aware(monkeypatch):
-    """The no-SKILL.md safety net must not hand a delegate agent write rules."""
+def test_fallback_body_makes_the_main_agent_do_the_task(monkeypatch):
+    """The no-SKILL.md safety net describes the same roles as the bundled body."""
     import opalatex.memgpt_runtime as runtime
 
     monkeypatch.setattr(runtime, "find_skill_dir", lambda *a, **k: None)
 
-    direct = runtime._chat_orchestrator_body("/tmp/x", "full", "direct")
-    delegate = runtime._chat_orchestrator_body("/tmp/x", "full", "delegate")
+    body = runtime._chat_orchestrator_body("/tmp/x", "full")
 
-    assert "write_file is the only tool that creates a new file" in direct
-    assert "You have NO file-writing tools" in delegate
-    assert "every edit goes to a worker" in delegate
+    assert "write_file is the only tool that creates a new file" in body
+    assert "load_skill" in body and "run_skill" in body
+    assert "never changes project files" in body
 
 
 @pytest.mark.parametrize("policy", ["direct", "delegate"])
 def test_code_navigation_is_a_read_tool_under_every_policy(tmp_path, monkeypatch, policy):
-    """find_symbol and code_outline only read, so delegate keeps them too."""
+    """find_symbol and code_outline only read; every policy holds them."""
     project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy=policy)
     assert {"find_symbol", "code_outline"} <= _tool_names(project)

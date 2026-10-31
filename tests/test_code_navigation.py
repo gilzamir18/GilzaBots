@@ -196,9 +196,9 @@ def test_code_outline_refuses_paths_outside_the_project(project):
     assert "outside the project" in str(error.value)
 
 
-def test_navigation_tools_reach_workers_and_orchestrators():
-    from opalatex.tools import code_outline, find_symbol, get_available_tools, get_code_navigation_tools
+def test_navigation_tools_reach_helpers_and_orchestrators():
+    from opalatex.tools import code_outline, find_symbol, get_helper_tools, get_code_navigation_tools
 
     assert get_code_navigation_tools() == [find_symbol, code_outline]
-    worker_tools = get_available_tools()
+    worker_tools = get_helper_tools()
     assert find_symbol in worker_tools and code_outline in worker_tools

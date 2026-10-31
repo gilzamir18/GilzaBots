@@ -19,8 +19,9 @@ OpalaTex has three parts working together:
    model-based LaTeX WYSIWYG mode, a markdown preview, an HTML preview, and a file explorer.
 2. **The AI assistant** — a chat orchestrator that reads and edits your files, runs
    commands, searches the web, generates office documents (.docx, .pptx), asks
-   interactive clarifying questions, and delegates specialised tasks to skills and
-   templates from the **Asset Store**.
+   interactive clarifying questions, follows skills from the **Asset Store** for
+   specialised tasks, and hands auxiliary jobs (long reads, log condensing, web
+   research) to helper agents.
 3. **Local compilation** — Tectonic compiles your document without requiring a
    system-wide LaTeX installation.
 
@@ -163,7 +164,7 @@ sidebar) and are organised into four tabs:
 ### 2. Orchestrator & Worker Tabs
 
 A project configures separate models and runtime settings for the **Orchestrator** (the
-conversational agent) and the **Worker** (ephemeral sub-agents spawned by `run_skill`).
+conversational agent) and the **Worker** (the model of the helpers that `run_skill` spawns).
 Both tabs offer:
 
 - **Model Selection & Hardware Monitor** — select from registered models. Real-time GPU
@@ -246,11 +247,18 @@ Two useful shortcuts:
 
 A project uses **two model roles**:
 
-- **Orchestrator** — the model you talk to in the chat. It plans, calls tools, and
-  writes the final answers. Give it your best model.
-- **Worker** — the model used by ephemeral skill sub-agents (`run_skill`). Workers do
-  narrow, tool-heavy jobs and terminate quickly, so a smaller/faster model is fine and
-  usually preferable.
+- **Orchestrator** — the main agent, the model you talk to in the chat. It does your
+  task: it plans, reads, makes **every** change to your files, runs commands, and writes
+  the final answers. Give it your best model.
+- **Worker** — the model of the **helpers**: ephemeral agents (`run_skill`) that do an
+  auxiliary job for the main agent — reading or summarising a long document, extracting
+  parts of a file, condensing a log, researching the web — and return what they found.
+  Helpers never change your files. Their jobs are narrow, so a smaller/faster model is
+  fine and saves tokens. A helper skill can also name its own model; the chat shows each
+  helper's model, and whether it can see images, to the main agent.
+
+Skills come in the same two kinds. Most skills are instructions the main agent loads
+(`load_skill`) and carries out itself; a skill marked `role: helper` runs as a helper.
 
 When you register a model in the catalog you can declare capabilities:
 
@@ -269,55 +277,49 @@ When you register a model in the catalog you can declare capabilities:
 - **`prompt_profile`** (`full` or `light`) — how much prompt text the model receives.
   `full` delivers the complete guardrails, instructions and examples; `light` delivers a
   condensed version (same rules, less prose) that saves tokens and latency.
-- **Orchestrator writes** (`direct` or `delegate`) — whether this model, **when it is the
-  orchestrator**, may touch files. On `direct` it creates and edits them itself with
-  `write_file`, `edit_file`, `write_content_pos` and `replace_content_range`. On `delegate` it only
-  reads: every create, edit, rename or delete has to go through a worker via `run_skill`.
-  As a worker the model writes normally — the setting has no effect in that role, because
-  a worker has nobody to delegate to.
+- **Auxiliary work** (`direct` or `delegate`) — how much auxiliary work this model, **when
+  it is the orchestrator**, hands to helpers. On `direct` it reads and searches itself and
+  calls a helper only for a job too big for its own context. On `delegate` it sends
+  reading, summarising, extracting, log condensing and web research to helpers by default,
+  and keeps its own context for your task. Under both, the orchestrator makes every change
+  itself.
+- **`force_vision`** (a model parameter) — declares that a model accepts images when
+  LiteLLM does not know it (a local llava or Qwen-VL, for instance). It decides whether a
+  helper running on that model is offered image work.
 - **`num_ctx`** — optional catalog-level context window override for this model.
 
-Prompt profile and orchestrator writes are **two independent settings**: the first says
-how much text the model reads, the second says what it is allowed to do. All four
+Prompt profile and auxiliary work are **two independent settings**: the first says how
+much text the model reads, the second where the reading and research happen. All four
 combinations are valid.
 
 ### Which combination to use
 
-A new model defaults to `full` + `direct`, which is the behavior OpalaTex has always
-shipped. Tune it according to the project's two models:
+A new model defaults to `full` + `direct`. Tune it according to the project's two models:
 
-| Your setup | Prompt profile | Orchestrator writes |
+| Your setup | Prompt profile | Auxiliary work |
 | --- | --- | --- |
 | Small local model everywhere (orchestrator and worker) | `light` | `direct` |
 | Large model as orchestrator, small one as worker | `full` | `delegate` |
 | Large model in both roles (cloud) | `full` | `direct` |
-| Small model as orchestrator, large one as worker | `light` | `delegate` |
 
 Why each row:
 
-- **Small everywhere → short prompt, direct writes.** A small model follows a short
-  prompt better, and delegating here only swaps one small model for another: you pay an
-  extra round-trip plus a sub-agent that starts with no memory at all, and gain no
-  capability. For a one-line edit, the direct path makes fewer mistakes.
-- **Large + small → full prompt, delegated writes.** This is where delegation actually
-  pays off. The large model is good at exactly what is left for it: reading, locating the
-  precise range, and writing an unambiguous instruction. And the file content — usually
-  the bulk of a turn — ends up in the worker's context instead of the orchestrator's,
-  which is the expensive one and the one you want to preserve across the conversation.
-- **Large everywhere → full prompt, direct writes.** Context is plentiful and quality is
-  not the bottleneck; fewer round-trips means faster answers.
-- **Small orchestrator, large worker → short prompt, delegated writes.** Here delegation
-  exists to take editing away from the weaker model and hand it to the stronger one.
+- **Small everywhere → short prompt, direct.** A small model follows a short prompt
+  better, and delegating here only swaps one small model for another: you pay an extra
+  round-trip plus a helper that starts with no memory at all, and gain no capability.
+- **Large + small → full prompt, delegate.** This is where helpers pay off. The large
+  model keeps its context — the expensive one, and the one you want to last across the
+  conversation — for your task, while the bulk reading and research run on the small
+  model's tokens. The large model still makes every change.
+- **Large everywhere → full prompt, direct.** Context is plentiful and quality is not the
+  bottleneck; fewer round-trips means faster answers.
 
-Two caveats about `delegate`:
+Since the orchestrator makes every change, a small orchestrator with a large worker no
+longer moves editing to the stronger model: put the stronger model in the orchestrator.
+`delegate` costs one extra model call per auxiliary job; if answers feel slow, this is the
+first setting to reconsider.
 
-- It needs **at least one active skill** to work. `command-line` is active out of the box
-  and fills that role; if no skill is available, the assistant tells you it cannot write
-  instead of trying and failing.
-- It costs one extra model call per change. If small edits feel slow, this is the first
-  setting to reconsider.
-
-You'll find it in **Edit Models**, in the model form right below the prompt profile, and
+You'll find auxiliary work in **Edit Models**, in the model form right below the prompt profile, and
 as a column in the models list.
 
 ## settings :: Which settings should I use?
@@ -426,8 +428,10 @@ Running locally is free and private, and it works well when you respect the limi
 
 ## local-skills :: Which skills suit small local models?
 
-Skills are markdown instruction files that teach the assistant a specialised job. The
-assistant delegates to them with `run_skill`, which spawns a fresh, stateless sub-agent.
+Skills are markdown instruction files that teach the assistant a specialised job. Most
+are instructions the assistant loads and follows itself; a few (`log-table-condenser`,
+`staged-reader`, `elementary-ops`, `web-search`) are helpers it hands an auxiliary job to
+with `run_skill`, which spawns a fresh, stateless agent that returns what it found.
 For a small local model, prefer skills that turn a big job into a **script** instead of
 into a long conversation:
 

@@ -20,8 +20,9 @@ O OpalaTex tem três partes trabalhando juntas:
    de HTML e explorador de arquivos.
 2. **O assistente de IA** — um orquestrador de chat que lê e edita seus arquivos, roda
    comandos, pesquisa na web, gera documentos de escritório (.docx, .pptx), faz
-   perguntas interativas para tirar dúvidas e delega trabalho especializado para skills
-   e templates da **Asset Store**.
+   perguntas interativas para tirar dúvidas, segue skills da **Asset Store** em tarefas
+   especializadas e passa trabalhos auxiliares (leituras longas, condensar logs,
+   pesquisa na web) para agentes helpers.
 3. **Compilação local** — o Tectonic compila o documento sem exigir uma instalação de
    LaTeX no sistema.
 
@@ -166,8 +167,8 @@ engrenagem na barra lateral) e estão organizadas em quatro abas:
 ### 2. Abas Orquestrador e Worker
 
 O projeto configura modelos e parâmetros de execução separados para o **Orquestrador**
-(o agente de conversação e planejamento) e o **Worker** (sub-agentes efêmeros criados por
-`run_skill`). Ambas as abas oferecem:
+(o agente de conversação e planejamento) e o **Worker** (o modelo dos helpers que o
+`run_skill` cria). Ambas as abas oferecem:
 
 - **Seleção de Modelo e Monitor de Hardware** — escolha entre os modelos cadastrados.
   Indicadores em tempo real de VRAM da GPU e RAM do sistema sinalizam a adequação do
@@ -254,11 +255,20 @@ Dois atalhos úteis:
 
 Um projeto usa **dois papéis de modelo**:
 
-- **Orquestrador** — o modelo com quem você conversa no chat. Ele planeja, chama
-  ferramentas e escreve as respostas finais. Reserve para ele o seu melhor modelo.
-- **Worker** — o modelo usado pelos sub-agentes efêmeros das skills (`run_skill`).
-  Workers fazem tarefas estreitas, cheias de ferramentas, e terminam rápido; um modelo
-  menor e mais rápido serve bem e normalmente é até preferível.
+- **Orquestrador** — o agente principal, o modelo com quem você conversa no chat. Ele faz
+  a sua tarefa: planeja, lê, faz **todas** as alterações nos seus arquivos, roda comandos e
+  escreve as respostas finais. Reserve para ele o seu melhor modelo.
+- **Worker** — o modelo dos **helpers**: agentes efêmeros (`run_skill`) que fazem um
+  trabalho auxiliar para o agente principal — ler ou resumir um documento longo, extrair
+  partes de um arquivo, condensar um log, pesquisar na web — e devolvem o que encontraram.
+  Helpers nunca alteram seus arquivos. O trabalho deles é estreito, então um modelo menor
+  e mais rápido serve bem e economiza tokens. Uma skill helper também pode indicar o
+  próprio modelo; o chat mostra ao agente principal o modelo de cada helper e se ele
+  enxerga imagens.
+
+As skills seguem os mesmos dois tipos. A maioria é um conjunto de instruções que o agente
+principal carrega (`load_skill`) e executa ele mesmo; uma skill marcada com `role: helper`
+roda como helper.
 
 Ao cadastrar um modelo no catálogo você pode declarar capacidades:
 
@@ -279,56 +289,48 @@ Ao cadastrar um modelo no catálogo você pode declarar capacidades:
 - **`prompt_profile`** (`full` ou `light`) — quanto texto de prompt o modelo recebe.
   `full` envia o prompt completo com todas as salvaguardas e exemplos; `light` envia uma
   versão condensada (mesmas regras, menos prosa) que economiza tokens e latência.
-- **Escrita do orquestrador** (`direta` ou `delegada`) — se este modelo, **quando for o
-  orquestrador**, pode mexer em arquivos. Em `direta` ele cria e edita por conta própria
-  com `write_file`, `edit_file`, `write_content_pos` e `replace_content_range`. Em `delegada` ele
-  apenas lê: toda criação, edição, renomeação ou remoção precisa passar por um worker via
-  `run_skill`. Como worker, o modelo escreve normalmente — a opção não tem efeito nesse
-  papel, porque um worker não tem para quem delegar.
+- **Trabalho auxiliar** (`direta` ou `delegada`) — quanto trabalho auxiliar este modelo,
+  **quando for o orquestrador**, passa para os helpers. Em `direta` ele mesmo lê e busca,
+  e só chama um helper para um trabalho grande demais para o próprio contexto. Em
+  `delegada` ele manda leitura, resumo, extração, condensação de logs e pesquisa na web
+  para os helpers por padrão, e reserva o próprio contexto para a sua tarefa. Nas duas, o
+  orquestrador faz todas as alterações ele mesmo.
+- **`force_vision`** (um parâmetro de modelo) — declara que um modelo aceita imagens quando
+  o LiteLLM não o conhece (um llava ou Qwen-VL local, por exemplo). Decide se um helper
+  que roda nesse modelo recebe trabalho com imagens.
 - **`num_ctx`** — sobreposição opcional da janela de contexto no nível do catálogo para
   este modelo.
 
-Perfil de prompt e escrita do orquestrador são **duas opções independentes**: a primeira
-diz quanto texto o modelo lê, a segunda diz o que ele pode fazer. Qualquer uma das quatro
-combinações é válida.
+Perfil de prompt e trabalho auxiliar são **duas opções independentes**: a primeira diz
+quanto texto o modelo lê, a segunda onde acontecem a leitura e a pesquisa. Qualquer uma
+das quatro combinações é válida.
 
 ### Qual combinação usar
 
-O padrão de um modelo novo é `full` + `direta`, que é o comportamento de sempre. Ajuste
-conforme os dois modelos do projeto:
+O padrão de um modelo novo é `full` + `direta`. Ajuste conforme os dois modelos do projeto:
 
-| Seu cenário | Perfil de prompt | Escrita do orquestrador |
+| Seu cenário | Perfil de prompt | Trabalho auxiliar |
 | --- | --- | --- |
 | Modelo pequeno local em tudo (orquestrador e worker) | `light` | `direta` |
 | Modelo grande no orquestrador, pequeno no worker | `full` | `delegada` |
 | Modelo grande nos dois papéis (nuvem) | `full` | `direta` |
-| Modelo pequeno no orquestrador, grande no worker | `light` | `delegada` |
 
 Por que cada linha:
 
-- **Pequeno em tudo → prompt curto, escrita direta.** Um modelo pequeno segue melhor um
-  prompt curto, e delegar aqui só troca um modelo pequeno por outro: você paga uma ida e
-  volta a mais, mais um sub-agente que começa sem memória nenhuma, sem ganhar capacidade.
-  Para uma edição de uma linha, o caminho direto erra menos.
-- **Grande + pequeno → prompt completo, escrita delegada.** É a combinação em que a
-  delegação compensa de verdade. O modelo grande é bom justamente no que sobra para ele:
-  ler, localizar o trecho exato e escrever uma instrução precisa. E o conteúdo do arquivo
-  — que costuma ser a maior parte de um turno — passa a ocupar o contexto do worker, e
-  não o do orquestrador, que é o contexto caro e o que você quer preservar ao longo da
-  conversa.
-- **Grande em tudo → prompt completo, escrita direta.** Contexto sobra e a qualidade não
-  é o gargalo; menos idas e voltas significa resposta mais rápida.
-- **Pequeno no orquestrador, grande no worker → prompt curto, escrita delegada.** Aqui a
-  delegação existe para tirar a edição das mãos do modelo mais fraco e entregá-la ao mais
-  forte.
+- **Pequeno em tudo → prompt curto, direta.** Um modelo pequeno segue melhor um prompt
+  curto, e delegar aqui só troca um modelo pequeno por outro: você paga uma ida e volta a
+  mais, mais um helper que começa sem memória nenhuma, sem ganhar capacidade.
+- **Grande + pequeno → prompt completo, delegada.** É onde os helpers compensam. O modelo
+  grande reserva o próprio contexto — o caro, e o que você quer preservar ao longo da
+  conversa — para a sua tarefa, enquanto a leitura volumosa e a pesquisa gastam os tokens
+  do modelo pequeno. O modelo grande continua fazendo todas as alterações.
+- **Grande em tudo → prompt completo, direta.** Contexto sobra e a qualidade não é o
+  gargalo; menos idas e voltas significa resposta mais rápida.
 
-Dois avisos sobre `delegada`:
-
-- Ela precisa de **pelo menos uma skill ativa** para funcionar. A `command-line` já vem
-  ativa e cobre esse papel; se nenhuma skill estiver disponível, o assistente vai avisar
-  que não consegue escrever, em vez de tentar e falhar.
-- Ela custa uma chamada de modelo a mais por alteração. Se o seu incômodo for lentidão em
-  edições pequenas, é a primeira opção a rever.
+Como o orquestrador faz todas as alterações, um orquestrador pequeno com um worker grande
+não passa mais a edição para o modelo mais forte: coloque o modelo mais forte no
+orquestrador. `delegada` custa uma chamada de modelo a mais por trabalho auxiliar; se as
+respostas parecerem lentas, é a primeira opção a rever.
 
 A opção fica em **Editar Modelos**, no formulário do modelo, logo abaixo do perfil de
 prompt, e aparece como coluna na lista de modelos.
@@ -445,8 +447,10 @@ Rodar localmente é gratuito e privado, e funciona bem quando você respeita os 
 ## local-skills :: Quais skills combinam com modelos locais pequenos?
 
 Skills são arquivos markdown de instruções que ensinam ao assistente uma tarefa
-especializada. O assistente delega para elas com `run_skill`, que cria um sub-agente novo
-e sem memória. Para um modelo local pequeno, prefira skills que transformem um trabalho
+especializada. A maioria são instruções que o assistente carrega e segue ele mesmo;
+algumas (`log-table-condenser`, `staged-reader`, `elementary-ops`, `web-search`) são
+helpers para os quais ele passa um trabalho auxiliar com `run_skill`, que cria um agente
+novo e sem memória que devolve o que encontrou. Para um modelo local pequeno, prefira skills que transformem um trabalho
 grande em um **script**, e não em uma conversa longa:
 
 - **`command-line`** — a mais útil de todas. Comandos de terminal, scripts de build,

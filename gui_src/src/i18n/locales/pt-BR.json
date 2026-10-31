@@ -955,12 +955,12 @@
       "light": "Enxuto",
       "lightHint": "Um system prompt condensado (regras essenciais + lista de ferramentas/skills apenas). Use para modelos onde um prompt mais curto economiza tokens/latência sem prejudicar a confiabilidade."
     },
-    "orchestratorPolicyLabel": "Ações do orquestrador",
+    "orchestratorPolicyLabel": "Trabalho auxiliar (helpers)",
     "orchestratorPolicy": {
       "direct": "Direta",
-      "directHint": "O orquestrador age no projeto por conta própria: cria e edita arquivos (write_file, edit_file, write_content_pos, replace_content_range) e executa comandos (run_command, run_python_script) com as mesmas ferramentas de um worker de skill. Menos idas e vindas; o conteúdo do arquivo passa pelo contexto do orquestrador. O modo plan continua bloqueando essas ferramentas e o modo edit continua pedindo sua confirmação.",
+      "directHint": "O agente principal lê, busca e faz a tarefa ele mesmo, e só chama um helper para um trabalho auxiliar grande demais para o próprio contexto: cobrir um arquivo enorme, condensar um log grande, pesquisar em várias fontes da web. Nas duas opções o agente principal faz todas as alterações no projeto; o modo plan continua bloqueando escritas e comandos, e o modo edit continua pedindo sua confirmação.",
       "delegate": "Delegada",
-      "delegateHint": "O orquestrador apenas lê, e toda alteração de arquivo ou execução de comando vai para um worker de skill via run_skill. Mantém escritas grandes fora do contexto do orquestrador. Exige pelo menos uma skill ativa para ser utilizável."
+      "delegateHint": "O agente principal passa o trabalho auxiliar aos helpers por padrão (ler ou resumir documentos longos, extrair partes de um arquivo, condensar logs, pesquisar na web) e reserva o próprio contexto para a tarefa. Os helpers rodam no modelo worker do projeto, então apontá-lo para um modelo menor economiza tokens. O agente principal continua fazendo todas as alterações: helpers devolvem dados, nunca edições."
     },
     "supportsThinkingLabel": "Este modelo suporta thinking/reasoning",
     "supportsThinkingHint": "Mantenha desligado, exceto se a documentação do modelo disser explicitamente que ele suporta parâmetros de thinking ou reasoning.",

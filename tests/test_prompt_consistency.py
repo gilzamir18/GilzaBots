@@ -31,7 +31,7 @@ import pytest
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _ORCHESTRATOR_DIR = os.path.join(_REPO_ROOT, "skills", "chat-orchestrator")
-_VARIANTS = ("SKILL.md", "SKILL.delegate.md", "SKILL.light.md", "SKILL.light-delegate.md")
+_VARIANTS = ("SKILL.md", "SKILL.light.md")
 
 
 def _variant(name):
@@ -216,9 +216,9 @@ def test_plan_mode_names_the_same_tools_in_both_profiles():
 @pytest.mark.parametrize("profile", ["full", "light"])
 def test_the_worker_tool_list_is_the_toolset_it_receives(profile):
     from opalatex.prompt_profiles import get_profile
-    from opalatex.tools import get_available_tools
+    from opalatex.tools import get_helper_tools
 
-    tools = get_available_tools()
+    tools = get_helper_tools(vision=True)
     block = get_profile(profile)["worker_tools_block"](tools)
 
     missing = [t.name for t in tools if t.name not in block]
@@ -239,12 +239,14 @@ def test_the_worker_intro_does_not_name_the_skill_in_either_profile():
         assert "Executing the" not in intro(), profile
 
 
-def test_the_worker_write_rule_does_not_contradict_range_edits():
+def test_the_helper_write_rule_names_only_its_scratch_area():
+    """A helper writes notes, never project files (PROJECT_DESIGN 2.23), so its
+    prompt must not teach it to edit existing project files."""
     source = open(os.path.join(_REPO_ROOT, "opalatex", "memgpt_runtime.py"), encoding="utf-8").read()
 
     assert "ALWAYS use the write_file tool" not in source
-    assert "replace_content_range or write_content_pos to change part of an existing file" in source
-    assert "edit_file (an exact passage, found by its text)" in source
+    assert "Write scratch files (notes, plans, JSON) only through the file tools" in source
+    assert "replace_content_range or write_content_pos to change part of an existing file" not in source
 
 
 # ── Inline editor ────────────────────────────────────────────────────────────

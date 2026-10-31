@@ -29,7 +29,7 @@ from opalatex.prompt_surface import (
 
 SKILL_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                          "skills", "chat-orchestrator")
-VARIANTS = ["SKILL.md", "SKILL.delegate.md", "SKILL.light.md", "SKILL.light-delegate.md"]
+VARIANTS = ["SKILL.md", "SKILL.light.md"]
 
 #: The first name inside backticks: `/project [new]`, `get_editor_state`.
 NAMES = re.compile(r"`([A-Za-z_/][\w./-]*)[^`]*`")

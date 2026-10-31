@@ -1147,18 +1147,23 @@ def model_prompt_profile(model: str | None) -> str:
 
 
 def model_orchestrator_policy(model: str | None) -> str:
-    """Return the orchestrator tool policy ("direct" or "delegate") for *model*.
+    """Return the main agent's delegation policy ("direct" or "delegate") for *model*.
+
+    Both policies give the main agent the same tools: it is the agent that does
+    the task, so it always holds the workspace action tools (PROJECT_DESIGN
+    2.23). The policy decides only how much *auxiliary* work it hands to helper
+    agents. "direct" reads and searches itself and calls a helper for jobs too
+    big for its own context; "delegate" sends that work -- reading long
+    documents, extracting, condensing, researching the web -- to helpers by
+    default and keeps its own context for the task, which saves its tokens when
+    the helpers run on a smaller model.
 
     Deliberately a separate field from `model_prompt_profile`, not a third value
-    of it. The profile controls prompt verbosity (a capability question); the
-    policy controls whether the chat orchestrator gets file-writing tools at all
-    (an authority question). They are orthogonal -- "light prompt, delegate
-    writes" is the natural configuration for a small local model -- so folding
-    them into one field would make that combination unexpressible.
+    of it: the profile controls prompt verbosity, the policy controls where the
+    auxiliary work runs, and "light prompt, delegate" must stay expressible.
 
-    Only meaningful for the orchestrator role: a skill worker has no `run_skill`
-    tool and nothing to delegate to, so `build_run_skill_tool` never consults
-    this. "direct" is the default and matches the behavior shipped so far.
+    Only meaningful for the main agent: a helper has no `run_skill` tool and
+    nothing to delegate to. "direct" is the default.
     """
     try:
         from opalatex.models_store import get_model_by_runtime_id
@@ -1167,6 +1172,28 @@ def model_orchestrator_policy(model: str | None) -> str:
         return policy if policy in ("direct", "delegate") else "direct"
     except Exception:
         return "direct"
+
+
+def model_supports_vision(model: str | None, params: dict | None = None) -> bool:
+    """True when *model* accepts images, as far as OpalaTex can know.
+
+    LiteLLM's registry answers for the models it lists; a local vision model
+    (llava, moondream, a Qwen-VL served by Ollama) is not listed, so the
+    `force_vision` model parameter lets the user declare it. *params* are the
+    model parameters the caller will actually run the model with -- the
+    project's `model_params` for the main agent, its `worker_model_params` for a
+    helper -- so the answer and the request agree.
+    """
+    if params and bool(params.get("force_vision", False)):
+        return True
+    name = str(model or "").strip()
+    if not name:
+        return False
+    try:
+        import litellm as _litellm
+        return bool(_litellm.supports_vision(name))
+    except Exception:
+        return False
 
 
 def sanitize_litellm_kwargs_for_model(

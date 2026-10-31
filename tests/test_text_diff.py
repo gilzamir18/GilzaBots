@@ -105,9 +105,9 @@ def test_the_skill_script_renders_exactly_like_the_module():
 # ---------------------------------------------------------------------------
 
 def test_diff_files_is_a_safe_worker_tool():
-    from opalatex.tools import diff_files, get_available_tools
+    from opalatex.tools import diff_files, get_helper_tools
 
-    assert "diff_files" in {getattr(t, "name", None) for t in get_available_tools()}
+    assert "diff_files" in {getattr(t, "name", None) for t in get_helper_tools()}
     # Read-only: it must answer in plan mode without a permission prompt.
     assert getattr(diff_files, "name", "") == "diff_files"
 

@@ -2,6 +2,7 @@
 name: log-table-condenser
 description: Collect user options, inspects, analyzes, compares consistency, checks seeds/fields, discovers schemas, samples, and condenses large structured line-by-line log files (.jsonl, .csv, .tsv, .log) without overflowing context. Use whenever the user asks to inspect, compare, read, analyze, check seeds in, or transform large log files.
 model: worker
+role: helper
 ---
 
 # Log Table Condenser & Analyzer Skill

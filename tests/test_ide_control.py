@@ -254,23 +254,25 @@ def test_the_terminal_orchestrator_does_not(tmp_path):
         assert name not in agent.system_prompt, name
 
 
-def test_workers_are_not_given_the_window_controls():
-    from opalatex.tools import get_available_tools
+def test_helpers_are_not_given_the_window_controls():
+    from opalatex.tools import get_helper_tools
 
-    names = {str(getattr(t, "name", "")) for t in get_available_tools()}
+    names = {str(getattr(t, "name", "")) for t in get_helper_tools()}
     assert not {"open_file", "close_file", "reveal_in_pdf", "set_layout", "get_problems"} & names
 
 
-def test_workers_read_the_terminal_they_start_commands_in_on_the_desktop_only():
+def test_helpers_read_the_terminal_on_the_desktop_only_and_never_drive_it():
     from opalatex.prompt_surface import tools_for_surface
-    from opalatex.tools import get_available_tools
+    from opalatex.tools import get_helper_tools
 
-    names = {str(getattr(t, "name", "")) for t in tools_for_surface(get_available_tools())}
-    assert {"read_terminal", "run_background_command"} <= names
+    names = {str(getattr(t, "name", "")) for t in tools_for_surface(get_helper_tools())}
+    assert "read_terminal" in names
+    # Starting processes in the user's terminal is the main agent's.
+    assert not {"run_background_command", "run_interactive_command"} & names
 
     agent_stdin.set_reply_surface(agent_stdin.REPLY_SURFACE_TERMINAL)
     try:
-        names = {str(getattr(t, "name", "")) for t in tools_for_surface(get_available_tools())}
+        names = {str(getattr(t, "name", "")) for t in tools_for_surface(get_helper_tools())}
     finally:
         agent_stdin.set_reply_surface(None)
     assert "read_terminal" not in names
@@ -279,18 +281,15 @@ def test_workers_read_the_terminal_they_start_commands_in_on_the_desktop_only():
 # ── The map of the window ────────────────────────────────────────────────────
 
 
-def test_the_map_names_only_tools_the_policy_leaves_in_reach():
+def test_the_map_names_every_part_the_main_agent_reaches():
+    """Under both policies the main agent holds every tool the map names."""
     from opalatex.memgpt_runtime import desktop_workspace_block
 
-    direct = desktop_workspace_block("direct")
-    assert "`compile_latex`" in direct and "`run_background_command`" in direct
-    assert "`open_file`" in direct and "`get_editor_state`" in direct
-
-    delegate = desktop_workspace_block("delegate")
-    assert "compile_latex" not in delegate and "run_background_command" not in delegate
-    assert "`open_file`" in delegate
+    block = desktop_workspace_block()
+    assert "`compile_latex`" in block and "`run_background_command`" in block
+    assert "`open_file`" in block and "`get_editor_state`" in block
     for name in ("reveal_in_pdf", "get_problems", "read_terminal", "set_layout"):
-        assert f"`{name}`" in delegate and f"`{name}`" in direct
+        assert f"`{name}`" in block
 
 
 # ── reveal_in_pdf ────────────────────────────────────────────────────────────

@@ -28,6 +28,14 @@ from opalatex.project import ProjectData
 from opalatex.config import DEFAULT_MODEL, WORKER_MODEL
 
 
+def _enable_helper(project_path, name="staged-reader"):
+    """Activate a bundled helper skill: run_skill only accepts helpers."""
+    import yaml
+
+    with open(os.path.join(str(project_path), "skills.yaml"), "w", encoding="utf-8") as f:
+        yaml.safe_dump({"skills": [name]}, f)
+
+
 def _project(tmp_path):
     return ProjectData(
         name="t", project_name="t",
@@ -166,10 +174,15 @@ def test_chat_orchestrator_context_limit_uses_catalog_num_ctx_for_cloud_model(tm
 
 
 def test_chat_orchestrator_system_prompt_embeds_skill_metadata(tmp_path):
+    _enable_helper(tmp_path)
     m = build_chat_orchestrator(_project(tmp_path), None)
-    # Bundled skills must surface as Level-1 metadata for routing.
-    assert "Available skills" in m.system_prompt
-    assert "command-line" in m.system_prompt
+    # Bundled skills must surface as Level-1 metadata for routing, each in the
+    # list of the tool that accepts it.
+    prompt = m.system_prompt
+    helpers = prompt.index("## Helpers (delegate with run_skill)")
+    loadable = prompt.index("## Skills you carry out yourself (load with load_skill)")
+    assert helpers < prompt.index("- staged-reader:") < loadable
+    assert prompt.index("- command-line:") > loadable
 
 
 def test_current_date_instruction_is_prepended_to_system_prompt(tmp_path):
@@ -274,15 +287,16 @@ def test_run_skill_returns_blocked_result_in_plan_mode(tmp_path):
 
 
 def test_run_skill_breaks_consecutive_failed_worker_loop(tmp_path):
+    _enable_helper(tmp_path)
     m = build_chat_orchestrator(_project(tmp_path), None)
     m._skill_run_history = [
         {
-            "skill": "command-line",
+            "skill": "staged-reader",
             "context": "attempt 1",
             "result": "[AVISO: O worker terminou sem um resumo claro. Ele realizou 0 chamadas de ferramenta e o último texto gerado foi: ]",
         },
         {
-            "skill": "command-line",
+            "skill": "staged-reader",
             "context": "attempt 2",
             "result": "[CRITICAL WORKER CRASH] A exceção não tratada interrompeu o worker: litellm.APIConnectionError",
         },
@@ -290,11 +304,11 @@ def test_run_skill_breaks_consecutive_failed_worker_loop(tmp_path):
     run_skill = build_run_skill_tool(m, str(tmp_path), "ollama/proj")
     raw = getattr(run_skill, "_func", None) or run_skill
 
-    result = asyncio.run(raw("command-line", "attempt 3"))
+    result = asyncio.run(raw("staged-reader", "attempt 3"))
 
     assert "WORKER LOOP BREAKER" in result
     assert "Do NOT call this same worker again" in result
-    assert _recent_failed_skill_attempts(m, "command-line") == 2
+    assert _recent_failed_skill_attempts(m, "staged-reader") == 2
 
 
 def test_sanitize_skill_result_for_prompt_removes_raw_tool_json():
@@ -479,7 +493,8 @@ def test_run_skill_worker_disables_shared_router(tmp_path, monkeypatch):
     )
     raw = getattr(run_skill, "_func", None) or run_skill
 
-    result = asyncio.run(raw("command-line", "inspect the project"))
+    _enable_helper(tmp_path)
+    result = asyncio.run(raw("staged-reader", "inspect the project"))
 
     assert "done" in result
     assert captured["user_prompt_prefix"] == project.user_prompt_prefix
@@ -538,12 +553,13 @@ def test_run_skill_worker_uses_light_prompt_profile_and_skill_variant(tmp_path, 
     )
     raw = getattr(run_skill, "_func", None) or run_skill
 
-    result = asyncio.run(raw("command-line", "inspect the project"))
+    _enable_helper(tmp_path)
+    result = asyncio.run(raw("staged-reader", "inspect the project"))
 
     assert "done" in result
     system_prompt = captured["system_prompt"]
     assert "Tools: get_project_overview" in system_prompt
-    assert "Command Line Skill (light)" in system_prompt
+    assert "You are the **staged-reader** worker" in system_prompt  # its SKILL.light.md
     assert "RECOMMENDATION FOR EXECUTION AND TERMINATION" not in system_prompt
     assert "CRITICAL: LARGE FILES & TRUNCATION PREVENTION" not in system_prompt
 
@@ -750,7 +766,8 @@ def test_worker_reasoning_display_follows_its_own_model_capability(
         _project_ref=project,
     )
     raw = getattr(run_skill, "_func", None) or run_skill
-    asyncio.run(raw("command-line", "inspect the project"))
+    _enable_helper(tmp_path)
+    asyncio.run(raw("staged-reader", "inspect the project"))
 
     assert built, "the worker sub-agent should have been constructed"
     assert (built[-1].on_thinking is not None) is expect_wired
@@ -805,9 +822,10 @@ def test_worker_history_keeps_the_answer_it_is_asked_to_save(tmp_path, monkeypat
         m, str(tmp_path), project_model=project.model, _project_ref=project,
     )
     raw = getattr(run_skill, "_func", None) or run_skill
-    asyncio.run(raw("command-line", "write lista.tex"))
+    _enable_helper(tmp_path)
+    asyncio.run(raw("staged-reader", "write lista.tex"))
 
-    history = captured["prompt"].split("MEMGPT CONTEXT/INSTRUCTIONS:")[0]
+    history = captured["prompt"].split("MAIN AGENT'S REQUEST:")[0]
     assert "ASSISTANT: \\section{Level 1} THE LIST BODY" in history
     assert "USER: Save it to lista.tex." in history
     assert "ASSISTANT: \n" not in history

@@ -599,7 +599,7 @@ async def cmd_set_main_model(state: REPLState, args: list[str]) -> str | None:
 
 
 @_registry.register("/set-worker-model", usage="<model_id>",
-                    description="Set the worker model for this project")
+                    description="Set the worker model for this project (the model helpers run on)")
 async def cmd_set_worker_model(state: REPLState, args: list[str]) -> str | None:
     if not args:
         T.error("Usage: /set-worker-model <model_id>  (e.g. gemini/gemini-2.0-flash)")

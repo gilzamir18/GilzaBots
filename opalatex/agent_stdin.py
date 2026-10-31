@@ -689,15 +689,25 @@ def _worker_summary_response(agent) -> str:
 
 
 def _extract_worker_summary_from_tool_result(content: str) -> str:
-    """Extract a worker report from a run_skill tool result."""
-    marker = "Worker's summary/report:"
-    if marker not in content:
+    """Extract a helper's report from a run_skill tool result.
+
+    Chats stored before helpers existed hold results with the worker marker,
+    so both are read.
+    """
+    from opalatex.memgpt_runtime import HELPER_REPORT_MARKER, LEGACY_WORKER_REPORT_MARKER
+
+    marker = next(
+        (m for m in (HELPER_REPORT_MARKER, LEGACY_WORKER_REPORT_MARKER) if m in content), None
+    )
+    if marker is None:
         return ""
 
     summary = content.split(marker, 1)[1].strip()
     lines = summary.splitlines()
-    if lines and lines[0].strip().startswith("(Tools used by worker:"):
+    if lines and lines[0].strip().startswith(("(Tools used by worker:", "(Tool calls made by the helper:")):
         summary = "\n".join(lines[1:]).strip()
+    # The runtime's tool-error list is not part of the helper's report.
+    summary = summary.split("\n\n[Tool errors in this helper run", 1)[0].strip()
     return summary
 
 
@@ -1030,8 +1040,8 @@ def _empty_response_retry_prompt(worker_summary: str = "") -> str:
     summary = str(worker_summary or "").strip()
     if summary:
         prompt += (
-            "\n\nThe worker already completed work and returned this summary. "
-            "Use it to produce the final user-facing message; do not repeat the work:\n"
+            "\n\nA helper already did its job and returned this report. "
+            "Use it to produce the final user-facing message; do not repeat the job:\n"
             f"{summary}"
         )
     return prompt
@@ -1672,15 +1682,13 @@ def _prepare_turn_attachments(
     turn with no attachments of its own reuses the recent ones from the chat, but
     a mid-turn message must not re-attach what the turn already carries.
     """
-    import litellm as _litellm
+    from opalatex.config import model_supports_vision as _model_supports_vision
 
     _model_name = (current_project.model if current_project else None) or ""
     _mp = getattr(current_project, "model_params", {}) or {}
-    # litellm.supports_vision() only knows models in its static registry;
-    # local Ollama vision models (e.g. llava, moondream2) are NOT listed there.
-    # Setting force_vision=true in model_params lets the user override this.
-    _litellm_vision = _litellm.supports_vision(_model_name)
-    model_supports_vision = _litellm_vision or bool(_mp.get("force_vision", False))
+    # LiteLLM's registry, or the user's `force_vision` for a local vision model
+    # it does not list -- one rule, shared with the helper catalog.
+    model_supports_vision = _model_supports_vision(_model_name, _mp)
 
     pdf_truncate_enabled = _mp.get("pdf_truncate", True)
     # The documents are fitted into the window only when it is known; an
@@ -1898,19 +1906,19 @@ def wrap_tool(original_tool):
 
 
 
-from opalatex.tools import get_available_tools
+from opalatex.tools import get_helper_tools
 
-# Monkey-patch get_available_tools to automatically wrap tools returned to sub-agents
-original_get_available_tools = get_available_tools
+# Monkey-patch get_helper_tools to automatically wrap the tools handed to helpers
+original_get_helper_tools = get_helper_tools
 
-def patched_get_available_tools():
-    tools = original_get_available_tools()
+def patched_get_helper_tools(vision: bool = False):
+    tools = original_get_helper_tools(vision=vision)
     return [wrap_tool(t) for t in tools]
 
 import opalatex.tools
 import opalatex.memgpt_runtime
-opalatex.tools.get_available_tools = patched_get_available_tools
-opalatex.memgpt_runtime.get_available_tools = patched_get_available_tools
+opalatex.tools.get_helper_tools = patched_get_helper_tools
+opalatex.memgpt_runtime.get_helper_tools = patched_get_helper_tools
 
 async def handle_load_project(data: dict):
     global current_project, current_store, current_memgpt

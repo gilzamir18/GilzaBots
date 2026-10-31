@@ -180,9 +180,33 @@ def compose_visible_response(parts: List[str], final: str = "") -> str:
     return "\n\n".join(chunks)
 
 
+class ToolCallRecord(BaseModel):
+    """What happened to one tool call the model issued, in issue order.
+
+    ``ok`` is False when the call never produced a result: the tool raised, the
+    name matched no tool, or loop detection refused it before execution. A tool
+    that *returns* text describing a problem still counts as ``ok`` -- the block
+    cannot read meaning into a successful return value, and does not try.
+    """
+    index: int
+    """1-based position of the call within the run."""
+    tool: str
+    ok: bool
+    error: str = ""
+    """The error the model was shown, without the block's corrective suffix."""
+
+
 class AgentOutput(BaseModel):
     response: str
     tool_calls_made: int = 0
+    tool_calls: List[ToolCallRecord] = Field(default_factory=list)
+    """Every tool call of the run and whether it produced a result, in order.
+
+    A run's final text is the model's own account, and a model told to correct
+    tool errors silently will usually leave a recovered error out of it. A host
+    that delegates to this block and has to know what actually happened -- an
+    error, and what the model did after it -- reads it here instead of from the
+    prose. Empty when the block does not report one."""
     structured_output: Optional[Any] = None
     termination_reason: str = ""
     """Why the run loop stopped, in the loop's own words.
@@ -683,6 +707,7 @@ class LLMAgentBlock(AgentBlock[AgentInput, AgentOutput]):
         visible_texts: List[str] = []
         tool_usage: Dict[str, int] = defaultdict(int)
         tool_call_signatures: Dict[str, int] = defaultdict(int)
+        tool_records: List[ToolCallRecord] = []
         json_retries = 0
         termination_reason: str = "unknown"
 
@@ -747,6 +772,7 @@ class LLMAgentBlock(AgentBlock[AgentInput, AgentOutput]):
                     output = AgentOutput(
                         response=compose_visible_response(visible_texts, content),
                         tool_calls_made=tool_call_count,
+                        tool_calls=list(tool_records),
                         structured_output=structured_obj,
                         narration=list(visible_texts),
                         final_text=content,
@@ -760,6 +786,7 @@ class LLMAgentBlock(AgentBlock[AgentInput, AgentOutput]):
                             visible_texts, "Agent stopped: Max iterations reached."
                         ),
                         tool_calls_made=tool_call_count,
+                        tool_calls=list(tool_records),
                         narration=list(visible_texts),
                         budget_exhausted=True,
                     )
@@ -916,6 +943,7 @@ class LLMAgentBlock(AgentBlock[AgentInput, AgentOutput]):
                 output = AgentOutput(
                     response=compose_visible_response(visible_texts, content),
                     tool_calls_made=tool_call_count,
+                    tool_calls=list(tool_records),
                     structured_output=structured_obj,
                     narration=list(visible_texts),
                     final_text=content,
@@ -950,19 +978,29 @@ class LLMAgentBlock(AgentBlock[AgentInput, AgentOutput]):
                     signature = _tool_call_signature(function_name, tool_call.function.arguments)
                     tool_call_signatures[signature] += 1
                     if tool_call_signatures[signature] > self.loop_detection_limit:
+                        loop_message = _loop_block_message(function_name, self.loop_detection_limit)
                         messages.append({
                             "role": "tool",
                             "tool_call_id": tool_call.id,
                             "name": function_name,
-                            "content": _loop_block_message(function_name, self.loop_detection_limit),
+                            "content": loop_message,
                         })
+                        tool_records.append(ToolCallRecord(
+                            index=tool_call_count, tool=function_name, ok=False, error=loop_message,
+                        ))
                         continue
 
                 # Look for the matching native tool (connected blocks).
                 matched_block = next((b for b in self.tools if b.name == function_name), None)
                 if not matched_block:
+                    unknown_message = unknown_tool_message(
+                        function_name, tool_call.function.arguments, litellm_tools
+                    )
+                    tool_records.append(ToolCallRecord(
+                        index=tool_call_count, tool=function_name, ok=False, error=unknown_message,
+                    ))
                     tool_result_content = json.dumps({"error": (
-                        unknown_tool_message(function_name, tool_call.function.arguments, litellm_tools)
+                        unknown_message
                         + " CRITICAL: Do NOT apologize to the user for this error. Correct it silently."
                     )})
                     messages.append({
@@ -988,6 +1026,7 @@ class LLMAgentBlock(AgentBlock[AgentInput, AgentOutput]):
                         return AgentOutput(
                             response=compose_visible_response(visible_texts, tool_result_content),
                             tool_calls_made=tool_call_count,
+                            tool_calls=list(tool_records),
                             narration=list(visible_texts),
                             final_text=tool_result_content,
                         )
@@ -1009,7 +1048,11 @@ class LLMAgentBlock(AgentBlock[AgentInput, AgentOutput]):
                         "name": function_name,
                         "content": tool_result_content
                     })
+                    tool_records.append(ToolCallRecord(index=tool_call_count, tool=function_name, ok=True))
                 except Exception as e:
+                    tool_records.append(ToolCallRecord(
+                        index=tool_call_count, tool=function_name, ok=False, error=str(e),
+                    ))
                     tool_result_content = json.dumps({"error": f"{str(e)}. Please fix your tool call and try again. CRITICAL: Do NOT apologize to the user for this error. Correct it silently."})
                     messages.append({
                         "role": "tool",
@@ -1034,6 +1077,7 @@ class LLMAgentBlock(AgentBlock[AgentInput, AgentOutput]):
                     return AgentOutput(
                         response=compose_visible_response(visible_texts, tool_result_content),
                         tool_calls_made=tool_call_count,
+                        tool_calls=list(tool_records),
                         narration=list(visible_texts),
                         final_text=tool_result_content,
                     )
@@ -1086,6 +1130,7 @@ class LLMAgentBlock(AgentBlock[AgentInput, AgentOutput]):
                 output = AgentOutput(
                     response=compose_visible_response(visible_texts, content),
                     tool_calls_made=tool_call_count,
+                    tool_calls=list(tool_records),
                     structured_output=structured_obj,
                     narration=list(visible_texts),
                     final_text=content,

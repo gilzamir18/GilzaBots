@@ -2,6 +2,7 @@
 name: staged-reader
 description: Reads one bounded line window of a large text file per delegation and extracts exactly what was asked from it (dates, entities, TODOs, a summary, matches), then reports the next start line so the orchestrator can continue the read on the next call without ever loading the whole file into context. Use whenever a file is too large to read at once, a read_file size refusal happened, or the request needs full coverage of a long .tex, .log, .txt, .md, or source file.
 model: worker
+role: helper
 ---
 
 # Staged Reader Skill

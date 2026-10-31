@@ -99,7 +99,7 @@ def test_skill_is_registered_in_the_asset_store():
 def test_orchestrator_prompts_teach_the_staged_read_loop():
     """Every orchestrator prompt variant must drive the loop the same way."""
     base = os.path.join(_REPO_ROOT, "skills", "chat-orchestrator")
-    for variant in ("SKILL.md", "SKILL.delegate.md", "SKILL.light.md", "SKILL.light-delegate.md"):
+    for variant in ("SKILL.md", "SKILL.light.md"):
         with open(os.path.join(base, variant), encoding="utf-8") as f:
             text = f.read()
         assert "NEXT_START" in text, variant

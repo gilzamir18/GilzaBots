@@ -209,8 +209,9 @@ def test_a_legacy_spreadsheet_without_a_reader_still_fails_fast(tmp_path, monkey
     assert "You have run_command" in message
 
 
-def test_a_delegate_orchestrator_is_sent_to_the_command_line_skill(tmp_path, monkeypatch):
-    """Without the execution tools, "convert it yourself" would be a dead end."""
+def test_the_main_agent_in_plan_mode_is_sent_to_the_user(tmp_path, monkeypatch):
+    """Without the execution tools -- plan mode, for the main agent -- "convert it
+    yourself" would be a dead end, and so would a helper: run_skill is blocked."""
     target = tmp_path / "old.xls"
     target.write_bytes(b"\xd0\xcf\x11\xe0\x00\x00legacy OLE2 payload")
     _prepare(monkeypatch, target)
@@ -219,9 +220,9 @@ def test_a_delegate_orchestrator_is_sent_to_the_command_line_skill(tmp_path, mon
     with pytest.raises(ValueError) as excinfo:
         _read_file(str(target))
     message = str(excinfo.value)
-    assert "you cannot convert it yourself" in message
-    assert "command-line" in message
     assert "plan mode" in message
+    assert "ask the user" in message
+    assert "command-line" not in message and "run_skill" not in message
 
 
 def test_a_worker_is_told_to_convert_an_unreadable_file_itself(tmp_path, monkeypatch):
@@ -261,18 +262,17 @@ def test_a_missing_file_points_a_direct_caller_at_write_file(tmp_path, monkeypat
     assert "run_skill" not in message
 
 
-def test_a_missing_file_sends_a_delegate_orchestrator_to_run_skill(tmp_path, monkeypatch):
-    """A delegate orchestrator has no write_file; naming it was a dead end that a
-    small model answered with a web_search loop on "how to use write_file"."""
+def test_a_missing_file_sends_the_main_agent_to_write_file(tmp_path, monkeypatch):
+    """Outside plan mode the main agent holds write_file under every policy."""
     target = _prepare_missing(monkeypatch, tmp_path)
-    monkeypatch.setattr(tools, "_ORCHESTRATOR_HAS_TERMINAL", False)
+    monkeypatch.setattr(tools, "_ORCHESTRATOR_HAS_TERMINAL", True)
 
     with pytest.raises(ValueError) as excinfo:
         _read_file(str(target))
     message = str(excinfo.value)
     assert "file not found" in message
-    assert "use 'write_file'" not in message
-    assert "run_skill with skill_name 'command-line'" in message
+    assert "use 'write_file' instead" in message
+    assert "run_skill" not in message
     # Recorded failure: naming create_plan outside plan mode made a small model
     # call run_skill("create_plan"), a tool that does not exist in auto mode.
     assert "create_plan" not in message
@@ -292,7 +292,8 @@ def test_a_missing_file_in_plan_mode_names_only_create_plan(tmp_path, monkeypatc
     assert "write_file" not in message
 
 
-def test_a_missing_file_tells_a_worker_to_write_it_itself(tmp_path, monkeypatch):
+def test_a_missing_file_tells_a_helper_where_it_may_write(tmp_path, monkeypatch):
+    """A helper writes only its scratch area; a project file goes in its report."""
     target = _prepare_missing(monkeypatch, tmp_path)
     monkeypatch.setattr(tools, "_ORCHESTRATOR_HAS_TERMINAL", False)
     monkeypatch.setattr(tools, "_IN_SKILL_WORKER", True)
@@ -300,7 +301,8 @@ def test_a_missing_file_tells_a_worker_to_write_it_itself(tmp_path, monkeypatch)
     with pytest.raises(ValueError) as excinfo:
         _read_file(str(target))
     message = str(excinfo.value)
-    assert "use 'write_file' instead" in message
+    assert "'.opalatex/'" in message
+    assert "report" in message
     assert "run_skill" not in message
 
 

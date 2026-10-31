@@ -97,11 +97,11 @@ def test_runs_in_plan_mode_without_a_permission_prompt(tmp_path):
     assert "`a.tex`" in out
 
 
-def test_tool_is_offered_to_orchestrator_and_workers():
-    from opalatex.tools import get_available_tools
+def test_tool_is_offered_to_orchestrator_and_helpers():
+    from opalatex.tools import get_helper_tools
     from opalatex.agent_stdin import ALL_TOOLS_MAP
 
-    assert any(getattr(t, "name", "") == "get_editor_state" for t in get_available_tools())
+    assert any(getattr(t, "name", "") == "get_editor_state" for t in get_helper_tools())
     assert "get_editor_state" in ALL_TOOLS_MAP
 
 

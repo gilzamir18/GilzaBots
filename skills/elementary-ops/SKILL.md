@@ -2,6 +2,7 @@
 name: elementary-ops
 description: Answers questions about text files by composing deterministic elementary operations — address a section, environment or line range; extract labels, citations, references, numbers, headings or matching lines; diff two files or passages; compare lists — and checks the answer with logical conditions (all/any/not, subset, empty, counts). Use to compare two files, two versions or two passages of LaTeX, Markdown or plain text, or to verify that an edit kept its citations, labels, references or numbers, instead of reading and comparing by eye.
 model: worker
+role: helper
 ---
 
 # Elementary Ops Skill

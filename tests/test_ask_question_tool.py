@@ -4,7 +4,7 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from opalatex.tools import ask_question, ask_human, get_available_tools
+from opalatex.tools import ask_question, ask_human, get_helper_tools
 from opalatex.agent_stdin import ALL_TOOLS_MAP
 from opalatex.memgpt_runtime import build_chat_orchestrator
 from opalatex.project import ProjectData
@@ -61,8 +61,8 @@ def test_ask_human_alias():
 
 
 def test_ask_question_in_available_tools():
-    """get_available_tools must include ask_question (and ask_human) for workers."""
-    tools = get_available_tools()
+    """get_helper_tools must include ask_question (and ask_human) for helpers."""
+    tools = get_helper_tools()
     assert ask_question in tools
     assert ask_human in tools
     tool_names = [getattr(t, "name", getattr(t, "__name__", str(t))) for t in tools]

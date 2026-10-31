@@ -13,6 +13,20 @@ import os
 # The chat-orchestrator skill is always loaded regardless of skills.yaml.
 MANDATORY_SKILLS = ("chat-orchestrator", "command-line")
 
+# A skill's `role` frontmatter decides who carries it out (PROJECT_DESIGN 2.23).
+#
+# * "helper": an auxiliary job -- read a long document, extract what was asked,
+#   condense a log, search the web -- run by an ephemeral helper agent through
+#   `run_skill`. The helper returns data to the main agent and never changes the
+#   project; it may keep scratch notes under `<project>/.opalatex/`.
+# * "instructions" (the default): the main agent loads the body with
+#   `load_skill` and does the work itself, with its own tools. A skill that
+#   changes the project is one of these, so every change is made by the agent
+#   that answers for it and sees each of its tool results.
+HELPER_ROLE = "helper"
+INSTRUCTIONS_ROLE = "instructions"
+SKILL_ROLES = (HELPER_ROLE, INSTRUCTIONS_ROLE)
+
 # Directory name of the skill manifest file inside each skill directory.
 SKILL_MANIFEST = "SKILL.md"
 
@@ -82,6 +96,7 @@ def parse_skill_md(skill_dir: str, profile: str = "full") -> dict | None:
 
     Returned dict:
       name, description, model (optional, "" if absent),
+      role ("helper" or "instructions", the default; see HELPER_ROLE),
       dir (absolute path to the skill directory),
       manifest (absolute path to SKILL.md),
       body (Level-2 instructions text).
@@ -123,12 +138,17 @@ def parse_skill_md(skill_dir: str, profile: str = "full") -> dict | None:
     model = fm.get("model", "")
     extends = fm.get("extends", "")
     icon = fm.get("icon", "")
+    # An unknown role is kept as written, not coerced: `skill_role` reports it,
+    # and both run_skill and load_skill refuse the skill with that diagnostic
+    # instead of guessing which agent was meant to run it.
+    role = (fm.get("role", "") or INSTRUCTIONS_ROLE).strip().lower()
     return {
         "name": name,
         "description": description,
         "model": model,
         "extends": extends,
         "icon": icon,
+        "role": role,
         "dir": os.path.abspath(skill_dir),
         "manifest": os.path.abspath(manifest),
         "body": body,
@@ -270,6 +290,15 @@ def active_skills(project_path: str = "") -> list[dict]:
 def level1_metadata(skills: list[dict]) -> str:
     """Render Level-1 metadata (name + description) for the MemGPT system prompt."""
     return "\n".join(f"- {s['name']}: {s['description']}".rstrip() for s in skills)
+
+
+def skill_role(skill_meta: dict) -> str:
+    """The skill's role as declared ("instructions" when the field is absent)."""
+    return str(skill_meta.get("role") or INSTRUCTIONS_ROLE).strip().lower()
+
+
+def is_helper_skill(skill_meta: dict) -> bool:
+    return skill_role(skill_meta) == HELPER_ROLE
 
 
 def local_skill_dir(skill_name: str, project_path: str) -> str | None:

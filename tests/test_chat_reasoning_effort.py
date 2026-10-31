@@ -9,6 +9,8 @@ to `get_agent_llm_kwargs` through the existing `reasoning_effort_override`, so i
 reaches the provider by the same path as the catalog value -- as `think` on
 Ollama, as `reasoning_effort` elsewhere.
 """
+
+import os
 import asyncio
 import json
 import sqlite3
@@ -210,7 +212,10 @@ def _worker_kwargs(store, chat_id, monkeypatch, worker_model):
         _project_ref=project, _store_ref=store,
     )
     raw = getattr(run_skill, "_func", None) or run_skill
-    asyncio.run(raw("command-line", "inspect the project"))
+    import yaml
+    with open(os.path.join(project.project_path, "skills.yaml"), "w", encoding="utf-8") as f:
+        yaml.safe_dump({"skills": ["staged-reader"]}, f)  # run_skill accepts helpers only
+    asyncio.run(raw("staged-reader", "inspect the project"))
     assert built, "the worker sub-agent should have been constructed"
     return built[-1].model_kwargs
 
