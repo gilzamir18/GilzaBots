@@ -202,7 +202,7 @@ async def test_environment_endpoint_reports_snap_platform_and_version(monkeypatc
 
     assert responses[-1] == (
         200,
-        {"platform": "Linux", "running_in_snap": True, "version": "0.2.26"},
+        {"platform": "Linux", "running_in_snap": True, "version": "0.2.27"},
         "application/json",
     )
 

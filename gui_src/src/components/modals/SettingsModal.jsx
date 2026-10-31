@@ -98,7 +98,7 @@ export default function SettingsModal({
   const [dictationModels, setDictationModels] = React.useState([]);
   const [dictationBusy, setDictationBusy] = React.useState('');
   const [isRestarting, setIsRestarting] = React.useState(false);
-  const [runtimeInfo, setRuntimeInfo] = React.useState({ platform: '', running_in_snap: false, version: '0.2.26' });
+  const [runtimeInfo, setRuntimeInfo] = React.useState({ platform: '', running_in_snap: false, version: '0.2.27' });
   const [sandbox, setSandbox] = React.useState({
     enabled: false,
     image: 'python:3.12-slim',
