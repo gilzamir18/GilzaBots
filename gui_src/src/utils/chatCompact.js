@@ -12,6 +12,8 @@
 // never changes another. Compact is the default: the layouts listed here are
 // the ones where the full panel leaves almost no room for the conversation.
 
+import { preferenceStorage } from './preferences.js';
+
 export const COMPACT_CHAT_LAYOUTS = ['studio'];
 
 const COMPACT_CHAT_LAYOUT_SET = new Set(COMPACT_CHAT_LAYOUTS);
@@ -21,13 +23,8 @@ export const compactChatLayoutFor = (mode) => (COMPACT_CHAT_LAYOUT_SET.has(mode)
 
 export const chatCompactStorageKey = (layout) => `chatCompact.${layout}`;
 
-const defaultStorage = () => {
-  try {
-    return globalThis.localStorage ?? null;
-  } catch (_) {
-    return null;
-  }
-};
+// The backend-owned preference store (see utils/preferences.js).
+const defaultStorage = () => preferenceStorage;
 
 /** Whether the chat should be compact in `layout`. Always false for a layout without a compact chat. */
 export const readChatCompact = (layout, storage = defaultStorage()) => {

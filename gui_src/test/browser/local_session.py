@@ -69,6 +69,15 @@ async def checks(work):
                 assert await page.js(f"new Promise(resolve=>{{const img=new Image(); img.onload=()=>resolve(img.naturalWidth); img.onerror=()=>resolve(0); img.src={json.dumps(image_url)};}})") == 1
                 assert await page.js("new Promise(resolve=>{const events=new EventSource('/api/review-events');events.onmessage=e=>{events.close();resolve(e.data)};events.onerror=()=>{events.close();resolve('error')}})") == 'authenticated'
                 print(f'PASS: {origin} mounts, authenticates fetch, loads native image and EventSource; token is HttpOnly')
+            # The page on the current sources (Vite) loaded its preferences from
+            # the backend before mounting, importing the old localStorage once,
+            # and a preference written there reaches ui_settings.json.
+            prefs = await page.js("fetch('/api/settings/client-prefs').then(r=>r.json())")
+            assert prefs['imported'] is True, prefs
+            await page.js("fetch('/api/settings/client-prefs',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({set:{theme:'light'},remove:[]})}).then(r=>r.status)")
+            settings = json.loads((work / 'home' / 'ui_settings.json').read_text(encoding='utf-8'))
+            assert settings['client_prefs'].get('theme') == 'light', settings
+            print('PASS: preferences are hydrated from and saved to the backend')
             # A different local origin must not be able to use the backend session.
             assert await page.js(f"fetch({json.dumps(backend_url + '/api/session')},{{credentials:'include'}}).then(()=>false).catch(()=>true)")
             print('PASS: foreign-origin browser request is rejected')

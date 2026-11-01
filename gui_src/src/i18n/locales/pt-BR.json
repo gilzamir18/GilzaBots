@@ -1088,6 +1088,7 @@
     "projectSelected": "Projeto selecionado: {{name}}",
     "unsavedProjectSwitchPrompt": "Você tem {{count}} arquivo(s) não salvo(s) no projeto atual. Deseja salvá-los antes de trocar de projeto? (Escolha \"Cancelar\" para permanecer no projeto atual)",
     "failedToLoadProjects": "Falha ao carregar projetos: {{error}}",
+    "failedToRememberProject": "Não foi possível lembrar o projeto aberto para a próxima inicialização: {{error}}",
     "failedToListFiles": "Falha ao listar arquivos: {{error}}",
     "fileCallError": "Erro na chamada de arquivos: {{error}}",
     "commitCreating": "Criando commit com a mensagem: \"{{message}}\"...",

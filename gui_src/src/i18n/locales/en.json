@@ -1088,6 +1088,7 @@
     "projectSelected": "Project selected: {{name}}",
     "unsavedProjectSwitchPrompt": "You have {{count}} unsaved file(s) in the current project. Do you want to save them before switching projects? (Choose \"Cancel\" to stay in the current project)",
     "failedToLoadProjects": "Failed to load projects: {{error}}",
+    "failedToRememberProject": "Could not remember the open project for the next launch: {{error}}",
     "failedToListFiles": "Failed to list files: {{error}}",
     "fileCallError": "Error calling files API: {{error}}",
     "commitCreating": "Creating commit with message: \"{{message}}\"...",

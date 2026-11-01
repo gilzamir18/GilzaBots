@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 import { readUiScale, viewportPxToApp } from '../utils/uiScale';
-import { safeGetLocalStorage, safeSetLocalStorage } from '../utils/storage';
+import { getPreference, setPreference } from '../utils/preferences';
 import {
   clampPlanWindowRect,
   defaultPlanWindowRect,
@@ -44,11 +44,11 @@ export default function FloatingAgentWindow({
   waitingLabel,
 }) {
   const [collapsed, setCollapsed] = useState(
-    () => safeGetLocalStorage(collapsedStorageKey, 'false') === 'true'
+    () => getPreference(collapsedStorageKey, 'false') === 'true'
   );
   const [rect, setRect] = useState(() => {
     const viewport = appViewport();
-    const stored = parsePlanWindowRect(safeGetLocalStorage(rectStorageKey, null));
+    const stored = parsePlanWindowRect(getPreference(rectStorageKey, null));
     return stored ? clampPlanWindowRect(stored, viewport) : defaultPlanWindowRect(viewport);
   });
   const [gesture, setGesture] = useState(null);
@@ -81,7 +81,7 @@ export default function FloatingAgentWindow({
     const endGesture = () => {
       pointerRef.current = null;
       setGesture(null);
-      safeSetLocalStorage(rectStorageKey, JSON.stringify(rectRef.current));
+      setPreference(rectStorageKey, JSON.stringify(rectRef.current));
     };
     window.addEventListener('pointermove', handleMove);
     window.addEventListener('pointerup', endGesture);
@@ -111,7 +111,7 @@ export default function FloatingAgentWindow({
   const toggleCollapsed = () => {
     setCollapsed((previous) => {
       const next = !previous;
-      safeSetLocalStorage(collapsedStorageKey, String(next));
+      setPreference(collapsedStorageKey, String(next));
       return next;
     });
   };

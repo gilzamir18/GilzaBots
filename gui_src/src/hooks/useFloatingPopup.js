@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { readUiScale, viewportPointToApp, viewportPxToApp } from '../utils/uiScale';
-import { safeGetLocalStorage, safeSetLocalStorage } from '../utils/storage';
+import { getPreference, setPreference } from '../utils/preferences';
 
 /**
  * The movable, viewport-clamped behaviour of the excerpt popups (translation,
@@ -36,9 +36,9 @@ const clampTextScale = (value) => (
  */
 export function useRememberedTextScale(storageKey, legacyKey = '') {
   const [textScale, setTextScale] = useState(() => {
-    const saved = safeGetLocalStorage(
+    const saved = getPreference(
       storageKey,
-      legacyKey ? safeGetLocalStorage(legacyKey, '1') : '1',
+      legacyKey ? getPreference(legacyKey, '1') : '1',
     );
     const stored = Number(saved);
     return Number.isFinite(stored) && stored > 0 ? clampTextScale(stored) : 1;
@@ -47,7 +47,7 @@ export function useRememberedTextScale(storageKey, legacyKey = '') {
   const changeTextScale = (delta) => {
     setTextScale((prev) => {
       const next = clampTextScale(prev + delta);
-      safeSetLocalStorage(storageKey, String(next));
+      setPreference(storageKey, String(next));
       return next;
     });
   };

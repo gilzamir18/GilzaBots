@@ -25,6 +25,7 @@ import { buildQuoteExcerptPrompt } from '../utils/askAboutPrompt.js';
 import SearchChatsModal from './modals/SearchChatsModal.jsx';
 import ModelSelect from './ModelSelect.jsx';
 import TutorialMenu from './TutorialMenu.jsx';
+import { getPreference, setPreference } from '../utils/preferences.js';
 
 const normalizeForErrorMatch = (value) => String(value || '')
   .normalize('NFD')
@@ -466,14 +467,13 @@ export default function ChatPanel({
   }, [chatInput, setChatInput, closeMenu]);
 
   const [hideThink, setHideThink] = useState(() => {
-    const stored = localStorage.getItem('chatHideThink');
-    return stored === null ? false : stored === 'true';
+    return getPreference('chatHideThink') === 'true';
   });
 
   // Chat input history state
   const [inputHistory, setInputHistory] = useState(() => {
     try {
-      const saved = localStorage.getItem('chatInputHistory');
+      const saved = getPreference('chatInputHistory');
       return saved ? JSON.parse(saved) : [];
     } catch (_) {
       return [];
@@ -488,7 +488,7 @@ export default function ChatPanel({
   const [mcpApiKeyDraft, setMcpApiKeyDraft] = useState('');
   const [useMcpDraft, setUseMcpDraft] = useState(false);
   const [chatZoom, setChatZoom] = useState(() => {
-    const saved = localStorage.getItem('chatZoom');
+    const saved = getPreference('chatZoom');
     const parsed = saved !== null ? Number(saved) : NaN;
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
   });
@@ -501,7 +501,7 @@ export default function ChatPanel({
   const applyChatZoom = useCallback((next) => {
     const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(next * 10) / 10));
     setChatZoom(clamped);
-    localStorage.setItem('chatZoom', String(clamped));
+    setPreference('chatZoom', String(clamped));
   }, []);
   const zoomIn = useCallback(() => applyChatZoom(chatZoom + ZOOM_STEP), [applyChatZoom, chatZoom]);
   const zoomOut = useCallback(() => applyChatZoom(chatZoom - ZOOM_STEP), [applyChatZoom, chatZoom]);
@@ -751,9 +751,7 @@ export default function ChatPanel({
       setInputHistory(prev => {
         if (prev[prev.length - 1] === text) return prev;
         const newHist = [...prev, text].slice(-100);
-        try {
-          localStorage.setItem('chatInputHistory', JSON.stringify(newHist));
-        } catch (_) {}
+        setPreference('chatInputHistory', JSON.stringify(newHist));
         return newHist;
       });
     }
@@ -1670,7 +1668,7 @@ export default function ChatPanel({
               onChange={e => {
                 const val = e.target.checked;
                 setHideThink(val);
-                localStorage.setItem('chatHideThink', val);
+                setPreference('chatHideThink', val);
               }}
               style={{ cursor: 'pointer', margin: 0 }}
               title={t('chatPanel.hideThinkTooltip', 'Ocultar blocos <think> do chat')}
@@ -1751,7 +1749,7 @@ export default function ChatPanel({
                       onClick={() => {
                         const val = !hideThink;
                         setHideThink(val);
-                        localStorage.setItem('chatHideThink', val);
+                        setPreference('chatHideThink', val);
                       }}
                       role="menuitemcheckbox"
                       aria-checked={hideThink}

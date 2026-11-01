@@ -18,6 +18,7 @@ import { readSelectionWithin } from '../utils/documentSelection';
 import PdfAnnotationLayer from './PdfAnnotationLayer';
 import PdfNotePopup from './PdfNotePopup';
 import PdfPresentMode from './PdfPresentMode';
+import { getPreference, setPreference } from '../utils/preferences.js';
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
@@ -637,11 +638,7 @@ const PdfPreview = forwardRef(({ base64Pdf, sourceUrl, directUrl, isCompiling, e
       return;
     }
     setAnnotationColor(color);
-    try {
-      localStorage.setItem('pdfAnnotationColor', color);
-    } catch {
-      // A browser refusing storage is not a reason to lose the mark.
-    }
+    setPreference('pdfAnnotationColor', color);
     // A selection crossing a page break becomes one annotation per page, since a
     // PDF annotation belongs to a single page.
     for (const group of groups) {
@@ -835,12 +832,8 @@ const PdfPreview = forwardRef(({ base64Pdf, sourceUrl, directUrl, isCompiling, e
 
   // Restore the last highlighter color, so the choice carries across documents.
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('pdfAnnotationColor');
-      if (saved && ANNOTATION_COLORS.includes(saved)) setAnnotationColor(saved);
-    } catch {
-      // Storage being unavailable just means the default color.
-    }
+    const saved = getPreference('pdfAnnotationColor');
+    if (saved && ANNOTATION_COLORS.includes(saved)) setAnnotationColor(saved);
   }, []);
 
   const handlePdfContextMenu = (event) => {

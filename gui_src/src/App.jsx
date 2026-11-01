@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import i18n from './i18n/index.js';
 
 // Utils
-import { safeGetLocalStorage, safeSetLocalStorage } from './utils/storage';
+import { getPreference, setPreference } from './utils/preferences';
 import { UI_SCALE_DEFAULT, UI_SCALE_KEY_STEP, clampUiScale, roundUiScale, viewportPointToApp, viewportPxToApp } from './utils/uiScale';
 import { enterLayout, layoutAfterOpeningFile, layoutAllowsChatToggle, layoutHasChatSidebar, layoutShowsEditor } from './utils/layoutModes';
 import { compactChatLayoutFor } from './utils/chatCompact';
@@ -471,18 +471,10 @@ export default function App() {
   const [providerWait, setProviderWait] = useState(null);
   // Whatever ended the turn (answer, error, interruption) also ended the wait.
   useEffect(() => { if (!isAgentRunning) setProviderWait(null); }, [isAgentRunning]);
-  const [heartbeatMode, setHeartbeatModeState] = useState(() => {
-    try {
-      return localStorage.getItem('chatHeartbeatMode') || 'medium';
-    } catch (_) {
-      return 'medium';
-    }
-  });
+  const [heartbeatMode, setHeartbeatModeState] = useState(() => getPreference('chatHeartbeatMode') || 'medium');
   const setHeartbeatMode = (mode) => {
     setHeartbeatModeState(mode);
-    try {
-      localStorage.setItem('chatHeartbeatMode', mode);
-    } catch (_) {}
+    setPreference('chatHeartbeatMode', mode);
   };
   const resolveEffectiveMaxHeartbeats = (modeOverride = null) => {
     const mode = modeOverride || heartbeatMode;
@@ -508,7 +500,7 @@ export default function App() {
   const [isTerminalCollapsed, setIsTerminalCollapsed] = useState(true);
   const [activeBottomTab, setActiveBottomTab] = useState('thinking');
   const [panelMaxLines, setPanelMaxLines] = useState(() => {
-    const stored = safeGetLocalStorage('panelMaxLines');
+    const stored = getPreference('panelMaxLines');
     const parsed = stored !== null ? Number(stored) : NaN;
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 1000;
   });
@@ -720,16 +712,16 @@ export default function App() {
   // question menu come from the backend so the front-end never has to guess either.
   const [tutorialChatId, setTutorialChatId] = useState('');
   const [tutorialTopics, setTutorialTopics] = useState([]);
-  const [theme, setTheme] = useState(() => safeGetLocalStorage('theme', 'dark'));
+  const [theme, setTheme] = useState(() => getPreference('theme', 'dark'));
   // Accessibility interface scale. Unlike the other appearance settings this
   // one lives in ui_settings.json rather than localStorage: it is the setting a
   // user with low vision cannot work around if it silently resets, and the
   // backend store is the one whose stated purpose is surviving restarts.
   const [uiScale, setUiScale] = useState(UI_SCALE_DEFAULT);
-  const [editorFontSize, setEditorFontSize] = useState(() => Number(safeGetLocalStorage('editorFontSize', 13)));
-  const [editorTabSize, setEditorTabSize] = useState(() => Number(safeGetLocalStorage('editorTabSize', 4)));
-  const [editorWordWrap, setEditorWordWrap] = useState(() => safeGetLocalStorage('editorWordWrap', 'on'));
-  const [editorMinimap, setEditorMinimap] = useState(() => safeGetLocalStorage('editorMinimap', 'on'));
+  const [editorFontSize, setEditorFontSize] = useState(() => Number(getPreference('editorFontSize', 13)));
+  const [editorTabSize, setEditorTabSize] = useState(() => Number(getPreference('editorTabSize', 4)));
+  const [editorWordWrap, setEditorWordWrap] = useState(() => getPreference('editorWordWrap', 'on'));
+  const [editorMinimap, setEditorMinimap] = useState(() => getPreference('editorMinimap', 'on'));
   const [showHiddenWorkspaceFiles, setShowHiddenWorkspaceFiles] = useState(false);
 
   // ── Accessibility interface scale ───────────────────────────────────────
@@ -793,7 +785,7 @@ export default function App() {
   // ── Ephemeral Agent Params ────────────────────────────────────────────────
   const [ephemeralParams, setEphemeralParams] = useState(() => {
     try {
-      const stored = JSON.parse(localStorage.getItem('ephemeralParams')) || {};
+      const stored = JSON.parse(getPreference('ephemeralParams')) || {};
       // `think` was a per-run override before thinking became a model-catalog
       // capability. Drop a stored value so it cannot be sent as a request
       // parameter that nothing reads back.
@@ -1393,7 +1385,7 @@ export default function App() {
   }, [isBottomMaximized, isTerminalCollapsed, uiScale, applyUiScale, layoutMode, isChatVisible, isEditorMaximized]);
 
   useEffect(() => {
-    safeSetLocalStorage('theme', theme);
+    setPreference('theme', theme);
     if (theme === 'light') document.body.classList.add('light-theme');
     else document.body.classList.remove('light-theme');
     // `color-scheme` is declared on :root, so the html element keeps the dark
@@ -1888,7 +1880,9 @@ export default function App() {
             if (forced) { handleSelectProject(forced); return; }
           }
           if (!activeProject) {
-            const lastActiveProjectName = localStorage.getItem('lastActiveProject');
+            // Owned by the backend (ui_settings.json): localStorage is per
+            // origin, and the origin changes with the server port.
+            const lastActiveProjectName = data.last_active_project || '';
             let projToSelect = null;
             if (lastActiveProjectName) {
               projToSelect = data.projects.find(p => p.name === lastActiveProjectName && p.exists);
@@ -2017,6 +2011,16 @@ export default function App() {
     return () => clearInterval(timer);
   }, [cloudStatus?.settings?.enabled, cloudPassRunning, refreshCloudStatus, refreshCloudFileStates]);
 
+  const rememberLastActiveProject = (projectName) => {
+    fetch('/api/settings/last-project', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project_name: projectName }),
+    }).then(res => {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    }).catch(err => addLog('error', t('app.failedToRememberProject', { error: err.message })));
+  };
+
   const handleSelectProject = (proj) => {
     if (proj.exists === false) {
       addLog('error', t('app.projectDirMissing', { path: proj.project_path }));
@@ -2053,7 +2057,7 @@ export default function App() {
             }
           }
           setActiveProject(proj);
-          localStorage.setItem('lastActiveProject', proj.name);
+          rememberLastActiveProject(proj.name);
           addLog('info', t('app.projectSelected', { name: proj.project_name || proj.name }));
         }
       });
@@ -2061,7 +2065,7 @@ export default function App() {
     }
 
     setActiveProject(proj);
-    localStorage.setItem('lastActiveProject', proj.name);
+    rememberLastActiveProject(proj.name);
     addLog('info', t('app.projectSelected', { name: proj.project_name || proj.name }));
   };
 
@@ -4228,10 +4232,10 @@ export default function App() {
       const isCtrl = ev.ctrlKey || ev.metaKey;
       if (isCtrl && (ev.key === '+' || ev.key === '=' || ev.code === 'Equal' || ev.code === 'NumpadAdd')) {
         ev.preventDefault(); ev.stopPropagation();
-        setEditorFontSize(prev => { const v = Math.min(30, prev + 1); safeSetLocalStorage('editorFontSize', v); return v; });
+        setEditorFontSize(prev => { const v = Math.min(30, prev + 1); setPreference('editorFontSize', v); return v; });
       } else if (isCtrl && (ev.key === '-' || ev.code === 'Minus' || ev.code === 'NumpadSubtract')) {
         ev.preventDefault(); ev.stopPropagation();
-        setEditorFontSize(prev => { const v = Math.max(10, prev - 1); safeSetLocalStorage('editorFontSize', v); return v; });
+        setEditorFontSize(prev => { const v = Math.max(10, prev - 1); setPreference('editorFontSize', v); return v; });
       }
     });
 
@@ -5323,7 +5327,7 @@ export default function App() {
           ephemeralParams={ephemeralParams}
           setEphemeralParams={setEphemeralParams}
           panelMaxLines={panelMaxLines}
-          setPanelMaxLines={(val) => { setPanelMaxLines(val); safeSetLocalStorage('panelMaxLines', val); }}
+          setPanelMaxLines={(val) => { setPanelMaxLines(val); setPreference('panelMaxLines', val); }}
           thoughtContextTokens={thoughtContextTokens}
           onThoughtContextTokensChange={applyThoughtContextTokens}
           chatThoughtPreviewTokens={chatThoughtPreviewTokens}

@@ -2708,7 +2708,12 @@ class AsyncHTTPServer:
                     p['exists'] = os.path.exists(os.path.abspath(os.path.expanduser(raw_path)))
                 else:
                     p['exists'] = False
-            self.send_response(writer, 200, json.dumps({"projects": projects}).encode('utf-8'), "application/json")
+            from opalatex.ui_settings import load_ui_settings
+            last_active = load_ui_settings().get('last_active_project', '')
+            self.send_response(writer, 200, json.dumps({
+                "projects": projects,
+                "last_active_project": last_active if isinstance(last_active, str) else '',
+            }).encode('utf-8'), "application/json")
 
         # 5. Create Project
         elif path == '/api/opalatex/create-project' and method == 'POST':
@@ -6042,6 +6047,41 @@ class AsyncHTTPServer:
                 "ui_scale": ui_scale,
             }).encode('utf-8'), "application/json")
 
+        # 7t. Last active project — POST (set). Read back through list-projects.
+        elif path == '/api/settings/last-project' and method == 'POST':
+            from opalatex.ui_settings import save_ui_settings
+            project_name = data.get("project_name")
+            if not isinstance(project_name, str) or not project_name.strip():
+                self.send_response(writer, 400, json.dumps({
+                    "error": "project_name must be a non-empty string",
+                }).encode('utf-8'), "application/json")
+            else:
+                save_ui_settings({"last_active_project": project_name})
+                self.send_response(writer, 200, json.dumps({
+                    "success": True,
+                    "last_active_project": project_name,
+                }).encode('utf-8'), "application/json")
+
+        # 7u. Interface preferences (formerly localStorage) — GET
+        elif path == '/api/settings/client-prefs' and method == 'GET':
+            from opalatex.ui_settings import load_client_prefs
+            self.send_response(writer, 200, json.dumps(load_client_prefs()).encode('utf-8'), "application/json")
+
+        # 7v. Interface preferences — POST {"set": {...}, "remove": [...], "legacy_import": bool}
+        elif path == '/api/settings/client-prefs' and method == 'POST':
+            from opalatex.ui_settings import update_client_prefs
+            try:
+                applied = update_client_prefs(
+                    data.get("set", {}), data.get("remove", []),
+                    legacy_import=bool(data.get("legacy_import", False)),
+                )
+            except ValueError as e:
+                self.send_response(writer, 400, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
+            else:
+                self.send_response(writer, 200, json.dumps({
+                    "success": True, "applied": applied,
+                }).encode('utf-8'), "application/json")
+
         # 7l. Web search MCP test
         elif path == '/api/settings/web-search/test' and method == 'POST':
             from opalatex.web_search_config import test_mcp
@@ -6558,9 +6598,21 @@ def schedule_app_restart(delay=0.6):
 
 
 def find_available_port(host, start_port, max_port=3050):
+    """First port in [start_port, max_port] the server's listener can bind.
+
+    The probe must use the listener's own bind semantics. asyncio's server
+    sets SO_REUSEADDR on POSIX, so a port whose only remnants are TIME_WAIT
+    connections from the previous run is free for it; a probe without the
+    flag treats it as taken and moves to the next port. Closing and reopening
+    the app then changed the port, hence the page origin and its
+    localStorage. On Windows SO_REUSEADDR would let the probe bind a port
+    another process is listening on, and asyncio does not set it there either.
+    """
     import socket
     for p in range(start_port, max_port + 1):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if os.name != "nt":
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 s.bind((host, p))
                 return p

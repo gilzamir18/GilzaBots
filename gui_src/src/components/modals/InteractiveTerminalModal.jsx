@@ -4,7 +4,7 @@ import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { X, Check, SquareTerminal } from 'lucide-react';
 import '@xterm/xterm/css/xterm.css';
-import { safeGetLocalStorage, safeSetLocalStorage } from '../../utils/storage';
+import { getPreference, setPreference } from '../../utils/preferences';
 import {
   TERMINAL_FONT_SIZE_DEFAULT,
   TERMINAL_FONT_SIZE_STORAGE_KEY,
@@ -23,7 +23,7 @@ export default function InteractiveTerminalModal({ request, onConfirm, activePro
   // Shares the panel terminal's font size preference, so the two do not
   // disagree about how big terminal text should be.
   const [fontSize, setFontSize] = useState(() =>
-    clampTerminalFontSize(safeGetLocalStorage(TERMINAL_FONT_SIZE_STORAGE_KEY, TERMINAL_FONT_SIZE_DEFAULT)));
+    clampTerminalFontSize(getPreference(TERMINAL_FONT_SIZE_STORAGE_KEY, TERMINAL_FONT_SIZE_DEFAULT)));
   const fontSizeRef = useRef(fontSize);
   fontSizeRef.current = fontSize;
   const uiScaleRef = useRef(uiScale);
@@ -103,7 +103,7 @@ export default function InteractiveTerminalModal({ request, onConfirm, activePro
       if (next === null) return true;
       ev.preventDefault();
       const clamped = clampTerminalFontSize(next);
-      safeSetLocalStorage(TERMINAL_FONT_SIZE_STORAGE_KEY, clamped);
+      setPreference(TERMINAL_FONT_SIZE_STORAGE_KEY, clamped);
       setFontSize(clamped);
       return false;
     });

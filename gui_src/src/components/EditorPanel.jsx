@@ -10,7 +10,7 @@ import {
   nextCountMode,
   resolveCountMode,
 } from '../utils/textStats';
-import { safeSetLocalStorage } from '../utils/storage';
+import { setPreference } from '../utils/preferences';
 import InlinePromptOverlay from './InlinePromptOverlay';
 import EditorContextMenuOverlay from './EditorContextMenuOverlay';
 import TabContextMenu from './TabContextMenu';
@@ -270,7 +270,7 @@ export default function EditorPanel({
     if (!setEditorFontSize) return;
     setEditorFontSize(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
-      safeSetLocalStorage('editorFontSize', next);
+      setPreference('editorFontSize', next);
       return next;
     });
   }, [setEditorFontSize]);

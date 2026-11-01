@@ -46,7 +46,30 @@ _DEFAULTS: dict[str, Any] = {
     # application; "off" is the recovery for a machine where that happens.
     # Only takes effect at the next launch (see opalatex/webengine_env.py).
     "webengine_gpu": "auto",
+    # Name of the project the desktop window had open last, reopened at the
+    # next launch. Kept here rather than in localStorage because localStorage
+    # is per origin, and the origin carries the server port: a launch that
+    # lands on 3001 instead of 3000 (port still held, a second instance)
+    # would read another port's stale value and reopen an older project.
+    "last_active_project": "",
+    # Interface preferences the front-end used to keep in localStorage (theme,
+    # editor font, chat zoom, window positions, ...), as string key/value
+    # pairs with localStorage's own semantics. They live here for the reason
+    # given for "last_active_project": localStorage is split per server port.
+    # See update_client_prefs.
+    "client_prefs": {},
+    # Set once the first window has imported its old localStorage. Later
+    # windows, possibly on another port with an older copy, must not import.
+    "client_prefs_imported": False,
 }
+
+CLIENT_PREF_KEY_MAX_CHARS = 200
+CLIENT_PREF_VALUE_MAX_CHARS = 1_000_000
+
+# localStorage keys that are not interface preferences, and so are never
+# imported into "client_prefs". "lastActiveProject" maps onto
+# "last_active_project" instead; "uiLanguage" is superseded by "lang".
+_LEGACY_KEYS_NOT_IMPORTED = {"lastActiveProject", "uiLanguage"}
 
 # Bounds for "ui_scale". The upper bound keeps the app usable on a 1080p
 # screen (at 2.0 the layout has ~960x540 of usable space left).
@@ -113,3 +136,66 @@ def save_ui_settings(settings: dict[str, Any]) -> None:
     current = load_ui_settings()
     current.update(settings)
     write_text_atomic(str(_SETTINGS_PATH), json.dumps(current, indent=2, ensure_ascii=False))
+
+
+def _validate_client_pref_changes(changes: Any, removals: Any) -> tuple[dict[str, str], list[str]]:
+    if not isinstance(changes, dict):
+        raise ValueError("'set' must be an object of string keys to string values")
+    if not isinstance(removals, list):
+        raise ValueError("'remove' must be a list of keys")
+    for key in list(changes) + removals:
+        if not isinstance(key, str) or not key or len(key) > CLIENT_PREF_KEY_MAX_CHARS:
+            raise ValueError(
+                f"preference keys must be non-empty strings of at most {CLIENT_PREF_KEY_MAX_CHARS} characters"
+            )
+    for key, value in changes.items():
+        if not isinstance(value, str):
+            raise ValueError(f"the value of preference {key!r} must be a string")
+        if len(value) > CLIENT_PREF_VALUE_MAX_CHARS:
+            raise ValueError(
+                f"the value of preference {key!r} exceeds {CLIENT_PREF_VALUE_MAX_CHARS} characters"
+            )
+    return changes, removals
+
+
+def load_client_prefs() -> dict[str, Any]:
+    """The stored interface preferences and whether the legacy import ran."""
+    settings = load_ui_settings()
+    prefs = settings.get("client_prefs")
+    return {
+        "prefs": dict(prefs) if isinstance(prefs, dict) else {},
+        "imported": bool(settings.get("client_prefs_imported", False)),
+    }
+
+
+def update_client_prefs(changes: Any, removals: Any = None, *, legacy_import: bool = False) -> bool:
+    """Apply preference changes; return whether they were applied.
+
+    Raises ValueError for a malformed request. ``legacy_import`` marks the
+    one-time copy of a window's old localStorage: it is applied only while no
+    import has happened yet, and never overwrites a key already stored here.
+    It also carries the old ``lastActiveProject`` over when no last project is
+    recorded yet.
+    """
+    changes, removals = _validate_client_pref_changes(changes, [] if removals is None else removals)
+    settings = load_ui_settings()
+    prefs = settings.get("client_prefs")
+    prefs = dict(prefs) if isinstance(prefs, dict) else {}
+    update: dict[str, Any] = {}
+    if legacy_import:
+        if settings.get("client_prefs_imported"):
+            return False
+        last_project = changes.get("lastActiveProject", "")
+        if last_project.strip() and not settings.get("last_active_project"):
+            update["last_active_project"] = last_project
+        for key, value in changes.items():
+            if key not in _LEGACY_KEYS_NOT_IMPORTED:
+                prefs.setdefault(key, value)
+        update["client_prefs_imported"] = True
+    else:
+        prefs.update(changes)
+        for key in removals:
+            prefs.pop(key, None)
+    update["client_prefs"] = prefs
+    save_ui_settings(update)
+    return True

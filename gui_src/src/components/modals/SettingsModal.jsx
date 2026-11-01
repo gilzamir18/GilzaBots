@@ -11,7 +11,7 @@ import {
 import { useCustomDialog } from './CustomDialogProvider';
 import SpeechVoiceManager from './SpeechVoiceManager.jsx';
 import i18n from '../../i18n/index.js';
-import { safeSetLocalStorage } from '../../utils/storage';
+import { setPreference } from '../../utils/preferences';
 import { writeClipboard } from '../../utils/clipboard';
 import { openExternal } from '../../utils/openExternal';
 
@@ -98,7 +98,7 @@ export default function SettingsModal({
   const [dictationModels, setDictationModels] = React.useState([]);
   const [dictationBusy, setDictationBusy] = React.useState('');
   const [isRestarting, setIsRestarting] = React.useState(false);
-  const [runtimeInfo, setRuntimeInfo] = React.useState({ platform: '', running_in_snap: false, version: '0.2.27' });
+  const [runtimeInfo, setRuntimeInfo] = React.useState({ platform: '', running_in_snap: false, version: '0.2.28' });
   const [sandbox, setSandbox] = React.useState({
     enabled: false,
     image: 'python:3.12-slim',
@@ -482,7 +482,7 @@ export default function SettingsModal({
     if (val === '' || val === undefined) delete updated[key];
     else updated[key] = val;
     setEphemeralParams(updated);
-    safeSetLocalStorage('ephemeralParams', JSON.stringify(updated));
+    setPreference('ephemeralParams', JSON.stringify(updated));
   };
 
   const copyDirectInstallCommand = async () => {
@@ -636,7 +636,7 @@ export default function SettingsModal({
                 <label className="vscode-sidebar-section-title" style={{ padding: 0 }}>{t('settingsModal.editorFontSize')}</label>
                 <input
                   type="number" min="10" max="30" value={editorFontSize}
-                  onChange={(e) => { const val = Number(e.target.value); setEditorFontSize(val); safeSetLocalStorage('editorFontSize', val); }}
+                  onChange={(e) => { const val = Number(e.target.value); setEditorFontSize(val); setPreference('editorFontSize', val); }}
                   className="vscode-settings-input"
                   style={{ width: '100%' }}
                 />
@@ -645,7 +645,7 @@ export default function SettingsModal({
               {/* Tab size */}
               <div className="flex flex-col" style={{ gap: '6px' }}>
                 <label className="vscode-sidebar-section-title" style={{ padding: 0 }}>{t('settingsModal.tabSize')}</label>
-                <select value={editorTabSize} onChange={(e) => { const val = Number(e.target.value); setEditorTabSize(val); safeSetLocalStorage('editorTabSize', val); }} className="vscode-settings-input" style={{ width: '100%' }}>
+                <select value={editorTabSize} onChange={(e) => { const val = Number(e.target.value); setEditorTabSize(val); setPreference('editorTabSize', val); }} className="vscode-settings-input" style={{ width: '100%' }}>
                   <option value={2}>{t('settingsModal.twoSpaces')}</option>
                   <option value={4}>{t('settingsModal.fourSpaces')}</option>
                   <option value={8}>{t('settingsModal.eightSpaces')}</option>
@@ -655,7 +655,7 @@ export default function SettingsModal({
               {/* Word wrap */}
               <div className="flex flex-col" style={{ gap: '6px' }}>
                 <label className="vscode-sidebar-section-title" style={{ padding: 0 }}>{t('settingsModal.wordWrap')}</label>
-                <select value={editorWordWrap} onChange={(e) => { setEditorWordWrap(e.target.value); safeSetLocalStorage('editorWordWrap', e.target.value); }} className="vscode-settings-input" style={{ width: '100%' }}>
+                <select value={editorWordWrap} onChange={(e) => { setEditorWordWrap(e.target.value); setPreference('editorWordWrap', e.target.value); }} className="vscode-settings-input" style={{ width: '100%' }}>
                   <option value="on">{t('settingsModal.wordWrapOn')}</option>
                   <option value="off">{t('settingsModal.wordWrapOff')}</option>
                 </select>
@@ -664,7 +664,7 @@ export default function SettingsModal({
               {/* Minimap */}
               <div className="flex flex-col" style={{ gap: '6px' }}>
                 <label className="vscode-sidebar-section-title" style={{ padding: 0 }}>{t('settingsModal.minimap')}</label>
-                <select value={editorMinimap} onChange={(e) => { setEditorMinimap(e.target.value); safeSetLocalStorage('editorMinimap', e.target.value); }} className="vscode-settings-input" style={{ width: '100%' }}>
+                <select value={editorMinimap} onChange={(e) => { setEditorMinimap(e.target.value); setPreference('editorMinimap', e.target.value); }} className="vscode-settings-input" style={{ width: '100%' }}>
                   <option value="on">{t('settingsModal.minimapOn')}</option>
                   <option value="off">{t('settingsModal.minimapOff')}</option>
                 </select>

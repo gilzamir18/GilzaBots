@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useTextContextMenu } from '../hooks/useTextContextMenu.js';
 import TextContextMenu from './TextContextMenu.jsx';
 import TerminalInstance from './TerminalInstance.jsx';
-import { safeGetLocalStorage, safeSetLocalStorage } from '../utils/storage';
+import { getPreference, setPreference } from '../utils/preferences';
 import {
   TERMINAL_FONT_SIZE_DEFAULT,
   TERMINAL_FONT_SIZE_MAX,
@@ -55,12 +55,12 @@ export default function BottomPanel({
   // This tunes the terminal on top of the global interface scale rather than
   // replacing it — see utils/uiScale.js.
   const [terminalFontSize, setTerminalFontSize] = useState(() =>
-    clampTerminalFontSize(safeGetLocalStorage(TERMINAL_FONT_SIZE_STORAGE_KEY, TERMINAL_FONT_SIZE_DEFAULT)));
+    clampTerminalFontSize(getPreference(TERMINAL_FONT_SIZE_STORAGE_KEY, TERMINAL_FONT_SIZE_DEFAULT)));
 
   const changeTerminalFontSize = useCallback((next) => {
     setTerminalFontSize((prev) => {
       const clamped = clampTerminalFontSize(typeof next === 'function' ? next(prev) : next);
-      safeSetLocalStorage(TERMINAL_FONT_SIZE_STORAGE_KEY, clamped);
+      setPreference(TERMINAL_FONT_SIZE_STORAGE_KEY, clamped);
       return clamped;
     });
   }, []);

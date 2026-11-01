@@ -1,6 +1,7 @@
 import React, { Suspense } from 'react';
 import i18next from 'i18next';
 import { establishLocalSession } from './utils/localSession.js';
+import { hydratePreferences } from './utils/preferences.js';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import { CustomDialogProvider } from './components/modals/CustomDialogProvider.jsx';
@@ -122,6 +123,8 @@ const root = ReactDOM.createRoot(document.getElementById('root'));
 async function startApplication() {
   try {
     await establishLocalSession();
+    // Components read their preferences synchronously while mounting.
+    await hydratePreferences();
     root.render(
       <React.StrictMode>
         <Suspense fallback={null}>
