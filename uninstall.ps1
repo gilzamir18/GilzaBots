@@ -89,6 +89,7 @@ Get-CimInstance Win32_Process -Filter "Name = 'OpalaTex.exe'" -ErrorAction Silen
 Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "OpalaTexMonitors" -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force "HKCU:\Software\Classes\opalatex-monitor" -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force "HKCU:\Software\Classes\AppUserModelId\com.opalacoder.OpalaTex" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\com.opalacoder.OpalaTex" -ErrorAction SilentlyContinue
 
 if (Get-Process -Name "OpalaTex" -ErrorAction SilentlyContinue) {
     Stop-Uninstall "OpalaTex is still running. Close it and run the uninstaller again."

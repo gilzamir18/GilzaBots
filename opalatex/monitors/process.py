@@ -74,10 +74,13 @@ def spawn_detached(argv: list[str], *, log_path: str | None = None, env: dict | 
     kwargs["stdout"] = log
     kwargs["stderr"] = subprocess.STDOUT if log_path else subprocess.DEVNULL
     if sys.platform == "win32":
-        DETACHED_PROCESS = 0x00000008
         CREATE_NEW_PROCESS_GROUP = 0x00000200
         CREATE_NO_WINDOW = 0x08000000
-        kwargs["creationflags"] = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
+        # DETACHED_PROCESS and CREATE_NO_WINDOW are mutually exclusive in
+        # CreateProcessW (combining them fails with ERROR_INVALID_PARAMETER /
+        # WinError 87). CREATE_NO_WINDOW detaches from the parent console without
+        # opening a window while preserving redirected standard handles.
+        kwargs["creationflags"] = CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
     else:
         kwargs["start_new_session"] = True
     try:

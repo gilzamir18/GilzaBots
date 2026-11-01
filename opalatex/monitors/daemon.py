@@ -282,8 +282,10 @@ def _restart_with_new_code() -> None:
     copied from ``sys.argv``, which under ``-m`` names a module file.
     """
     argv = service.daemon_argv()
-    sys.stdout.flush()
-    sys.stderr.flush()
+    if sys.stdout is not None:
+        sys.stdout.flush()
+    if sys.stderr is not None:
+        sys.stderr.flush()
     if sys.platform == "win32":
         from .process import spawn_detached
 

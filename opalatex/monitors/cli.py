@@ -302,6 +302,12 @@ _COMMANDS = {
 
 
 def main(argv: list[str]) -> int:
+    import os
+
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8", errors="replace")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8", errors="replace")
     args = _parser().parse_args(argv)
     try:
         from opalatex.ui_settings import load_ui_settings

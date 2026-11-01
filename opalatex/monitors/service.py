@@ -316,7 +316,7 @@ def _run(argv: list[str], timeout: int = 20) -> subprocess.CompletedProcess:
     kwargs: dict = {}
     if sys.platform == "win32":
         kwargs["creationflags"] = 0x08000000
-    return subprocess.run(argv, capture_output=True, text=True, timeout=timeout, **kwargs)
+    return subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout, **kwargs)
 
 
 def _quote_systemd(arg: str) -> str:

@@ -605,6 +605,68 @@ class TestNotify:
         assert base64.b64decode(payload).decode("utf-8") == xml
         assert "CreateToastNotifier('com.opalacoder.OpalaTex')" in script
 
+    def test_windows_toast_registers_aumid_and_settings_even_for_notify_test(self, monkeypatch):
+        registry: dict[tuple[str, str], dict[str, tuple[int, object]]] = {}
+        deleted: list[tuple[str, str]] = []
+
+        class FakeKey:
+            def __init__(self, hive, path):
+                self.slot = registry.setdefault((hive, path), {})
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        fake_winreg = types.SimpleNamespace(
+            HKEY_CURRENT_USER="HKCU",
+            REG_SZ=1,
+            REG_DWORD=4,
+            CreateKey=lambda hive, path: FakeKey(hive, path),
+            SetValueEx=lambda key, name, _reserved, kind, value: key.slot.__setitem__(name, (kind, value)),
+            DeleteKey=lambda hive, path: (deleted.append((hive, path)), registry.pop((hive, path), None)),
+        )
+        monkeypatch.setitem(sys.modules, "winreg", fake_winreg)
+        monkeypatch.setattr(notify.sys, "platform", "win32")
+        monkeypatch.setattr(notify, "_powershell", lambda: r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe")
+
+        runs = []
+
+        def fake_run(argv, **kwargs):
+            runs.append((argv, kwargs))
+            return subprocess.CompletedProcess(argv, 0, "", "")
+
+        monkeypatch.setattr(notify.subprocess, "run", fake_run)
+
+        # default_notifier() with no arguments (used by notify-test in GUI/CLI)
+        # must still register the AppUserModelId, Notification Settings and URI scheme.
+        notifier = notify.default_notifier()
+        assert isinstance(notifier, notify.WindowsToastNotifier)
+        assert notifier.open_command and notifier.open_command[-2:] == ["monitors", "open"]
+        notifier.send("OpalaTex", "Monitor notifications work.")
+
+        aumid_key = ("HKCU", rf"Software\Classes\AppUserModelId\{notify.WINDOWS_APP_ID}")
+        settings_key = ("HKCU", rf"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\{notify.WINDOWS_APP_ID}")
+        command_key = ("HKCU", rf"Software\Classes\{notify.URI_SCHEME}\shell\open\command")
+        assert registry[aumid_key]["DisplayName"] == (1, "OpalaTex")
+        assert registry[settings_key]["Enabled"] == (4, 1)
+        assert registry[settings_key]["ShowInActionCenter"] == (4, 1)
+        assert command_key in registry
+        assert runs[0][1]["stdin"] == subprocess.DEVNULL
+        assert runs[0][1]["creationflags"] == 0x08000000
+
+        # Even if constructed with open_command=None directly, AppUserModelId and
+        # Notification Settings are still registered before showing the toast.
+        registry.clear()
+        direct = notify.WindowsToastNotifier("powershell.exe", open_command=None)
+        direct.send("OpalaTex", "Direct toast")
+        assert aumid_key in registry and settings_key in registry
+        assert command_key not in registry
+
+        notify.unregister_windows_integration()
+        assert settings_key not in registry and aumid_key not in registry
+
     def test_platform_selection(self, monkeypatch):
         monkeypatch.setattr(notify.sys, "platform", "linux")
         monkeypatch.setattr(notify.shutil, "which", lambda name: "/usr/bin/gdbus" if name == "gdbus" else None)
@@ -706,6 +768,27 @@ class TestService:
     def test_opalatex_command_runs_main_py_from_a_checkout(self):
         argv = service.opalatex_command() if hasattr(service, "opalatex_command") else None
         assert argv[-1].endswith("main.py")
+
+    def test_spawn_detached_on_windows_avoids_conflicting_creation_flags(self, monkeypatch):
+        from opalatex.monitors import process as proc_mod
+
+        captured = {}
+
+        class FakePopen:
+            def __init__(self, argv, **kwargs):
+                captured["argv"] = argv
+                captured["kwargs"] = kwargs
+
+        monkeypatch.setattr(proc_mod.sys, "platform", "win32")
+        monkeypatch.setattr(proc_mod.subprocess, "Popen", FakePopen)
+        proc_mod.spawn_detached(["pythonw.exe", "main.py", "monitors", "daemon"])
+        flags = captured["kwargs"]["creationflags"]
+        DETACHED_PROCESS = 0x00000008
+        CREATE_NO_WINDOW = 0x08000000
+        # Combining DETACHED_PROCESS and CREATE_NO_WINDOW fails with WinError 87
+        # in Windows CreateProcessW.
+        assert flags & CREATE_NO_WINDOW
+        assert not (flags & DETACHED_PROCESS)
 
 
 # ── Daemon ──────────────────────────────────────────────────────────────────
