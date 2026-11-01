@@ -242,6 +242,23 @@ class TestStore:
         assert mstore.take_open_request()["chat_id"] == "c2"
         assert mstore.take_open_request() is None
 
+    def test_a_database_from_an_earlier_version_gains_the_new_chat_column(self, tmp_path):
+        import sqlite3
+
+        path = str(tmp_path / "old.db")
+        with sqlite3.connect(path) as conn:
+            conn.execute("CREATE TABLE wake_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, monitor_id TEXT NOT NULL,"
+                         " monitor_name TEXT NOT NULL DEFAULT '', project TEXT NOT NULL, project_path TEXT NOT NULL DEFAULT '',"
+                         " chat_id TEXT NOT NULL, sessions_db TEXT NOT NULL DEFAULT '', prompt TEXT NOT NULL,"
+                         " display TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL, status TEXT NOT NULL,"
+                         " claimed_by TEXT NOT NULL DEFAULT '', claimed_pid INTEGER, claimed_at REAL, finished_at REAL,"
+                         " error TEXT NOT NULL DEFAULT '')")
+        upgraded = st.MonitorStore(db_path=path)
+        monitor = upgraded.create_monitor(_wake_spec())
+        wake_id = upgraded.enqueue_wake(monitor, "p", "d", new_chat=True)
+        assert upgraded.get_wake(wake_id)["new_chat"] == 1
+        assert upgraded.get_wake(upgraded.enqueue_wake(monitor, "p", "d"))["new_chat"] == 0
+
     def test_events_are_bounded(self, mstore):
         monitor = mstore.create_monitor(_spec())
         for index in range(st.MAX_EVENTS_PER_MONITOR + 20):
@@ -308,6 +325,7 @@ class TestEngine:
         assert chat_ids <= set(stored_chats)
         assert all(stored_chats[c].startswith("⏰ build") for c in chat_ids)
         assert "This is a new chat the monitor opened" in wakes[0]["prompt"]
+        assert all(wake["new_chat"] == 1 for wake in wakes)
         assert "write the report" in wakes[0]["prompt"]
         assert sessions.load("proj", chat_id="chat-1").history == []
         assert mstore.get_monitor(monitor["id"])["status"] == st.STATUS_ACTIVE
@@ -582,6 +600,52 @@ class TestService:
         entry.uninstall()
         assert not entry.installed()
 
+    def test_a_service_is_never_removed_or_replaced_for_another_data_folder(self, tmp_path, monkeypatch):
+        """Turning autostart off from one data folder removed the service of another."""
+        monkeypatch.setattr(service, "_run", lambda argv, timeout=20: subprocess.CompletedProcess(argv, 0, "", ""))
+        unit = service.SystemdUserAutostart(config_home=str(tmp_path))
+        monkeypatch.setattr(service, "current_home", lambda: "/data/main")
+        unit.install()
+        assert unit.installed() and "# OpalaTex data folder: /data/main" in open(unit.unit_path).read()
+
+        monkeypatch.setattr(service, "current_home", lambda: "/tmp/scratch-home")
+        assert unit.installed() is False and unit.foreign_owner() == "/data/main"
+        with pytest.raises(RuntimeError, match=r"another OpalaTex data folder \(/data/main\); it was not removed"):
+            unit.uninstall()
+        with pytest.raises(RuntimeError, match="it was not replaced"):
+            unit.install()
+        assert "/data/main" in open(unit.unit_path).read()
+
+        monkeypatch.setattr(service, "current_home", lambda: "/data/main")
+        unit.uninstall()
+        assert not unit.present()
+
+    def test_a_service_written_before_ownership_belongs_to_the_folder_it_resolves(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(service, "_home_without_env", lambda: "/data/default")
+        unit = service.SystemdUserAutostart(config_home=str(tmp_path))
+        os.makedirs(os.path.dirname(unit.unit_path))
+        with open(unit.unit_path, "w") as handle:
+            handle.write("[Service]\nExecStart=/x/python main.py monitors daemon\n")
+        assert unit.owner() == "/data/default"
+        with open(unit.unit_path, "w") as handle:
+            handle.write('[Service]\nEnvironment="OPALATEX_HOME=/data/other place"\n')
+        assert unit.owner() == "/data/other place"
+        entry = service.XdgAutostart(config_home=str(tmp_path), snap=False)
+        os.makedirs(os.path.dirname(entry.entry_path))
+        with open(entry.entry_path, "w") as handle:
+            handle.write("Exec=env OPALATEX_HOME=/data/x /py main.py monitors daemon\n")
+        assert entry.owner() == "/data/x"
+
+    def test_set_autostart_reports_a_foreign_service(self, mstore, tmp_path, monkeypatch):
+        unit = service.XdgAutostart(config_home=str(tmp_path), snap=False)
+        monkeypatch.setattr(service, "current_home", lambda: "/data/main")
+        unit.install()
+        monkeypatch.setattr(service, "current_home", lambda: "/data/scratch")
+        monkeypatch.setattr(service, "autostart_backend", lambda: unit)
+        result = service.set_autostart(mstore, False)
+        assert result["ok"] is False and "/data/main" in result["error"]
+        assert unit.present()
+
     def test_lock_is_exclusive(self, tmp_path):
         first = service.DaemonLock(str(tmp_path / "d.lock"))
         second = service.DaemonLock(str(tmp_path / "d.lock"))
@@ -685,6 +749,36 @@ class TestDaemon:
         asyncio.run(daemon.step())
         assert daemon.should_exit() is False
 
+    def test_the_daemon_restarts_when_the_installed_code_changes(self, mstore, clock, monkeypatch):
+        versions = iter(["v1", "v1", "v2"])
+        daemon = daemon_mod.MonitorDaemon(
+            mstore, notifier=RecordingNotifier(), engine=FakeEngine(mstore, [], clock), clock=clock,
+            fingerprint=lambda: next(versions),
+        )
+        monitor = mstore.create_monitor(_spec())
+        clock.advance(daemon_mod.CODE_CHECK_SECONDS)
+        asyncio.run(daemon.step())
+        assert daemon.restart_requested is False
+        clock.advance(daemon_mod.CODE_CHECK_SECONDS)
+        asyncio.run(daemon.step())
+        assert daemon.restart_requested is True and daemon.should_exit()
+        # Stale code did no work in the step that found the change.
+        assert mstore.get_monitor(monitor["id"])["check_count"] == 0
+
+    def test_restart_execs_the_installation_not_sys_argv(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(daemon_mod.os, "execv", lambda path, argv: calls.append((path, argv)))
+        monkeypatch.setattr(daemon_mod.sys, "platform", "linux")
+        daemon_mod._restart_with_new_code()
+        assert calls == [(service.daemon_argv()[0], service.daemon_argv())]
+        assert calls[0][1][-2:] == ["monitors", "daemon"]
+
+    def test_code_fingerprint_is_stable_and_versioned(self):
+        from opalatex import __version__
+
+        assert service.code_fingerprint() == service.code_fingerprint()
+        assert service.code_fingerprint().startswith(__version__ + "|")
+
     def test_a_click_opens_the_chat(self, mstore, clock, monkeypatch):
         opened = []
         monkeypatch.setattr(service, "open_chat", lambda store, *args: opened.append(args))
@@ -695,6 +789,47 @@ class TestDaemon:
 
 
 # ── Background turns ────────────────────────────────────────────────────────
+
+class TestNoChatNeverRunsElsewhere:
+    """A wake-up without a chat once ran in whatever chat the window had open."""
+
+    def _legacy_wake(self, mstore):
+        monitor = mstore.create_monitor(_spec(project="proj"))
+        with mstore._connect() as conn:
+            cursor = conn.execute(
+                "INSERT INTO wake_requests (monitor_id, monitor_name, project, chat_id, prompt, created_at, status)"
+                " VALUES (?, 'm', 'proj', '', 'p', 0, 'pending')", (monitor["id"],))
+            return cursor.lastrowid
+
+    def test_enqueueing_without_a_chat_is_refused(self, mstore):
+        monitor = mstore.create_monitor(_spec(project="proj"))
+        with pytest.raises(ValueError, match="names no chat"):
+            mstore.enqueue_wake(monitor, "p", "d")
+
+    def test_the_window_never_receives_one(self, mstore):
+        wake_id = self._legacy_wake(mstore)
+        body = asyncio.run(api.handle("/api/monitors/poll", "POST", {"project_name": "proj", "idle": True}, {},
+                                      turn_active=False))[1]
+        assert body["wake"] is None
+        wake = st.MonitorStore().get_wake(wake_id)
+        assert wake["status"] == st.WAKE_FAILED and "names no chat" in wake["error"]
+
+    def test_the_daemon_fails_it(self, mstore, clock):
+        wake_id = self._legacy_wake(mstore)
+        daemon = daemon_mod.MonitorDaemon(mstore, notifier=RecordingNotifier(),
+                                          engine=FakeEngine(mstore, [], clock), clock=clock)
+        assert daemon.dispatch_wakes() == 0
+        assert mstore.get_wake(wake_id)["status"] == st.WAKE_FAILED
+
+    def test_a_stored_monitor_without_its_chat_reports_instead_of_waking(self, mstore, clock):
+        monitor = mstore.create_monitor(_wake_spec())
+        with mstore._connect() as conn:  # as stored before chats were required
+            conn.execute("UPDATE monitors SET chat_id = '' WHERE id = ?", (monitor["id"],))
+        clock.advance(120)
+        asyncio.run(FakeEngine(mstore, [None], clock).tick())
+        assert mstore.list_wakes() == []
+        assert mstore.undelivered_notifications()[0]["urgency"] == "critical"
+
 
 class TestWakeRunner:
     def _wake(self, mstore):

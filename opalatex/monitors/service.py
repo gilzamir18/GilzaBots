@@ -42,6 +42,31 @@ SERVICE_NAME = "opalatex-monitors"
 LAUNCH_AGENT_LABEL = "com.opalacoder.opalatex.monitors"
 WINDOWS_RUN_VALUE = "OpalaTexMonitors"
 AUTOSTART_SETTING = "autostart"
+SYSTEMD_OWNER_PREFIX = "# OpalaTex data folder: "
+XDG_OWNER_PREFIX = "X-OpalaTex-Data-Folder="
+PLIST_OWNER_KEY = "OpalaTexDataFolder"
+
+
+def _read_text(path: str) -> str:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
+    except OSError:
+        return ""
+
+
+def _owner_from_text(text: str, marker: str, env_pattern: str) -> str | None:
+    """The folder a service file records; for a file written before the record
+    existed, the folder its ``OPALATEX_HOME`` (or its absence) resolves."""
+    import re
+
+    if not text:
+        return None
+    for line in text.splitlines():
+        if line.startswith(marker):
+            return line[len(marker):].strip()
+    match = re.search(env_pattern, text)
+    return match.group(1).strip() if match else _home_without_env()
 
 
 def monitors_dir() -> str:
@@ -70,6 +95,52 @@ def daemon_argv() -> list[str]:
 
 def _running_in_snap() -> bool:
     return os.environ.get("SNAP_NAME") == "opalatex" and bool(os.environ.get("SNAP"))
+
+
+# ── Code fingerprint ────────────────────────────────────────────────────────
+
+def code_fingerprint() -> str:
+    """What identifies the code this installation would run now.
+
+    The daemon is long-lived: an update installed while it runs (a snap
+    refresh, a reinstall, a source checkout that changed) would otherwise keep
+    the old code in memory for as long as any monitor is active -- which is how
+    a monitor registered with a newer option was carried out by a daemon that
+    did not know it. The daemon compares this with the value it started with and
+    restarts itself on a difference (``daemon.MonitorDaemon``).
+
+    Built from the version, the newest modification time and count of the
+    package's sources (a source or pip install), the executable's modification
+    time (a frozen build), and the revision ``current`` points at (the snap,
+    whose running revision stays mounted after a refresh).
+    """
+    from opalatex import __version__
+
+    parts = [__version__]
+    if getattr(sys, "frozen", False):
+        try:
+            parts.append(f"exe:{os.stat(sys.executable).st_mtime_ns}")
+        except OSError:
+            pass
+    snap_name = os.environ.get("SNAP_NAME")
+    if snap_name and os.environ.get("SNAP"):
+        try:
+            parts.append("snap:" + os.path.basename(os.path.realpath(f"/snap/{snap_name}/current")))
+        except OSError:
+            pass
+    package_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    newest, count = 0, 0
+    for root, dirs, files in os.walk(package_dir):
+        dirs[:] = [d for d in dirs if d not in ("__pycache__", "gui")]
+        for name in files:
+            if name.endswith(".py"):
+                try:
+                    newest = max(newest, os.stat(os.path.join(root, name)).st_mtime_ns)
+                except OSError:
+                    continue
+                count += 1
+    parts.append(f"src:{count}:{newest}")
+    return "|".join(parts)
 
 
 # ── Lock ────────────────────────────────────────────────────────────────────
@@ -154,6 +225,7 @@ def daemon_status() -> dict:
             "available": bool(backend and backend.available()[0]),
             "reason": backend.available()[1] if backend else "No login service is supported on this platform.",
             "installed": bool(backend and backend.installed()),
+            "other_folder": backend.foreign_owner() if backend else None,
         },
         "log": log_path(),
     }
@@ -167,14 +239,66 @@ def _home_environment() -> dict[str, str]:
 
 # ── Login services ──────────────────────────────────────────────────────────
 
+def current_home() -> str:
+    from opalatex.config import get_opalatex_home
+
+    return get_opalatex_home()
+
+
+def _home_without_env() -> str:
+    """The data folder a process started without ``OPALATEX_HOME`` resolves.
+
+    ``config.get_opalatex_home`` minus its first step, computed rather than by
+    unsetting the variable, which other threads of this process may be reading.
+    """
+    from opalatex.config import configured_opalatex_home, data_dir_error
+
+    custom = configured_opalatex_home()
+    if custom and not data_dir_error(custom):
+        return custom
+    return os.path.join(os.path.expanduser("~"), ".opalatex")
+
+
+def _same_folder(left: str | None, right: str | None) -> bool:
+    if not left or not right:
+        return False
+    return os.path.realpath(os.path.expanduser(left)) == os.path.realpath(os.path.expanduser(right))
+
+
 class AutostartBackend:
+    """A per-user login service. There is one per user, but data folders can be
+    several (``OPALATEX_HOME``), so each service records the folder it serves
+    and is never replaced or removed on behalf of another one."""
+
     name = "none"
 
     def available(self) -> tuple[bool, str]:
         return False, "Not supported on this platform."
 
-    def installed(self) -> bool:
+    def present(self) -> bool:
+        """A service of this kind exists, whichever folder it serves."""
         return False
+
+    def owner(self) -> str | None:
+        """The data folder the existing service serves; None when there is none."""
+        return None
+
+    def installed(self) -> bool:
+        """A service exists and serves this process's data folder."""
+        return self.present() and _same_folder(self.owner(), current_home())
+
+    def foreign_owner(self) -> str | None:
+        """The other data folder an existing service serves, if any."""
+        owner = self.owner() if self.present() else None
+        return owner if owner and not _same_folder(owner, current_home()) else None
+
+    def _refuse_foreign(self, doing: str) -> None:
+        other = self.foreign_owner()
+        if other:
+            raise RuntimeError(
+                f"The login service starts the monitors of another OpalaTex data folder ({other}); "
+                f"it was not {doing}. Change \u201cStart at login\u201d from that data folder."
+            )
 
     def install(self) -> None:
         raise RuntimeError("Not supported on this platform.")
@@ -224,6 +348,7 @@ class SystemdUserAutostart(AutostartBackend):
             f"Environment={_quote_systemd(f'{key}={value}')}\n" for key, value in _home_environment().items()
         )
         return (
+            f"{SYSTEMD_OWNER_PREFIX}{current_home()}\n"
             "[Unit]\n"
             "Description=OpalaTex monitor agents\n"
             "After=graphical-session.target\n\n"
@@ -237,10 +362,15 @@ class SystemdUserAutostart(AutostartBackend):
             "WantedBy=default.target\n"
         )
 
-    def installed(self) -> bool:
+    def present(self) -> bool:
         return os.path.isfile(self.unit_path)
 
+    def owner(self) -> str | None:
+        return _owner_from_text(_read_text(self.unit_path), SYSTEMD_OWNER_PREFIX,
+                                r'Environment="?OPALATEX_HOME=([^"\n]+)"?')
+
     def install(self) -> None:
+        self._refuse_foreign("replaced")
         os.makedirs(os.path.dirname(self.unit_path), exist_ok=True)
         with open(self.unit_path, "w", encoding="utf-8") as handle:
             handle.write(self.unit_text())
@@ -251,6 +381,7 @@ class SystemdUserAutostart(AutostartBackend):
                 raise RuntimeError(f"{' '.join(argv)} failed: {result.stderr.strip()}")
 
     def uninstall(self) -> None:
+        self._refuse_foreign("removed")
         if os.path.isfile(self.unit_path):
             _run(["systemctl", "--user", "disable", f"{SERVICE_NAME}.service"])
             os.remove(self.unit_path)
@@ -299,17 +430,24 @@ class XdgAutostart(AutostartBackend):
             "NoDisplay=true\n"
             "Terminal=false\n"
             "X-GNOME-Autostart-enabled=true\n"
+            f"{XDG_OWNER_PREFIX}{current_home()}\n"
         )
 
-    def installed(self) -> bool:
+    def present(self) -> bool:
         return os.path.isfile(self.entry_path)
 
+    def owner(self) -> str | None:
+        return _owner_from_text(_read_text(self.entry_path), XDG_OWNER_PREFIX,
+                                r"env (?:[^\n]* )?OPALATEX_HOME=(\S+)")
+
     def install(self) -> None:
+        self._refuse_foreign("replaced")
         os.makedirs(os.path.dirname(self.entry_path), exist_ok=True)
         with open(self.entry_path, "w", encoding="utf-8") as handle:
             handle.write(self.desktop_text())
 
     def uninstall(self) -> None:
+        self._refuse_foreign("removed")
         if os.path.isfile(self.entry_path):
             os.remove(self.entry_path)
 
@@ -335,21 +473,37 @@ class LaunchAgentAutostart(AutostartBackend):
             "KeepAlive": {"SuccessfulExit": False},
             "StandardOutPath": log_path(),
             "StandardErrorPath": log_path(),
+            # Ignored by launchd; records the data folder this agent serves.
+            PLIST_OWNER_KEY: current_home(),
         }
         env = _home_environment()
         if env:
             data["EnvironmentVariables"] = env
         return plistlib.dumps(data)
 
-    def installed(self) -> bool:
+    def present(self) -> bool:
         return os.path.isfile(self.plist_path)
 
+    def owner(self) -> str | None:
+        import plistlib
+
+        try:
+            with open(self.plist_path, "rb") as handle:
+                data = plistlib.load(handle)
+        except (OSError, ValueError):
+            return None
+        return (data.get(PLIST_OWNER_KEY)
+                or (data.get("EnvironmentVariables") or {}).get("OPALATEX_HOME")
+                or _home_without_env())
+
     def install(self) -> None:
+        self._refuse_foreign("replaced")
         os.makedirs(os.path.dirname(self.plist_path), exist_ok=True)
         with open(self.plist_path, "wb") as handle:
             handle.write(self.plist_bytes())
 
     def uninstall(self) -> None:
+        self._refuse_foreign("removed")
         if os.path.isfile(self.plist_path):
             _run(["launchctl", "unload", "-w", self.plist_path])
             os.remove(self.plist_path)
@@ -370,7 +524,11 @@ class WindowsRunKeyAutostart(AutostartBackend):
     def command(self) -> str:
         return subprocess.list2cmdline(daemon_argv())
 
-    def installed(self) -> bool:
+    #: Not in the Run key itself: every value there is executed at login.
+    _OWNER_KEY = r"Software\OpalaTex"
+    _OWNER_VALUE = "MonitorsDataFolder"
+
+    def present(self) -> bool:
         import winreg  # type: ignore[import-not-found]
 
         try:
@@ -380,20 +538,35 @@ class WindowsRunKeyAutostart(AutostartBackend):
         except OSError:
             return False
 
+    def owner(self) -> str | None:
+        import winreg  # type: ignore[import-not-found]
+
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self._OWNER_KEY) as key:
+                return winreg.QueryValueEx(key, self._OWNER_VALUE)[0]
+        except OSError:
+            # Recorded before ownership was; a Run command carries no environment.
+            return _home_without_env()
+
     def install(self) -> None:
         import winreg  # type: ignore[import-not-found]
 
+        self._refuse_foreign("replaced")
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, self._KEY) as key:
             winreg.SetValueEx(key, WINDOWS_RUN_VALUE, 0, winreg.REG_SZ, self.command())
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, self._OWNER_KEY) as key:
+            winreg.SetValueEx(key, self._OWNER_VALUE, 0, winreg.REG_SZ, current_home())
 
     def uninstall(self) -> None:
         import winreg  # type: ignore[import-not-found]
 
-        try:
-            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, self._KEY, 0, winreg.KEY_SET_VALUE) as key:
-                winreg.DeleteValue(key, WINDOWS_RUN_VALUE)
-        except OSError:
-            pass
+        self._refuse_foreign("removed")
+        for path, value in ((self._KEY, WINDOWS_RUN_VALUE), (self._OWNER_KEY, self._OWNER_VALUE)):
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path, 0, winreg.KEY_SET_VALUE) as key:
+                    winreg.DeleteValue(key, value)
+            except OSError:
+                pass
 
 
 def autostart_backend() -> AutostartBackend | None:

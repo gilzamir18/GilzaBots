@@ -3995,11 +3995,36 @@ export default function App() {
     // monitor that wakes a new chat each time created that chat in the store,
     // so the sidebar list is reloaded to show it.
     runWake: (wake) => {
+      // Never fall back to the chat on screen: handleSendMessage reads an
+      // empty chatIdOverride as "the active chat".
+      if (!wake.chat_id) {
+        addLog('error', t('app.monitorWakeWithoutChat', 'A monitor wake-up named no chat and was not run.'));
+        return Promise.resolve('failed');
+      }
       if (activeProject && !chats.some(chat => chat.id === wake.chat_id)) {
         fetch(`/api/chat/list?project_name=${encodeURIComponent(activeProject.name)}&t=${Date.now()}`)
           .then(r => (r.ok ? r.json() : null))
           .then(d => { if (d?.chats) setChats(d.chats); })
           .catch(() => { });
+      }
+      if (wake.new_chat) {
+        // The monitor opened this chat for the wake-up: show it, the way a
+        // chat created for a task is shown (createChatForTask), so the turn
+        // streams in front of the user instead of in a chat they never see.
+        // Its history is empty, so the base messages are known without a load.
+        setActiveChatId(wake.chat_id);
+        setActiveProject(prev => (prev ? { ...prev, current_chat_id: wake.chat_id } : null));
+        setChatContextUsage(null);
+        setIsChatVisible(true);
+        const greeting = activeProject?.project_name || activeProject?.name || '';
+        const baseMessages = [{ role: 'assistant', content: t('app.greeting', { projectName: greeting }) }];
+        setChatMessages(baseMessages);
+        return handleSendMessage(null, null, {
+          overrideText: wake.prompt,
+          displayText: wake.display || wake.prompt,
+          chatIdOverride: wake.chat_id,
+          baseMessages,
+        });
       }
       return handleSendMessage(null, null, {
         overrideText: wake.prompt,

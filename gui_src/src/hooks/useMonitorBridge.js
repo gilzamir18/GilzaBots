@@ -26,6 +26,7 @@ export default function useMonitorBridge({ activeProject, isTurnBusy, runWake, o
   const callbacks = useRef({});
   callbacks.current = { isTurnBusy, runWake, openChat, onInputs };
   const wakeInFlight = useRef(false);
+  const inputsKey = useRef('');
   const projectName = activeProject?.name || '';
   const projectPath = activeProject?.project_path || '';
 
@@ -69,7 +70,13 @@ export default function useMonitorBridge({ activeProject, isTurnBusy, runWake, o
         if (res.ok && !stopped) {
           const data = await res.json();
           const waiting = Array.isArray(data.inputs) ? data.inputs : [];
-          setInputs(waiting);
+          // Only a change re-renders: `inputs` lives in App, and a fresh array
+          // on every poll re-rendered the whole application every few seconds.
+          const key = waiting.map(item => `${item.id}:${item.status}`).join('|');
+          if (key !== inputsKey.current) {
+            inputsKey.current = key;
+            setInputs(waiting);
+          }
           callbacks.current.onInputs?.(waiting);
           if (data.open) callbacks.current.openChat?.(data.open);
           if (data.wake) handleWake(data.wake);

@@ -1266,7 +1266,8 @@
     "noChatWhileRunning": "No chat is open. Wait for the agent to finish, then send the message to start a new chat.",
     "autoCreateChatFailed": "Could not create a chat for this message: {{error}}",
     "monitorProjectMissing": "The monitor's project \"{{project}}\" is not in the project list.",
-    "monitorAnswerBusy": "Answer the question already open first."
+    "monitorAnswerBusy": "Answer the question already open first.",
+    "monitorWakeWithoutChat": "A monitor wake-up named no chat and was not run."
   },
   "onboarding": {
     "welcome": "Welcome to OpalaTex! ",

@@ -247,9 +247,12 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
   const autostart = daemon?.autostart;
 
   return (
+    // No backdrop-filter: the window often composites in software
+    // (--disable-gpu), where blurring the whole app behind the panel cost
+    // ~100 ms per keystroke in the form (measured: 134 ms vs 33 ms per key).
     <div style={{
       position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(5px)',
+      background: 'rgba(0,0,0,0.7)',
     }} onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="vscode-modal" role="dialog" aria-label={t('monitors.title')} style={{
         borderRadius: '12px', width: 'min(960px, 94vw)', maxHeight: '88vh', padding: '20px',

@@ -40,6 +40,8 @@ IDLE_EXIT_SECONDS = 15 * 60
 #: Keep listening for clicks this long after the last notification.
 CLICK_WINDOW_SECONDS = 60 * 60
 MAX_WAKE_CHILDREN = 2
+#: How often the daemon checks whether the installed code changed under it.
+CODE_CHECK_SECONDS = 30.0
 HOST_KIND = "daemon"
 
 
@@ -63,7 +65,8 @@ def _apply_ui_language() -> None:
 class MonitorDaemon:
     def __init__(self, store: st.MonitorStore, *, notifier: Notifier | None = None,
                  engine: MonitorEngine | None = None, clock=time.time,
-                 child_argv=None, idle_exit_seconds: float = IDLE_EXIT_SECONDS):
+                 child_argv=None, idle_exit_seconds: float = IDLE_EXIT_SECONDS,
+                 fingerprint=service.code_fingerprint):
         self.store = store
         self.clock = clock
         self.notifier = notifier or default_notifier(opalatex_command() + ["monitors", "open"])
@@ -78,6 +81,11 @@ class MonitorDaemon:
         self._last_busy = clock()
         self._last_notification = 0.0
         self._stopping = False
+        self.fingerprint = fingerprint
+        self._started_with = fingerprint()
+        self._last_code_check = clock()
+        #: Set when the installed code changed: run_daemon re-executes itself.
+        self.restart_requested = False
 
     # ── Notifications ───────────────────────────────────────────────────────
 
@@ -119,6 +127,7 @@ class MonitorDaemon:
 
     def dispatch_wakes(self) -> int:
         started = 0
+        self.store.fail_unrunnable_wakes(HOST_KIND, os.getpid())
         gui_hosts = self.store.live_hosts("gui", service.GUI_ALIVE_SECONDS)
         running_chats = {chat for _proc, chat in self.children.values()}
         for wake in self.store.list_wakes((st.WAKE_PENDING,)):
@@ -182,6 +191,10 @@ class MonitorDaemon:
         )
 
     async def step(self) -> None:
+        # Before anything is checked or dispatched: work done by stale code is
+        # what this guards against.
+        if self.check_code():
+            return
         self.store.touch_host(HOST_KIND, os.getpid())
         await self.engine.tick()
         self.deliver_notifications()
@@ -190,6 +203,18 @@ class MonitorDaemon:
         self.reconcile()
         if self.busy():
             self._last_busy = self.clock()
+
+    def check_code(self) -> bool:
+        """Stop for a restart when the installed code is no longer what runs."""
+        if self.clock() - self._last_code_check < CODE_CHECK_SECONDS:
+            return False
+        self._last_code_check = self.clock()
+        if self.fingerprint() == self._started_with:
+            return False
+        print("[monitors] the installed OpalaTex code changed; restarting the daemon to load it.", flush=True)
+        self.restart_requested = True
+        self._stopping = True
+        return True
 
     def should_exit(self) -> bool:
         return self._stopping or (self.clock() - self._last_busy >= self.idle_exit_seconds)
@@ -243,5 +268,26 @@ def run_daemon() -> int:
         asyncio.run(daemon.run())
     finally:
         lock.release()
+    if daemon.restart_requested:
+        _restart_with_new_code()
     print("[monitors] daemon stopped.", flush=True)
     return 0
+
+
+def _restart_with_new_code() -> None:
+    """Replace this process with a daemon running the installed code.
+
+    ``exec`` keeps the PID, so a systemd unit or LaunchAgent sees the same
+    service. Windows has no real exec: a new detached daemon is started and this
+    one exits. The argv is rebuilt from the installation (``daemon_argv``), not
+    copied from ``sys.argv``, which under ``-m`` names a module file.
+    """
+    argv = service.daemon_argv()
+    sys.stdout.flush()
+    sys.stderr.flush()
+    if sys.platform == "win32":
+        from .process import spawn_detached
+
+        spawn_detached(argv, log_path=service.log_path())
+        return
+    os.execv(argv[0], argv)

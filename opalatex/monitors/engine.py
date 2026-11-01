@@ -274,9 +274,19 @@ class MonitorEngine:
                     project=monitor.get("project", ""), project_path=monitor.get("project_path", ""),
                 )
                 return
+        if not chat_id:
+            # Validation requires a chat for `origin`; a monitor stored before
+            # that rule must still not wake whatever chat happens to be open.
+            reason = "The monitor names no chat to wake; register it again from a chat, or with a new chat each time."
+            self.store.add_event(monitor["id"], "error", reason, {"event": event})
+            self.store.enqueue_notification(
+                _t("monitor_wake_done_title", name=monitor["name"]), reason, urgency="critical",
+                project=monitor.get("project", ""), project_path=monitor.get("project_path", ""),
+            )
+            return
         prompt = wake_prompt(monitor, event, value, variables, error, new_chat=new_chat)
         display = _t(f"monitor_wake_display_{event}", name=monitor["name"])
-        wake_id = self.store.enqueue_wake(monitor, prompt, display, chat_id=chat_id)
+        wake_id = self.store.enqueue_wake(monitor, prompt, display, chat_id=chat_id, new_chat=new_chat)
         self.store.add_event(monitor["id"], "wake_queued", display,
                              {"wake_request_id": wake_id, "event": event, "chat_id": chat_id, "new_chat": new_chat})
 

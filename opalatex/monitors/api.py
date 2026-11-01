@@ -160,6 +160,7 @@ async def handle(path: str, method: str, data: dict, query: dict, *,
                 except Exception:
                     pass
         if project and data.get("idle") and not turn_active:
+            store.fail_unrunnable_wakes(GUI_HOST, os.getpid())
             for wake in store.list_wakes((st.WAKE_PENDING,), project=project):
                 if store.lease_holder(project, wake["chat_id"]):
                     continue

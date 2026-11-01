@@ -21,6 +21,9 @@ nor with a click on a GNOME notification** — see *Open items*.
 | Delivery | All delivered through the daemon's outbox, because the daemon is the process that receives the click. |
 | A watch that fails | Five consecutive errors stop it with a critical notification; it does not retry forever. |
 | A wait that times out | The waiting chat is woken with the reason, so the orchestrator decides (wait again or ask the user). |
+| Code updated while the daemon runs | The daemon restarts itself on the new code (checked every 30 s). |
+| A login service and several data folders | The service records the data folder it serves; another folder can neither replace nor remove it. |
+| A wake-up in a new chat with the window open | The window switches to that chat and streams the turn there. |
 | Which chat a wake-up runs in | Chosen per monitor: the chat it was registered from (default — continues a task with its context) or a new chat in the same project for every wake-up (recurring work that should not crowd the original conversation). A chat that no longer exists or cannot be created fails the wake-up with a notification; it is never redirected to another chat. |
 
 ## Why a daemon and not the window's server

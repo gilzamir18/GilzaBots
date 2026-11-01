@@ -119,7 +119,8 @@ CREATE TABLE IF NOT EXISTS wake_requests (
     claimed_pid INTEGER,
     claimed_at REAL,
     finished_at REAL,
-    error TEXT NOT NULL DEFAULT ''
+    error TEXT NOT NULL DEFAULT '',
+    new_chat INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS pending_inputs (
     id TEXT PRIMARY KEY,
@@ -212,6 +213,16 @@ class MonitorStore:
         os.makedirs(directory, exist_ok=True)
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
+            self._migrate(conn)
+
+    @staticmethod
+    def _migrate(conn: sqlite3.Connection) -> None:
+        """Add the columns a database created by an earlier version lacks."""
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(wake_requests)")}
+        if "new_chat" not in columns:
+            # Whether the monitor opened this chat for the wake-up, so the
+            # window shows it instead of running it out of sight.
+            conn.execute("ALTER TABLE wake_requests ADD COLUMN new_chat INTEGER NOT NULL DEFAULT 0")
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -430,21 +441,30 @@ class MonitorStore:
 
     # ── Wake requests ───────────────────────────────────────────────────────
 
-    def enqueue_wake(self, monitor: dict, prompt: str, display: str, *, chat_id: str | None = None) -> int:
-        """Queue a wake-up of *chat_id*, by default the monitor's own chat."""
+    def enqueue_wake(self, monitor: dict, prompt: str, display: str, *, chat_id: str | None = None,
+                     new_chat: bool = False) -> int:
+        """Queue a wake-up of *chat_id*, by default the monitor's own chat.
+
+        Raises ValueError without a chat: a front-end given an empty chat would
+        run the turn in whichever chat it has open.
+        """
+        chat = monitor.get("chat_id", "") if chat_id is None else chat_id
+        if not str(chat or "").strip():
+            raise ValueError(f"The wake-up of monitor {monitor.get('id', '?')} names no chat to run in.")
         with self._connect() as conn:
             cursor = conn.execute(
                 """
                 INSERT INTO wake_requests (
                     monitor_id, monitor_name, project, project_path, chat_id, sessions_db,
-                    prompt, display, created_at, status
-                ) VALUES (?,?,?,?,?,?,?,?,?,?)
+                    prompt, display, created_at, status, new_chat
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     monitor["id"], monitor.get("name", ""), monitor.get("project", ""),
                     monitor.get("project_path", ""),
-                    monitor.get("chat_id", "") if chat_id is None else chat_id,
+                    chat,
                     monitor.get("sessions_db", ""), prompt, display, self.clock(), WAKE_PENDING,
+                    1 if new_chat else 0,
                 ),
             )
             return int(cursor.lastrowid)
@@ -475,6 +495,22 @@ class MonitorStore:
                 (WAKE_CLAIMED, holder, int(pid), self.clock(), int(wake_id), WAKE_PENDING),
             )
             return cursor.rowcount == 1
+
+    def fail_unrunnable_wakes(self, holder: str, pid: int) -> int:
+        """Fail the pending wake-ups that name no chat; returns how many.
+
+        Only code from before ``enqueue_wake`` refused them could have queued
+        one; it is closed with a diagnostic instead of being handed to a
+        front-end that would run it in another chat.
+        """
+        failed = 0
+        for wake in self.list_wakes((WAKE_PENDING,)):
+            if str(wake.get("chat_id") or "").strip():
+                continue
+            if self.claim_wake(wake["id"], holder, pid):
+                self.finish_wake(wake["id"], WAKE_FAILED, "the wake-up names no chat to run in")
+                failed += 1
+        return failed
 
     def set_wake_pid(self, wake_id: int, pid: int) -> None:
         """Hand a claimed wake-up to the process that actually runs the turn."""
