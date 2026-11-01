@@ -12,6 +12,7 @@ import { compactChatLayoutFor } from './utils/chatCompact';
 import { clearAnsweredRequest, confirmRequestDialog, dialogRequestKey, normalizeInputRequest } from './utils/askQuestion';
 import { readRunConflict, RUN_CONFLICT_TURN_STOPPING } from './utils/agentRunConflict';
 import { interruptedTurnContent } from './utils/turnMarkers.js';
+import { settleAtHandoff } from './utils/editHandoff.js';
 import { formatWaitDuration, providerWaitFromEvent } from './utils/providerWait.js';
 import { consumeLinesByFrame } from './utils/frameBatchedLines.js';
 import {
@@ -3813,14 +3814,19 @@ export default function App() {
         });
         if (!truncateRes.ok) {
           const err = await truncateRes.json().catch(() => ({}));
-        throw new Error(err.error || t('app.truncateChatFailed'));
+          throw new Error(err.error || t('app.truncateChatFailed'));
         }
       } catch (err) {
-        addLog('error', t('app.editPreparationFailed', { error: err.message }));
+        const message = t('app.editPreparationFailed', { error: err.message });
+        addLog('error', message);
+        options.onRefused?.(message);
         localTurnRef.current = false;
         return;
       }
     }
+    // From here on the message is on its way: a caller holding the text
+    // elsewhere (the message editor) can let go of it.
+    options.onHandoff?.();
     const requestPrompt = userText;
     if (displayText) userText = displayText;
     // Show attachment previews alongside the user message in the chat history
@@ -3924,7 +3930,10 @@ export default function App() {
         // Nothing was sent: take the optimistic bubble back and, for a message
         // typed in the composer, return its text and attachments.
         setChatMessages(prev => prev.filter(m => m.client_message_id !== clientMessageId));
-        if (!options.resumeInterrupted && options.overrideText === undefined && !retryMsg) {
+        if (
+          (!options.resumeInterrupted && options.overrideText === undefined && !retryMsg)
+          || options.returnTextOnConflict
+        ) {
           setChatInput(prev => (prev.trim() ? prev : userText));
           setPendingAttachments(prev => (prev.length ? prev : attachmentsSnapshot));
         }
@@ -4136,10 +4145,35 @@ export default function App() {
     }));
   };
 
+  // Sends an edited message and resolves as soon as the editor's copy of the
+  // text is no longer needed (see utils/editHandoff.js): the turn itself may
+  // run for minutes, and an edit that went nowhere must not close the editor.
+  const sendEditedMessage = (sendOptions) => settleAtHandoff(
+    ({ onHandoff, onRefused }) => handleSendMessage(null, null, { ...sendOptions, onHandoff, onRefused }),
+    t('app.editNotSent', 'The edited message was not sent.'),
+  );
+
+  // Returns { accepted, error }. A refused edit keeps the message editor open
+  // with the text and the reason (ChatPanel): an edit must never disappear
+  // without a word, leaving the user to send the text some other way.
   const handleEditUserMessage = async (messageIndex, originalMessage, editedContent) => {
-    if (!activeProject || isTurnBusy() || editBranchInFlightRef.current || !originalMessage || originalMessage.role !== 'user') return;
+    const refuse = (error) => {
+      addLog('error', error);
+      return { accepted: false, error };
+    };
+    if (!activeProject) return refuse(t('app.editNoProject', 'No project is open.'));
+    if (!originalMessage || originalMessage.role !== 'user') {
+      return refuse(t('app.editNotUserMessage', 'Only your own messages can be edited.'));
+    }
+    if (isTurnBusy()) {
+      return refuse(t('app.editWhileRunning', 'The agent is still working. Wait for it to finish, or stop it, then save the edit again.'));
+    }
+    if (editBranchInFlightRef.current) {
+      return refuse(t('app.editAlreadyInFlight', 'Another edit is still being applied. Try again in a moment.'));
+    }
     const nextContent = (editedContent || '').trim();
-    if (!nextContent || nextContent === originalMessage.content) return;
+    if (!nextContent) return refuse(t('app.editEmpty', 'The edited message is empty.'));
+    if (nextContent === originalMessage.content) return { accepted: true };
 
     let lastUserIndex = -1;
     for (let i = chatMessages.length - 1; i >= 0; i--) {
@@ -4155,22 +4189,24 @@ export default function App() {
       clientMessageId: String(originalMessage.client_message_id || '').trim(),
     };
     if (!messageAnchor.messageId && !messageAnchor.clientMessageId) {
-      addLog('error', t('app.editAnchorMissing', 'This message cannot be edited: it has no stored identifier.'));
-      return;
+      return refuse(t('app.editAnchorMissing', 'This message cannot be edited: it has no stored identifier.'));
     }
     if (messageIndex === lastUserIndex) {
-      await handleSendMessage(null, null, {
+      return sendEditedMessage({
         overrideText: nextContent,
         overrideAttachments: attachments,
         supersedeFrom: messageAnchor,
         replaceUiIndex: messageIndex,
+        // The old answer is already superseded when a run is refused, so the
+        // composer of this chat is where the edit can still be sent from.
+        returnTextOnConflict: true,
       });
-      return;
     }
 
     const sourceChat = chats.find(c => c.id === activeChatId);
     const newChatName = `${sourceChat?.name || 'Chat'} (edited)`;
     editBranchInFlightRef.current = true;
+    let data;
     try {
       const res = await fetch('/api/chat/branch-edit', {
         method: 'POST',
@@ -4187,31 +4223,49 @@ export default function App() {
         const err = await res.json().catch(() => ({}));
         throw new Error(err.error || t('app.editedBranchCreateFailed'));
       }
-      const data = await res.json();
-      const branchHistory = data.history || [];
-      const newChatId = data.new_chat_id;
-      setActiveChatId(newChatId);
-      setActiveProject(prev => prev ? { ...prev, current_chat_id: newChatId } : null);
-      setChats(prev => [{ id: newChatId, name: data.name || newChatName }, ...prev]);
-      // The branched chat has its own (shorter) history: the source chat's
-      // measured window does not describe it.
-      setChatContextUsage(null);
-      setChatMessages(branchHistory);
-      await handleSendMessage(null, null, {
+      data = await res.json();
+    } catch (err) {
+      editBranchInFlightRef.current = false;
+      return refuse(t('app.editedBranchCreateError', { error: err.message }));
+    }
+
+    const branchHistory = data.history || [];
+    const newChatId = data.new_chat_id;
+    const branchName = data.name || newChatName;
+    setActiveChatId(newChatId);
+    setActiveProject(prev => prev ? { ...prev, current_chat_id: newChatId } : null);
+    setChats(prev => [{ id: newChatId, name: branchName }, ...prev]);
+    // The branched chat has its own (shorter) history: the source chat's
+    // measured window does not describe it.
+    setChatContextUsage(null);
+    setChatMessages(branchHistory);
+    try {
+      const result = await sendEditedMessage({
         overrideText: nextContent,
         overrideAttachments: attachments,
         chatIdOverride: newChatId,
         baseMessages: branchHistory,
+        returnTextOnConflict: true,
       });
+      if (!result.accepted) {
+        // The branch exists and holds exactly the conversation before the
+        // edited message, so sending from its composer is the edit. The text
+        // goes there instead of staying in an editor that belongs to the
+        // chat that was just left.
+        setChatInput(prev => (prev.trim() ? prev : nextContent));
+        setPendingAttachments(prev => (prev.length ? prev : attachments));
+        addLog('error', t('app.editBranchNotSent', 'The branch "{{name}}" was created, but the edited message was not sent ({{error}}). It is in the message box: send it from there.', { name: branchName, error: result.error }));
+      }
+    } finally {
+      editBranchInFlightRef.current = false;
       fetch(`/api/chat/list?project_name=${encodeURIComponent(activeProject.name)}&t=${Date.now()}`)
         .then(r => r.ok ? r.json() : null)
         .then(d => { if (d?.chats) setChats(d.chats); })
         .catch(() => { });
-    } catch (err) {
-      addLog('error', t('app.editedBranchCreateError', { error: err.message }));
-    } finally {
-      editBranchInFlightRef.current = false;
     }
+    // Accepted either way: the editor's chat was left, and the text now lives
+    // in the branch (sent, or waiting in its composer).
+    return { accepted: true };
   };
 
   const handleGenerateResponseForUserMessage = async (messageIndex, message) => {

@@ -53,6 +53,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 GUI_SRC = os.path.dirname(os.path.dirname(HERE))
 HARNESS_PATH = "/test/browser/harness.html"
 STORE_PATH = "/test/browser/store.html"
+CHAT_PATH = "/test/browser/chat.html"
 PDF_PATH = "/test/browser/pdf.html"
 
 # Wide enough that the editor lays out its three columns, and a shape at the
@@ -2085,6 +2086,90 @@ async def check_terminal_selection(page: Page, check: Checks) -> None:
         await page.js("document.querySelector('#terminal-fixture').style.display = 'none'")
 
 
+MESSAGE_EDITOR_JS = (
+    "[...document.querySelectorAll('textarea.vscode-chat-textarea')].find(t => !t.closest('form'))"
+)
+
+
+async def check_chat_message_edit(page: Page, check: Checks) -> None:
+    """The pencil's editor keeps an edit until it is accepted.
+
+    An edit that the app could not apply used to close the editor anyway and
+    drop the text without a word; the natural next move — sending the text from
+    the composer — appends it after the very turns the edit was meant to
+    replace, and the agent answers with them in view. What only a browser can
+    answer is what the keys actually do in that editor: Enter in a textarea
+    inserts a line unless something stops it, and focus decides which textarea
+    receives the key at all.
+    """
+    base = page.url.split(HARNESS_PATH)[0]
+    await page.cmd("Page.navigate", {"url": f"{base}{CHAT_PATH}"})
+    pencils = "[...document.querySelectorAll('button')].filter(b => b.querySelector('svg.lucide-pencil'))"
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        if await page.js(f"!!window.__ready && {pencils}.length === 2"):
+            break
+        await asyncio.sleep(0.2)
+    else:
+        check("chat harness loads", False, "the pencils never rendered")
+        return
+    await asyncio.sleep(0.3)
+
+    async def open_editor(index: int) -> bool:
+        button = await page.js(
+            f"(() => {{ const b = {pencils}[{index}]; if (!b) return null;"
+            "  const r = b.getBoundingClientRect(); return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()"
+        )
+        if not button:
+            return False
+        await page.click(button["x"], button["y"])
+        await asyncio.sleep(SETTLE)
+        return bool(await page.js(f"!!({MESSAGE_EDITOR_JS})"))
+
+    # An earlier message, not the last one: the case that branches the chat.
+    if not check("the pencil opens an editor", await open_editor(0)):
+        return
+    check("the editor has the focus, not the composer",
+          await page.js(f"document.activeElement === ({MESSAGE_EDITOR_JS})"))
+
+    await page.chord("a", "KeyA", 65)
+    await page.type_text("Edited question")
+    await page.key("Enter", 13, modifiers=8, text="\r")          # Shift+Enter
+    await page.type_text("second line")
+    await asyncio.sleep(SETTLE)
+    draft = await page.js(f"({MESSAGE_EDITOR_JS}).value")
+    check("Shift+Enter starts a new line", draft == "Edited question\nsecond line", f"draft={draft!r}")
+    check("and does not save", await page.js("window.__editCalls.length") == 0)
+
+    await page.key("Enter", 13, text="\r")
+    await asyncio.sleep(0.4)
+    calls = await page.js("window.__editCalls")
+    check("Enter saves the edit", len(calls) == 1 and calls[0]["content"] == "Edited question\nsecond line"
+          and calls[0]["id"] == 1, f"calls={calls}")
+    check("a refused edit keeps the editor open", await page.js(f"!!({MESSAGE_EDITOR_JS})"))
+    check("with the edited text in it",
+          await page.js(f"({MESSAGE_EDITOR_JS})?.value") == "Edited question\nsecond line")
+    alert = await page.js("document.querySelector('.chat-edit-error')?.textContent || ''")
+    check("and says why", "agent is still working" in alert, f"alert={alert!r}")
+    check("nothing went to the composer",
+          await page.js("window.__composerText() === '' && window.__sentFromComposer.length === 0"))
+
+    await page.js("window.__editMode = 'accept'")
+    await page.js(f"({MESSAGE_EDITOR_JS}).focus()")
+    await page.key("Enter", 13, text="\r")
+    await asyncio.sleep(0.4)
+    check("an accepted edit closes the editor",
+          await page.js(f"!({MESSAGE_EDITOR_JS}) && window.__editCalls.length === 2"))
+
+    if not check("the pencil reopens an editor", await open_editor(1)):
+        return
+    await page.type_text(" more")
+    await page.key("Escape", 27, code="Escape")
+    await asyncio.sleep(SETTLE)
+    check("Escape cancels without saving",
+          await page.js(f"!({MESSAGE_EDITOR_JS}) && window.__editCalls.length === 2"))
+
+
 # Presentation runs last: it takes over the screen, and everything before it
 # needs the editor visible.
 SUITE = (
@@ -2110,6 +2195,7 @@ SUITE = (
     check_pdf_presentation,
     check_pdf_lookup,
     check_pdf_translation_popup,
+    check_chat_message_edit,
 )
 
 

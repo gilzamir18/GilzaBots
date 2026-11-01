@@ -513,6 +513,11 @@ export default function ChatPanel({
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [editingMessageIndex, setEditingMessageIndex] = useState(null);
   const [editingMessageDraft, setEditingMessageDraft] = useState('');
+  // Why the last save of the open editor was refused; the editor stays open
+  // with the text until the edit is accepted or cancelled.
+  const [editingMessageError, setEditingMessageError] = useState('');
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  const editSubmitInFlightRef = useRef(false);
 
   // Custom confirm state for deleting chat
   const [chatToDelete, setChatToDelete] = useState(null);
@@ -1180,21 +1185,60 @@ export default function ChatPanel({
   const handleStartEditMessage = (messageIndex, message) => {
     setEditingMessageIndex(messageIndex);
     setEditingMessageDraft(message.content || '');
+    setEditingMessageError('');
   };
 
   const handleCancelEditMessage = () => {
     setEditingMessageIndex(null);
     setEditingMessageDraft('');
+    setEditingMessageError('');
   };
 
+  // The editor closes only once the edit is accepted. A refused edit keeps the
+  // text and shows why, so it is never lost and never has to be re-sent
+  // another way (sending it from the composer appends it after the very turns
+  // the edit was meant to replace).
   const handleSubmitEditMessage = async (messageIndex, message) => {
+    if (editSubmitInFlightRef.current) return;
     const nextContent = editingMessageDraft.trim();
-    if (!nextContent || nextContent === message.content) {
+    if (!nextContent) return;
+    if (nextContent === message.content) {
       handleCancelEditMessage();
       return;
     }
-    await onEditUserMessage?.(messageIndex, message, nextContent);
-    handleCancelEditMessage();
+    editSubmitInFlightRef.current = true;
+    setIsSubmittingEdit(true);
+    setEditingMessageError('');
+    let result;
+    try {
+      result = onEditUserMessage
+        ? await onEditUserMessage(messageIndex, message, nextContent)
+        : { accepted: false, error: t('chatPanel.editUnavailable', 'Editing is not available here.') };
+    } catch (err) {
+      result = { accepted: false, error: err?.message || String(err) };
+    } finally {
+      editSubmitInFlightRef.current = false;
+      setIsSubmittingEdit(false);
+    }
+    if (result?.accepted) {
+      handleCancelEditMessage();
+      return;
+    }
+    setEditingMessageError(result?.error || t('chatPanel.editNotApplied', 'The edit was not applied.'));
+  };
+
+  const handleEditMessageKeyDown = (e, messageIndex, message) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelEditMessage();
+      return;
+    }
+    // Same keys as the composer: Enter saves, Shift+Enter starts a new line.
+    // Not while an input method is still composing a character.
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent?.isComposing) {
+      e.preventDefault();
+      if (!isAgentRunning) handleSubmitEditMessage(messageIndex, message);
+    }
   };
 
   const handleExportSingleMessage = (content) => {
@@ -2503,10 +2547,12 @@ export default function ChatPanel({
                     <textarea
                       value={editingMessageDraft}
                       onChange={(e) => setEditingMessageDraft(e.target.value)}
+                      onKeyDown={(e) => handleEditMessageKeyDown(e, i, msg)}
                       className="vscode-chat-textarea"
                       rows={Math.min(8, Math.max(2, editingMessageDraft.split('\n').length))}
                       autoFocus
                       disabled={isAgentRunning}
+                      aria-invalid={editingMessageError ? true : undefined}
                       style={{
                         width: '100%',
                         resize: 'vertical',
@@ -2514,11 +2560,20 @@ export default function ChatPanel({
                         boxSizing: 'border-box',
                       }}
                     />
+                    {editingMessageError && (
+                      <div
+                        role="alert"
+                        className="chat-edit-error"
+                        style={{ color: 'var(--vscode-errorForeground)', fontSize: '0.9em', whiteSpace: 'pre-wrap' }}
+                      >
+                        {editingMessageError}
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
                       <button
                         type="button"
                         onClick={() => handleSubmitEditMessage(i, msg)}
-                        disabled={isAgentRunning || !editingMessageDraft.trim()}
+                        disabled={isAgentRunning || isSubmittingEdit || !editingMessageDraft.trim()}
                         className="vscode-button"
                         title={t('chatPanel.saveEdit', 'Save edit')}
                         style={{ padding: '5px 7px', display: 'flex', alignItems: 'center' }}

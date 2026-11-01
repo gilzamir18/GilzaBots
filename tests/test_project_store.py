@@ -702,6 +702,122 @@ def test_supersede_chat_history_accepts_client_message_id(store):
     assert [m["content"] for m in loaded.history] == ["first"]
 
 
+def _three_turns_with_memory_writes(store):
+    """A chat whose every turn appends to the per-chat core memory mid-turn,
+    the way `append_core_memory` does: after the question, before the answer."""
+    store.create(**_base_args())
+    store.create_chat("myproj", "chat-myproj", "Chat")
+    p = store.load("myproj")
+    chat = p.current_chat_id
+    ids = {}
+    memory = ""
+    for n in (1, 2, 3):
+        ids[f"u{n}"] = store.append_message(p, "user", f"question {n}", client_message_id=f"cid-{n}")
+        memory = memory + ("\n" if memory else "") + f"- learned in turn {n}"
+        store.update_chat_core_memory("myproj", chat, memory)
+        ids[f"r{n}"] = store.append_message(p, "assistant", f"answer {n}")
+    return p, chat, ids
+
+
+def test_supersede_restores_core_memory_written_by_superseded_turns(store):
+    # Editing a question used to hide the old answers but keep what their turns
+    # wrote to core memory, which the next prompt presents as established fact.
+    _, chat, ids = _three_turns_with_memory_writes(store)
+
+    store.supersede_chat_history_from_message("myproj", chat, message_id=ids["u2"])
+
+    assert store.get_chat_core_memory("myproj", chat) == "- learned in turn 1"
+
+
+def test_supersede_from_an_answer_drops_the_memory_its_turn_wrote(store):
+    _, chat, ids = _three_turns_with_memory_writes(store)
+
+    store.supersede_chat_history_from_message("myproj", chat, message_id=ids["r3"])
+
+    assert store.get_chat_core_memory("myproj", chat) == (
+        "- learned in turn 1\n- learned in turn 2"
+    )
+
+
+def test_supersede_of_the_first_message_restores_the_memory_before_it(store):
+    _, chat, ids = _three_turns_with_memory_writes(store)
+
+    store.supersede_chat_history_from_message("myproj", chat, client_message_id="cid-1")
+
+    assert store.get_chat_core_memory("myproj", chat) == ""
+
+
+def test_supersede_ignores_rows_already_superseded_before_the_cut(store):
+    p, chat, ids = _three_turns_with_memory_writes(store)
+    store.supersede_chat_history_from_message("myproj", chat, message_id=ids["u3"])
+    retry_id = store.append_message(p, "user", "question 3 edited")
+    store.update_chat_core_memory(
+        "myproj", chat, "- learned in turn 1\n- learned in turn 2\n- learned in the retry"
+    )
+    store.append_message(p, "assistant", "answer 3 edited")
+
+    store.supersede_chat_history_from_message("myproj", chat, message_id=retry_id)
+
+    assert store.get_chat_core_memory("myproj", chat) == (
+        "- learned in turn 1\n- learned in turn 2"
+    )
+
+
+def test_supersede_leaves_core_memory_alone_when_no_snapshot_was_recorded(store):
+    # Rows stored before snapshots existed carry NULL: the memory at that point
+    # is unknown, and wiping the chat's memory would lose what is still valid.
+    import sqlite3
+
+    _, chat, ids = _three_turns_with_memory_writes(store)
+    conn = sqlite3.connect(store.db_path)
+    try:
+        conn.execute("UPDATE project_history SET core_memory_snapshot = NULL")
+        conn.commit()
+    finally:
+        conn.close()
+    before = store.get_chat_core_memory("myproj", chat)
+
+    store.supersede_chat_history_from_message("myproj", chat, message_id=ids["u2"])
+
+    assert store.get_chat_core_memory("myproj", chat) == before
+
+
+def test_branch_before_message_inherits_core_memory_as_of_the_cut(store):
+    _, chat, ids = _three_turns_with_memory_writes(store)
+
+    store.branch_chat_before_message("myproj", chat, "branch-edit", "Edited", message_id=ids["u3"])
+
+    assert store.get_chat_core_memory("myproj", "branch-edit") == (
+        "- learned in turn 1\n- learned in turn 2"
+    )
+    assert store.get_chat_core_memory("myproj", chat).endswith("- learned in turn 3")
+
+
+def test_branch_through_a_message_inherits_core_memory_as_of_that_message(store):
+    _, chat, ids = _three_turns_with_memory_writes(store)
+
+    store.branch_chat("myproj", chat, "through-answer", "B1", 0, message_id=ids["r2"])
+    # A kept question whose answer is not copied carries nothing of that answer's turn.
+    store.branch_chat("myproj", chat, "through-question", "B2", 0, message_id=ids["u2"])
+
+    assert store.get_chat_core_memory("myproj", "through-answer") == (
+        "- learned in turn 1\n- learned in turn 2"
+    )
+    assert store.get_chat_core_memory("myproj", "through-question") == "- learned in turn 1"
+
+
+def test_an_edit_inside_a_branch_restores_the_copied_snapshots(store):
+    _, chat, ids = _three_turns_with_memory_writes(store)
+    copied = store.branch_chat_before_message(
+        "myproj", chat, "branch-edit", "Edited", message_id=ids["u3"]
+    )
+    branch_u2 = next(m["id"] for m in copied if m["content"] == "question 2")
+
+    store.supersede_chat_history_from_message("myproj", "branch-edit", message_id=branch_u2)
+
+    assert store.get_chat_core_memory("myproj", "branch-edit") == "- learned in turn 1"
+
+
 def test_supersede_chat_history_requires_a_stable_anchor(store):
     store.create(**_base_args())
     store.create_chat("myproj", "chat-myproj", "Chat")

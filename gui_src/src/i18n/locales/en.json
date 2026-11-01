@@ -521,7 +521,9 @@
     "aiThoughtsOpenHint": "Open the full reasoning in the Agent Thinking panel",
     "aiThoughtsOpenPanel": "Full reasoning",
     "noChatOpen": "No chat is open. Send a message to start a new chat.",
-    "defaultChatName": "New Chat"
+    "defaultChatName": "New Chat",
+    "editUnavailable": "Editing is not available here.",
+    "editNotApplied": "The edit was not applied."
   },
   "chatSidebar": {
     "newChat": "New Chat",
@@ -1267,7 +1269,14 @@
     "autoCreateChatFailed": "Could not create a chat for this message: {{error}}",
     "monitorProjectMissing": "The monitor's project \"{{project}}\" is not in the project list.",
     "monitorAnswerBusy": "Answer the question already open first.",
-    "monitorWakeWithoutChat": "A monitor wake-up named no chat and was not run."
+    "monitorWakeWithoutChat": "A monitor wake-up named no chat and was not run.",
+    "editNoProject": "No project is open.",
+    "editNotUserMessage": "Only your own messages can be edited.",
+    "editWhileRunning": "The agent is still working. Wait for it to finish, or stop it, then save the edit again.",
+    "editAlreadyInFlight": "Another edit is still being applied. Try again in a moment.",
+    "editEmpty": "The edited message is empty.",
+    "editNotSent": "The edited message was not sent.",
+    "editBranchNotSent": "The branch \"{{name}}\" was created, but the edited message was not sent ({{error}}). It is in the message box: send it from there."
   },
   "onboarding": {
     "welcome": "Welcome to OpalaTex! ",

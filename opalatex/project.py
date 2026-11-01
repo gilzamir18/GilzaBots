@@ -474,6 +474,16 @@ def _init_schema(db_path: str) -> None:
         except sqlite3.OperationalError:
             pass
 
+        # The chat's per-chat core memory at the moment the row was stored, so an
+        # edit or a branch can return the memory to what it was at the point the
+        # conversation is cut. NULL means "not recorded" (rows stored before this
+        # column existed, or merged from another machine), which is different
+        # from '' (the memory was known to be empty).
+        try:
+            conn.execute("ALTER TABLE project_history ADD COLUMN core_memory_snapshot TEXT")
+        except sqlite3.OperationalError:
+            pass
+
         try:
             conn.execute("ALTER TABLE project_activity ADD COLUMN deleted_at TEXT NOT NULL DEFAULT ''")
         except sqlite3.OperationalError:
@@ -625,13 +635,15 @@ PROJECT_SETTINGS_FIELDS = (
 
 
 _BRANCH_CORE_MEMORY = ""
-"""Per-chat core memory a branched chat starts with.
+"""Per-chat core memory a branch starts with when its cut point has no snapshot.
 
-A branch copies the conversation only up to its anchor, but a chat's core
-memory is not versioned: copying it hands the branch whatever the source chat
-learned *after* that point, and the prompt presents it as facts from prior
-conversations. With memory isolation on, that made a branch answer from a
-conversation it never had. The copied history is the branch's only context.
+A branch starts with the source chat's core memory as it was at the cut
+(`project_history.core_memory_snapshot`), never its current one: the current
+memory holds what the source learned *after* that point, and the prompt
+presents it as facts from prior conversations. With memory isolation on, that
+made a branch answer from a conversation it never had. Rows stored before
+snapshots existed carry none; the memory at such a cut is unknown, so the
+branch starts empty and the copied history is its only context.
 """
 
 
@@ -1170,8 +1182,12 @@ class ProjectStore:
                         project.history.append(existing_message)
                     return existing_id
 
+            chat_row = conn.execute(
+                "SELECT core_memory FROM project_chats WHERE project = ? AND id = ?",
+                (project.name, project.current_chat_id),
+            ).fetchone()
             cursor = conn.execute(
-                "INSERT INTO project_history (project, chat_id, timestamp, role, content, client_message_id, attachments) VALUES (?,?,?,?,?,?,?)",
+                "INSERT INTO project_history (project, chat_id, timestamp, role, content, client_message_id, attachments, core_memory_snapshot) VALUES (?,?,?,?,?,?,?,?)",
                 (
                     project.name,
                     project.current_chat_id,
@@ -1180,6 +1196,7 @@ class ProjectStore:
                     content,
                     clean_client_message_id,
                     json.dumps(clean_attachments, ensure_ascii=False),
+                    chat_row["core_memory"] if chat_row is not None else None,
                 ),
             )
             message_id = cursor.lastrowid
@@ -1522,6 +1539,11 @@ class ProjectStore:
 
             superseded_ids = [int(r["id"]) for r in rows]
             cutoff_timestamp = rows[0]["timestamp"]
+            # Computed before the rows are marked: the cut point is the last row
+            # that stays visible.
+            restored_core_memory = self._chat_core_memory_at_cut(
+                conn, name, chat_id, before_id=anchor_id
+            )
             placeholders = ",".join("?" for _ in superseded_ids)
             conn.execute(
                 f"""
@@ -1544,6 +1566,16 @@ class ProjectStore:
                 "UPDATE project_chats SET agent_state = '{}', context_usage = '{}', external_turns = '[]' WHERE project = ? AND id = ?",
                 (name, chat_id),
             )
+            # The per-chat core memory still holds what the superseded turns wrote,
+            # and the prompt presents it as facts from earlier conversation. Return
+            # it to what it was at the cut. Without a recorded snapshot (rows stored
+            # before snapshots existed) the memory is left as it is: there is no
+            # record of what it held then.
+            if restored_core_memory is not None:
+                conn.execute(
+                    "UPDATE project_chats SET core_memory = ? WHERE project = ? AND id = ?",
+                    (restored_core_memory, name, chat_id),
+                )
 
         # The vector index is a derived artifact, not the source of truth: drop the
         # superseded entries so archival search stops returning replaced content.
@@ -1555,6 +1587,58 @@ class ProjectStore:
             pass
 
         return superseded_ids
+
+    @staticmethod
+    def _chat_core_memory_at_cut(
+        conn,
+        name: str,
+        chat_id: str,
+        *,
+        before_id: int | None = None,
+        through_id: int | None = None,
+    ) -> str | None:
+        """Per-chat core memory as it was at the end of a kept conversation prefix.
+
+        The prefix is the visible rows with ``id < before_id`` (an edit cut at an
+        anchor) or ``id <= through_id`` (a branch through a message). Each row
+        records the memory at the moment it was stored, and memory is written
+        only inside a turn — after its user message, before its answer is
+        stored — so the snapshot of the last kept row is the memory with nothing
+        learned after that row: a kept answer carries what its turn wrote, a kept
+        question whose answer is cut off carries nothing of that answer's turn.
+
+        With no visible row before ``before_id``, the anchor's own snapshot (the
+        memory before the chat's first kept turn) is used. Returns ``None`` when
+        the relevant row has no recorded snapshot.
+        """
+        if (before_id is None) == (through_id is None):
+            raise ValueError("exactly one of before_id or through_id is required")
+        if before_id is not None:
+            row = conn.execute(
+                """
+                SELECT core_memory_snapshot FROM project_history
+                WHERE project = ? AND chat_id = ? AND id < ? AND deleted_at = ''
+                ORDER BY id DESC LIMIT 1
+                """,
+                (name, chat_id, int(before_id)),
+            ).fetchone()
+            if row is None:
+                row = conn.execute(
+                    "SELECT core_memory_snapshot FROM project_history WHERE project = ? AND chat_id = ? AND id = ?",
+                    (name, chat_id, int(before_id)),
+                ).fetchone()
+        else:
+            row = conn.execute(
+                """
+                SELECT core_memory_snapshot FROM project_history
+                WHERE project = ? AND chat_id = ? AND id <= ? AND deleted_at = ''
+                ORDER BY id DESC LIMIT 1
+                """,
+                (name, chat_id, int(through_id)),
+            ).fetchone()
+        if row is None:
+            return None
+        return row["core_memory_snapshot"]
 
     def get_chat_core_memory(self, name: str, chat_id: str) -> str:
         with _conn(self.db_path) as conn:
@@ -1848,14 +1932,8 @@ class ProjectStore:
                 message_id=message_id,
                 client_message_id=client_message_id,
             )
-            
-            # 1. Create the new chat with an empty per-chat core memory; see
-            # _BRANCH_CORE_MEMORY for why the source chat's is not inherited.
-            conn.execute("INSERT INTO project_chats (id, project, name, created_at, core_memory) VALUES (?,?,?,?,?)",
-                         (new_chat_id, name, new_chat_name, now, _BRANCH_CORE_MEMORY))
-            _inherit_chat_reasoning_effort(conn, name, source_chat_id, new_chat_id)
-            
-            # 2. Copy history through the selected persisted message.
+
+            # 1. Select the history through the chosen persisted message.
             # Prefer stable message ids because UI indexes may omit stored system
             # audit entries such as [MODE] messages.
             target_message_id = self._resolve_chat_message_id(
@@ -1868,7 +1946,7 @@ class ProjectStore:
             if target_message_id is not None:
                 history = conn.execute(
                     """
-                    SELECT role, content, timestamp, attachments
+                    SELECT id, role, content, timestamp, attachments, core_memory_snapshot
                     FROM project_history
                     WHERE project = ? AND chat_id = ? AND id <= ? AND deleted_at = ''
                     ORDER BY id
@@ -1879,14 +1957,28 @@ class ProjectStore:
                 if message_index < -1:
                     raise ValueError("message_index must be >= -1")
                 history = conn.execute(
-                    "SELECT role, content, timestamp, attachments FROM project_history"
+                    "SELECT id, role, content, timestamp, attachments, core_memory_snapshot FROM project_history"
                     " WHERE project = ? AND chat_id = ? AND deleted_at = '' ORDER BY id LIMIT ?",
                     (name, source_chat_id, message_index + 1),
                 ).fetchall()
-            
+
+            # 2. Create the new chat with the source's per-chat core memory as it
+            # was at the last copied message, never its current one, which also
+            # holds what the source learned after that point.
+            branch_core_memory = None
+            if history:
+                branch_core_memory = self._chat_core_memory_at_cut(
+                    conn, name, source_chat_id, through_id=int(history[-1]["id"])
+                )
+            if branch_core_memory is None:
+                branch_core_memory = _BRANCH_CORE_MEMORY
+            conn.execute("INSERT INTO project_chats (id, project, name, created_at, core_memory) VALUES (?,?,?,?,?)",
+                         (new_chat_id, name, new_chat_name, now, branch_core_memory))
+            _inherit_chat_reasoning_effort(conn, name, source_chat_id, new_chat_id)
+
             for hist_row in history:
                 conn.execute(
-                    "INSERT INTO project_history (project, chat_id, timestamp, role, content, attachments) VALUES (?,?,?,?,?,?)",
+                    "INSERT INTO project_history (project, chat_id, timestamp, role, content, attachments, core_memory_snapshot) VALUES (?,?,?,?,?,?,?)",
                     (
                         name,
                         new_chat_id,
@@ -1894,6 +1986,7 @@ class ProjectStore:
                         hist_row["role"],
                         hist_row["content"],
                         hist_row["attachments"] or "[]",
+                        hist_row["core_memory_snapshot"],
                     )
                 )
 
@@ -1955,20 +2048,28 @@ class ProjectStore:
                 raise ValueError(
                     "message_id or client_message_id is required to branch a chat"
                 )
+            # The branch keeps the source's per-chat core memory as it was at the
+            # edited message, never its current one, which also holds what the
+            # source learned after that point.
+            branch_core_memory = self._chat_core_memory_at_cut(
+                conn, name, source_chat_id, before_id=anchor_id
+            )
+            if branch_core_memory is None:
+                branch_core_memory = _BRANCH_CORE_MEMORY
             conn.execute(
                 "INSERT INTO project_chats (id, project, name, created_at, core_memory) VALUES (?,?,?,?,?)",
-                (new_chat_id, name, new_chat_name, now, _BRANCH_CORE_MEMORY),
+                (new_chat_id, name, new_chat_name, now, branch_core_memory),
             )
             _inherit_chat_reasoning_effort(conn, name, source_chat_id, new_chat_id)
             history = conn.execute(
-                "SELECT role, content, timestamp, attachments FROM project_history"
+                "SELECT role, content, timestamp, attachments, core_memory_snapshot FROM project_history"
                 " WHERE project = ? AND chat_id = ? AND id < ? AND deleted_at = '' ORDER BY id",
                 (name, source_chat_id, anchor_id),
             ).fetchall()
             copied = []
             for hist_row in history:
                 cursor = conn.execute(
-                    "INSERT INTO project_history (project, chat_id, timestamp, role, content, attachments) VALUES (?,?,?,?,?,?)",
+                    "INSERT INTO project_history (project, chat_id, timestamp, role, content, attachments, core_memory_snapshot) VALUES (?,?,?,?,?,?,?)",
                     (
                         name,
                         new_chat_id,
@@ -1976,6 +2077,7 @@ class ProjectStore:
                         hist_row["role"],
                         hist_row["content"],
                         hist_row["attachments"] or "[]",
+                        hist_row["core_memory_snapshot"],
                     ),
                 )
                 copied.append({
