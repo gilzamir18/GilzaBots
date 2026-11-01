@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Files, GitBranch, MessageSquare, Settings, Cpu, LayoutTemplate, LayoutGrid, PanelBottom, Terminal, History, Columns2, Store, GraduationCap, Cloud, CloudOff, Plug } from 'lucide-react';
+import { Files, GitBranch, MessageSquare, Settings, Cpu, LayoutTemplate, LayoutGrid, PanelBottom, Terminal, History, Columns2, Store, GraduationCap, Cloud, CloudOff, Plug, Radar } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   ACTIVITY_BAR_DEFAULT_DENSITY,
@@ -19,6 +19,8 @@ export default function ActivityBar({
   onOpenSettings,
   onEditModels,
   onOpenHardware,
+  onOpenMonitors,
+  monitorsPendingCount = 0,
   onOpenAssetStore,
   onOpenCloudSync,
   cloudEnabled,
@@ -280,6 +282,25 @@ export default function ActivityBar({
             : t('activityBar.cloudSync', 'Cloud sync')}
         >
           {cloudEnabled ? <Cloud size={density.secondaryIconSize} /> : <CloudOff size={density.secondaryIconSize} />}
+        </button>
+
+        <button
+          onClick={onOpenMonitors}
+          className="vscode-activitybar-btn"
+          title={monitorsPendingCount > 0
+            ? t('activityBar.monitorsPending', { count: monitorsPendingCount })
+            : t('activityBar.monitors', 'Monitors')}
+          aria-label={t('activityBar.monitors', 'Monitors')}
+          style={{ position: 'relative' }}
+        >
+          <Radar size={density.secondaryIconSize} />
+          {monitorsPendingCount > 0 && (
+            <span aria-hidden="true" style={{
+              position: 'absolute', top: 2, right: 2, minWidth: 14, height: 14, padding: '0 3px',
+              borderRadius: 7, background: 'var(--vscode-fg-warning, #d29922)', color: '#000',
+              fontSize: 9, fontWeight: 700, lineHeight: '14px', textAlign: 'center',
+            }}>{monitorsPendingCount}</span>
+          )}
         </button>
 
         <button

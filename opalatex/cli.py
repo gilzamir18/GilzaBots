@@ -749,7 +749,25 @@ def _start_gui_or_explain() -> None:
     start_gui_server(host="127.0.0.1", port=3000)
 
 
+def _monitors_argv(argv: list[str]) -> list[str] | None:
+    """The arguments of ``opalatex monitors ...``, or None for any other command.
+
+    The snap launcher always prepends ``--gui`` (snap/local/opalatex-launch), so
+    it is skipped here; a subcommand is otherwise the first argument.
+    """
+    rest = [arg for arg in argv if arg != "--gui"]
+    if rest and rest[0] == "monitors":
+        return rest[1:]
+    return None
+
+
 def main() -> None:
+    monitors_args = _monitors_argv(sys.argv[1:])
+    if monitors_args is not None:
+        from .monitors.cli import main as monitors_main
+
+        sys.exit(monitors_main(monitors_args))
+
     parser = build_parser()
     args = parser.parse_args()
 

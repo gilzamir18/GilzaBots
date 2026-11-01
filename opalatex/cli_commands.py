@@ -166,6 +166,7 @@ COMMAND_GROUPS: dict[str, tuple[str, ...]] = {
                           "/list_assets", "/load_asset"),
     "help_group_vcs": ("/commit", "/undo", "/checkpoints", "/restoreckp", "/removechk"),
     "help_group_build": ("/compile",),
+    "help_group_monitors": ("/monitors",),
 }
 
 
@@ -1183,6 +1184,47 @@ async def cmd_compile(state: REPLState, args: list[str]) -> str | None:
         log = str(result.get("log") or "").strip()
         if log:
             T.console.print(f"[dim]{_escape(log[-2000:])}[/dim]")
+    return "continue"
+
+
+#: The `opalatex monitors` subcommands that make sense inside the REPL. The
+#: daemon would block it, and the internal ones are started by the daemon or OS.
+_REPL_MONITOR_COMMANDS = ("list", "info", "pause", "resume", "cancel", "delete", "test",
+                          "inputs", "answer", "service", "notify-test")
+
+
+@_registry.register(
+    "/monitors", usage="[list|info|pause|resume|cancel|delete|test|inputs|answer|service] ...",
+    cli_only=True,
+    description="Manage background monitors (the same as `opalatex monitors`)",
+    details="Examples:\n  /monitors                  active and paused monitors\n"
+            "  /monitors list --all       every monitor, finished ones included\n"
+            "  /monitors info <id>        details and recent history\n"
+            "  /monitors pause <id>       stop checking until resumed\n"
+            "  /monitors cancel <id>      stop it for good\n"
+            "  /monitors test <id>        check now, changing nothing\n"
+            "  /monitors inputs           questions background turns wait on\n"
+            "  /monitors answer <id> yes  answer one of them\n"
+            "  /monitors service status   the login service that starts the daemon",
+)
+async def cmd_monitors(_state: REPLState, args: list[str]) -> str:
+    import shlex
+
+    from .monitors.cli import main as monitors_main
+
+    try:
+        argv = shlex.split(" ".join(args)) if args else ["list"]
+    except ValueError as exc:
+        T.error(f"/monitors: {exc}")
+        return "continue"
+    if argv[0] not in _REPL_MONITOR_COMMANDS:
+        T.error(f"/monitors {argv[0]}: not available here. Use one of: {', '.join(_REPL_MONITOR_COMMANDS)}.")
+        return "continue"
+    try:
+        # Run off the loop: `test` runs its own event loop for the check.
+        await asyncio.to_thread(monitors_main, argv)
+    except SystemExit:
+        pass  # argparse reports a usage error and exits; the REPL keeps going.
     return "continue"
 
 

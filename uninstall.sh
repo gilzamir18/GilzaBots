@@ -118,6 +118,21 @@ if [[ -f "$DESKTOP_FILE" ]] && grep -Fqx "Exec=$INSTALL_DIR/OpalaTex" "$DESKTOP_
     rm -f "$DESKTOP_FILE"
 fi
 
+# The monitor daemon's login service (opalatex/monitors/service.py): a
+# systemd --user unit, or an XDG autostart entry where there is no user systemd.
+# Removed only when it starts this installation.
+MONITORS_UNIT="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/opalatex-monitors.service"
+MONITORS_AUTOSTART="${XDG_CONFIG_HOME:-$HOME/.config}/autostart/opalatex-monitors.desktop"
+if [[ -f "$MONITORS_UNIT" ]] && grep -Fq "$INSTALL_DIR/OpalaTex" "$MONITORS_UNIT"; then
+    systemctl --user disable --now opalatex-monitors.service >/dev/null 2>&1 || true
+    rm -f "$MONITORS_UNIT"
+    systemctl --user daemon-reload >/dev/null 2>&1 || true
+fi
+if [[ -f "$MONITORS_AUTOSTART" ]] && grep -Fq "$INSTALL_DIR/OpalaTex" "$MONITORS_AUTOSTART"; then
+    rm -f "$MONITORS_AUTOSTART"
+fi
+pkill -f "^$INSTALL_DIR/OpalaTex monitors " >/dev/null 2>&1 || true
+
 # ~/.local/bin is shared by many applications. Remove our shell initialization
 # block only while the directory has no other commands that may depend on it.
 if [[ ! -d "$BIN_DIR" ]] || [[ -z "$(command ls -A "$BIN_DIR" 2>/dev/null)" ]]; then

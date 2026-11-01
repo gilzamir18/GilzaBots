@@ -71,6 +71,8 @@ import AlertModal from './components/modals/AlertModal';
 import InteractiveTerminalModal from './components/modals/InteractiveTerminalModal';
 import AskModal from './components/modals/AskModal';
 import HardwareModal from './components/modals/HardwareModal';
+import MonitorsModal from './components/modals/MonitorsModal';
+import useMonitorBridge from './hooks/useMonitorBridge';
 import AssetStoreModal from './components/modals/AssetStoreModal';
 import CloudSyncModal from './components/modals/CloudSyncModal';
 import CloudDownloadModal from './components/modals/CloudDownloadModal';
@@ -636,6 +638,7 @@ export default function App() {
   const [planRequest, setPlanRequest] = useState(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHardwareModalOpen, setIsHardwareModalOpen] = useState(false);
+  const [isMonitorsModalOpen, setIsMonitorsModalOpen] = useState(false);
   const [isAssetStoreOpen, setIsAssetStoreOpen] = useState(false);
   const [isCloudSyncOpen, setIsCloudSyncOpen] = useState(false);
   const [isCloudDownloadOpen, setIsCloudDownloadOpen] = useState(false);
@@ -3890,6 +3893,10 @@ export default function App() {
     }
 
     bindRunChat(targetChatId);
+    // Reported to callers that must know whether the turn ran, such as a
+    // monitor's wake-up (useMonitorBridge), which returns a refused wake-up to
+    // the queue instead of marking it done.
+    let runOutcome = 'not_started';
     try {
       const res = await fetch('/api/opalatex/run', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -3922,7 +3929,7 @@ export default function App() {
           setPendingAttachments(prev => (prev.length ? prev : attachmentsSnapshot));
         }
         reportRunConflict(runConflict);
-        return;
+        return 'conflict';
       }
       // The turn was accepted, so the previous turn's partial output is safe to
       // drop: this one is about to produce its own. See the note above.
@@ -3934,11 +3941,94 @@ export default function App() {
       await consumeLinesByFrame(res.body.getReader(), (line) => {
         try { handleAgentEvent(JSON.parse(line)); } catch (e) { addLog('stdout', line); }
       });
+      runOutcome = 'completed';
     } catch (err) {
+      runOutcome = 'failed';
       addLog('error', t('app.executionFailed', { error: err.message }));
       setChatMessages(prev => [...prev, { role: 'assistant', content: `🔴 Falha na execução: ${err.message}`, is_error: true, timestamp: new Date().toISOString() }]);
     } finally { localTurnRef.current = false; bindRunChat(''); setIsAgentRunning(false); setIsInterruptPending(false); fetchFiles(); fetchProblems(); }
+    return runOutcome;
   };
+
+  // ── Monitors (PROJECT_DESIGN 2.24) ─────────────────────────────────────
+  // Questions a monitor's background turn is waiting on are shown in the same
+  // dialogs as this window's own (marked `remote`), and answered through the
+  // same /api/opalatex/input_response, which routes them by id.
+  const presentedRemoteInputsRef = useRef(new Set());
+  const pendingMonitorOpenRef = useRef(null);
+  const presentRemoteInput = (item) => {
+    const raw = item?.request || {};
+    const request = { ...normalizeInputRequest(raw), remote: true, monitorName: item.monitor_name };
+    if (raw.markdown_content) {
+      if (planRequest) return false;
+      setPlanRequest(request);
+    } else if (request.type === 'ask') {
+      if (askRequest) return false;
+      setAskRequest(request);
+    } else {
+      if (confirmRequest) return false;
+      setConfirmRequest(request);
+    }
+    presentedRemoteInputsRef.current.add(item.id);
+    return true;
+  };
+  const showMonitorChat = (target) => {
+    if (!target?.project) return;
+    setIsChatVisible(true);
+    if (activeProject?.name === target.project) {
+      if (target.chat_id && target.chat_id !== activeChatIdRef.current) handleSwitchChat(target.chat_id);
+      return;
+    }
+    const proj = projects.find(p => p.name === target.project);
+    if (!proj) {
+      addLog('error', t('app.monitorProjectMissing', 'The monitor\'s project "{{project}}" is not in the project list.', { project: target.project }));
+      return;
+    }
+    pendingMonitorOpenRef.current = target;
+    handleSelectProject(proj);
+  };
+  const { inputs: monitorInputs } = useMonitorBridge({
+    activeProject,
+    isTurnBusy,
+    // A wake-up is an ordinary turn of its chat: streamed there, and shown
+    // only while that chat is on screen, like any turn the user started. A
+    // monitor that wakes a new chat each time created that chat in the store,
+    // so the sidebar list is reloaded to show it.
+    runWake: (wake) => {
+      if (activeProject && !chats.some(chat => chat.id === wake.chat_id)) {
+        fetch(`/api/chat/list?project_name=${encodeURIComponent(activeProject.name)}&t=${Date.now()}`)
+          .then(r => (r.ok ? r.json() : null))
+          .then(d => { if (d?.chats) setChats(d.chats); })
+          .catch(() => { });
+      }
+      return handleSendMessage(null, null, {
+        overrideText: wake.prompt,
+        displayText: wake.display || wake.prompt,
+        chatIdOverride: wake.chat_id,
+        skipUserMessageAppend: wake.chat_id !== activeChatIdRef.current,
+      });
+    },
+    openChat: showMonitorChat,
+    onInputs: (items) => {
+      const waiting = new Set(items.map(item => item.id));
+      const withdraw = (prev) => (prev?.remote && !waiting.has(prev.id) ? null : prev);
+      setConfirmRequest(withdraw);
+      setAskRequest(withdraw);
+      setPlanRequest(withdraw);
+      presentedRemoteInputsRef.current = new Set([...presentedRemoteInputsRef.current].filter(id => waiting.has(id)));
+      for (const item of items) {
+        if (presentedRemoteInputsRef.current.has(item.id)) continue;
+        if (item.project !== activeProject?.name || item.chat_id !== activeChatIdRef.current) continue;
+        presentRemoteInput(item);
+      }
+    },
+  });
+  useEffect(() => {
+    const target = pendingMonitorOpenRef.current;
+    if (!target || activeProject?.name !== target.project) return;
+    pendingMonitorOpenRef.current = null;
+    if (target.chat_id && target.chat_id !== activeChatIdRef.current) handleSwitchChat(target.chat_id);
+  }, [activeProject?.name]);
 
   // A message the turn ended without delivering becomes an ordinary next turn.
   // It goes back through handleSendMessage rather than through a shortcut, so it
@@ -4792,6 +4882,8 @@ export default function App() {
           onOpenSettings={() => setIsSettingsOpen(true)}
           onEditModels={() => setShowEditModelsModal(true)}
           onOpenHardware={() => setIsHardwareModalOpen(true)}
+          onOpenMonitors={() => setIsMonitorsModalOpen(true)}
+          monitorsPendingCount={monitorInputs.length}
           onOpenAssetStore={() => setIsAssetStoreOpen(true)}
           onOpenCloudSync={() => setIsCloudSyncOpen(true)}
           cloudEnabled={!!cloudStatus?.settings?.enabled}
@@ -5342,6 +5434,17 @@ export default function App() {
         />
       )}
 
+      {isMonitorsModalOpen && (
+        <MonitorsModal
+          onClose={() => setIsMonitorsModalOpen(false)}
+          activeProject={activeProject}
+          activeChatId={activeChatId}
+          onAnswerInput={(item) => {
+            if (presentRemoteInput(item)) setIsMonitorsModalOpen(false);
+            else addLog('info', t('app.monitorAnswerBusy', 'Answer the question already open first.'));
+          }}
+        />
+      )}
       {isHardwareModalOpen && (
         <HardwareModal onClose={() => setIsHardwareModalOpen(false)} />
       )}

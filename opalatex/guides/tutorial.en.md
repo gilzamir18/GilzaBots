@@ -494,6 +494,9 @@ Beyond basic LaTeX file editing, OpalaTex includes powerful built-in tools and c
   messages let you inspect the model's reasoning trace without cluttering the final text.
 - **Docker Sandbox (Experimental)** — opt-in execution of commands and scripts within an
   isolated Docker container mounted to your project folder.
+- **Monitor Agents (Experimental)** — background watchers that notify you, or wake a chat
+  so the assistant resumes a task, when something happens — even with the window closed.
+  See *What are monitor agents, and how do I use them?*
 
 ## docker-sandbox :: What is the Docker sandbox and how does it work?
 
@@ -569,6 +572,112 @@ section under Preferences:
 Because this feature is **experimental**, standard local execution remains the default.
 If you encounter permission issues or do not need container isolation, you can safely
 leave it disabled.
+
+## monitors :: What are monitor agents, and how do I use them?
+
+> **IMPORTANT: Monitor agents are currently an EXPERIMENTAL feature.** They work on
+> Linux (tested on Ubuntu/GNOME), but the Windows and macOS integrations (notifications,
+> start at login) have not yet been tested on real machines, and a wake-up that resumes a
+> task with a real model has not been verified end to end. Expect rough edges, keep an eye
+> on what your monitors do, and report problems.
+
+A **monitor** watches something in the background and acts when a condition holds: it
+shows a **desktop notification**, **wakes a chat** so the assistant continues a task, or
+both. Monitors keep running when the OpalaTex window is closed.
+
+### Two ways to use them
+
+- **Ask to be told about something** — just say it in the chat: *"tell me whenever the
+  dollar rises more than 10 cents against the real"*, *"warn me when this page changes"*,
+  *"remind me in two hours to review chapter 3"*. The assistant registers a monitor that
+  notifies you each time the condition fires (or once, if you ask for a single notice).
+- **Let the assistant wait instead of spinning** — when a task depends on something that
+  finishes later (a long build, a download, a command started with
+  `run_background_command`), the assistant can register a monitor, tell you what it is
+  waiting for, and end its turn. When the condition holds, the chat is woken with a
+  **⏰ Monitor** message and the assistant carries on where it stopped. If the wait runs
+  out (too many checks or a time limit), the chat is woken anyway with the reason, so the
+  assistant can decide to wait longer or ask you whether to cancel.
+
+**Which chat is woken.** Each monitor that wakes the assistant does it in one of two ways:
+
+- **in the chat where it was created** (the default) — the assistant continues with that
+  conversation and everything it remembers from it. This is the right choice for waiting
+  on a task.
+- **in a new chat every time** — each wake-up opens a fresh chat in the same project (named
+  *⏰ monitor name · date and time*), and the original conversation is left untouched.
+  This suits recurring work, such as *"each time the dollar moves, write a short analysis"*.
+  The new chat starts empty, so the monitor's instructions must say everything the
+  assistant needs.
+
+Ask for it in your own words (*"…and open a new chat each time"*), or pick it in the
+**Wake a chat** field of the New monitor form. If the chat a monitor should wake was
+deleted, the wake-up fails with a notification rather than going to another chat.
+
+### What a monitor can check
+
+- **Web address (HTTP)** — reads a page or a JSON API; a JSON path such as `USDBRL.bid`
+  or a regular expression extracts the value. This is the cheap, reliable choice for
+  prices and status endpoints.
+- **Command** — runs a command in the project folder (inside the Docker sandbox when it
+  is enabled) and looks at its output or exit code.
+- **File** — whether a file exists, or whether its modification time or content changed.
+- **Timer** — no check at all: it simply fires after the time you set.
+- **Question for the model** — the project's worker model answers a question, with web
+  search. Use it only when the condition needs judgment ("only if the news involves AI"):
+  each check is a model call that costs tokens, so the minimum interval is 5 minutes.
+
+Conditions include *changes*, *moves by* (e.g. ±0.10 since the last notice), *greater /
+less than*, *equals*, *contains*, *matches pattern*, *exit code is*, *exists / is missing*.
+The first check runs when the monitor is registered: if the address does not answer or
+the JSON path matches nothing, you get the error right away instead of a monitor that
+fails silently.
+
+### Where it runs
+
+Monitors run in a small background service, `opalatex monitors daemon`, separate from the
+window. **Start at login** is on by default so your monitors survive a restart (a
+`systemd --user` service on Linux, the snap's own autostart in the snap, the per-user
+`Run` key on Windows, a LaunchAgent on macOS); you can turn it off in the Monitors panel.
+The service stops by itself after a while when there is nothing left to watch.
+
+- **Notifications** — native ones: the GNOME/KDE notification center on Linux, toasts on
+  Windows, Notification Center on macOS. Clicking a notification (on Linux and Windows)
+  opens OpalaTex on the chat it belongs to.
+- **When the window is open** on that project, a wake-up runs right there as a normal,
+  streamed turn. Otherwise it runs in the background and a notification brings you its
+  answer.
+- **Decisions while you are away** — if a background turn needs your approval (a command
+  in `edit` mode, a plan, a question), it **waits**: a notification asks for your
+  decision, and the question appears in the usual dialog when you open the chat or the
+  Monitors panel. Nothing is approved for you.
+- **One turn per chat** — while a background turn is running in a chat, a new message to
+  that same chat is refused until it finishes.
+
+### Managing monitors
+
+- **Monitors panel** — the radar icon in the left activity bar (a badge counts the
+  decisions waiting for you). It lists every monitor with its type (*Task wait* or
+  *Watch*), trigger, last check, last value and errors, with **Pause/Resume**, **Test**
+  (checks now without changing anything), **Cancel/Remove**, the history of each monitor,
+  a **New monitor** form, the service status, **Start at login** and **Test
+  notification**.
+- **In the chat** — ask the assistant to list, pause or cancel monitors
+  (`list_monitors`, `pause_monitor`, `cancel_monitor`).
+- **In the terminal** — `opalatex monitors list`, `info <id>`, `pause <id>`,
+  `resume <id>`, `cancel <id>`, `test <id>`, `inputs` and `answer <id> <answer>`,
+  `daemon --status`, `service status|install|uninstall`, `notify-test`; `/monitors` does
+  the same inside `opalatex --cli`.
+
+### Cautions
+
+- Registering a monitor counts as an action: in **edit** mode the assistant asks before
+  creating one, and in **plan** mode it cannot. A command monitor runs its command
+  repeatedly with nobody watching — read it before approving.
+- A monitor that fails five checks in a row stops and notifies you.
+- If notifications do not appear, use **Test notification** (or
+  `opalatex monitors notify-test`), and check `opalatex monitors daemon --status`. The
+  service writes a log at `<OpalaTex data folder>/monitors/daemon.log`.
 
 ## cloud-for-big-data :: When should I use cloud models?
 
@@ -699,7 +808,8 @@ switches between `auto`, `plan` and `edit`.
 `/help /providers`, `/help /chat`). Everything in the desktop chat works here, plus a
 few that only make sense in a terminal: `/chat` to list, create and switch conversations,
 `/effort` to set the current chat's reasoning effort, `/compile` to build the PDF
-with Tectonic, `/cost` to see how full the context window is, and `/resume`.
+with Tectonic, `/cost` to see how full the context window is, `/resume`, and
+`/monitors` to manage the background monitors (experimental; also `opalatex monitors`).
 
 **Installing just this** — the command-line interface is the base install:
 `pip install opalatex` or `uv tool install opalatex` gives you the agent without the

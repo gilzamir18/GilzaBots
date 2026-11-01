@@ -514,6 +514,9 @@ avançadas:
   mensagens permitem inspecionar o raciocínio da IA sem poluir o texto final.
 - **Sandbox Docker (Experimental)** — execução opcional e isolada de comandos e scripts
   dentro de um contêiner Docker montado na pasta do seu projeto.
+- **Agentes Monitores (Experimental)** — observadores em segundo plano que avisam você, ou
+  acordam um chat para o assistente retomar uma tarefa, quando algo acontece — mesmo com a
+  janela fechada. Veja *O que são os agentes monitores e como usá-los?*
 
 ## docker-sandbox :: O que é o sandbox Docker e como ele funciona?
 
@@ -592,6 +595,112 @@ seção **Sandbox Docker** em Preferências:
 Como esse recurso é **experimental**, a execução local padrão continua sendo o padrão.
 Se encontrar problemas de permissão ou não necessitar de isolamento em contêiner, você pode
 mantê-lo tranquilamente desativado.
+
+## monitors :: O que são os agentes monitores e como usá-los?
+
+> **IMPORTANTE: Os agentes monitores são atualmente um recurso EXPERIMENTAL.** Eles
+> funcionam no Linux (testados no Ubuntu/GNOME), mas as integrações com Windows e macOS
+> (notificações, início no login) ainda não foram testadas em máquinas reais, e um
+> despertar que retoma uma tarefa com um modelo real ainda não foi verificado de ponta a
+> ponta. Espere arestas, acompanhe o que seus monitores fazem e relate problemas.
+
+Um **monitor** observa algo em segundo plano e age quando uma condição é atendida: mostra
+uma **notificação na área de trabalho**, **acorda um chat** para o assistente continuar
+uma tarefa, ou os dois. Os monitores continuam rodando com a janela do OpalaTex fechada.
+
+### Duas formas de usar
+
+- **Pedir para ser avisado** — basta dizer no chat: *"me avise sempre que o dólar subir
+  mais de 10 centavos em relação ao real"*, *"avise quando esta página mudar"*,
+  *"me lembre daqui a duas horas de revisar o capítulo 3"*. O assistente cadastra um
+  monitor que notifica você a cada disparo (ou uma única vez, se você pedir um só aviso).
+- **Deixar o assistente esperar em vez de ficar consultando** — quando uma tarefa depende
+  de algo que termina depois (uma compilação longa, um download, um comando iniciado com
+  `run_background_command`), o assistente pode cadastrar um monitor, dizer o que está
+  esperando e encerrar o turno. Quando a condição é atendida, o chat é acordado com uma
+  mensagem **⏰ Monitor** e o assistente continua de onde parou. Se a espera se esgotar
+  (verificações demais ou prazo vencido), o chat é acordado mesmo assim, com o motivo,
+  para o assistente decidir se espera mais ou pergunta a você se cancela.
+
+**Qual chat é acordado.** Cada monitor que acorda o assistente faz isso de um de dois jeitos:
+
+- **no chat em que foi criado** (o padrão) — o assistente continua com aquela conversa e
+  tudo o que lembra dela. É a escolha certa para esperar uma tarefa.
+- **num chat novo a cada vez** — cada despertar abre um chat novo no mesmo projeto
+  (chamado *⏰ nome do monitor · data e hora*), e a conversa original fica intacta. Serve
+  para trabalho recorrente, como *"toda vez que o dólar variar, escreva uma análise curta"*.
+  O chat novo começa vazio, então as instruções do monitor precisam dizer tudo o que o
+  assistente precisa saber.
+
+Peça com suas palavras (*"…e abra um chat novo a cada vez"*) ou escolha no campo
+**Acordar um chat** do formulário de Novo monitor. Se o chat que o monitor deveria acordar
+foi apagado, o despertar falha com uma notificação em vez de ir para outro chat.
+
+### O que um monitor pode verificar
+
+- **Endereço web (HTTP)** — lê uma página ou uma API JSON; um caminho JSON como
+  `USDBRL.bid` ou uma expressão regular extrai o valor. É a opção barata e confiável para
+  cotações e endpoints de status.
+- **Comando** — roda um comando na pasta do projeto (dentro do sandbox Docker, quando ele
+  está ativado) e olha a saída ou o código de saída.
+- **Arquivo** — se um arquivo existe, ou se a data de modificação ou o conteúdo mudou.
+- **Temporizador** — nenhuma verificação: simplesmente dispara depois do tempo definido.
+- **Pergunta ao modelo** — o modelo worker do projeto responde a uma pergunta, com busca
+  na web. Use só quando a condição exige julgamento ("só se a notícia envolver IA"): cada
+  verificação é uma chamada ao modelo que gasta tokens, por isso o intervalo mínimo é de
+  5 minutos.
+
+As condições incluem *mudar*, *variar* (ex.: ±0,10 desde o último aviso), *maior / menor
+que*, *igual a*, *contiver*, *casar com o padrão*, *código de saída for*, *existir / não
+existir*. A primeira verificação roda no cadastro: se o endereço não responde ou o caminho
+JSON não encontra nada, você recebe o erro na hora, em vez de um monitor que falha em
+silêncio.
+
+### Onde ele roda
+
+Os monitores rodam num pequeno serviço em segundo plano, `opalatex monitors daemon`,
+separado da janela. **Iniciar no login** vem ligado por padrão para seus monitores
+sobreviverem a uma reinicialização (um serviço `systemd --user` no Linux, o autostart da
+própria snap na snap, a chave `Run` do usuário no Windows, um LaunchAgent no macOS); você
+pode desligar no painel de Monitores. O serviço para sozinho depois de um tempo quando não
+há mais nada para observar.
+
+- **Notificações** — as nativas: a central de notificações do GNOME/KDE no Linux, toasts
+  no Windows, a Central de Notificações no macOS. Clicar numa notificação (no Linux e no
+  Windows) abre o OpalaTex no chat a que ela pertence.
+- **Com a janela aberta** naquele projeto, o despertar roda ali mesmo, como um turno normal
+  com streaming. Caso contrário, roda em segundo plano e uma notificação traz a resposta.
+- **Decisões enquanto você está fora** — se um turno em segundo plano precisa da sua
+  aprovação (um comando no modo `edit`, um plano, uma pergunta), ele **espera**: uma
+  notificação pede sua decisão, e a pergunta aparece no diálogo de sempre quando você abre
+  o chat ou o painel de Monitores. Nada é aprovado por você.
+- **Um turno por chat** — enquanto um turno em segundo plano roda num chat, uma nova
+  mensagem para esse mesmo chat é recusada até ele terminar.
+
+### Gerenciando os monitores
+
+- **Painel de Monitores** — o ícone de radar na barra de atividades à esquerda (um selo
+  conta as decisões que esperam por você). Lista todos os monitores com tipo (*Espera de
+  tarefa* ou *Observação*), gatilho, última verificação, último valor e erros, com
+  **Pausar/Retomar**, **Testar** (verifica agora sem alterar nada), **Cancelar/Remover**,
+  o histórico de cada monitor, um formulário de **Novo monitor**, o estado do serviço,
+  **Iniciar no login** e **Testar notificação**.
+- **No chat** — peça ao assistente para listar, pausar ou cancelar monitores
+  (`list_monitors`, `pause_monitor`, `cancel_monitor`).
+- **No terminal** — `opalatex monitors list`, `info <id>`, `pause <id>`, `resume <id>`,
+  `cancel <id>`, `test <id>`, `inputs` e `answer <id> <resposta>`, `daemon --status`,
+  `service status|install|uninstall`, `notify-test`; `/monitors` faz o mesmo dentro do
+  `opalatex --cli`.
+
+### Cuidados
+
+- Cadastrar um monitor conta como uma ação: no modo **edit** o assistente pergunta antes
+  de criar um, e no modo **plan** ele não pode. Um monitor de comando executa o comando
+  repetidamente sem ninguém olhando — leia-o antes de aprovar.
+- Um monitor que falha cinco verificações seguidas para e avisa você.
+- Se as notificações não aparecem, use **Testar notificação** (ou
+  `opalatex monitors notify-test`) e confira `opalatex monitors daemon --status`. O
+  serviço grava um log em `<pasta de dados do OpalaTex>/monitors/daemon.log`.
 
 ## cloud-for-big-data :: Quando devo usar modelos em nuvem?
 
@@ -726,7 +835,8 @@ alterna entre `auto`, `plan` e `edit`.
 `/help /providers`, `/help /chat`). Tudo o que existe no chat da janela funciona aqui,
 mais alguns que só fazem sentido num terminal: `/chat` para listar, criar e trocar de conversa,
 `/effort` para definir o esforço de raciocínio do chat atual, `/compile` para gerar o PDF com
-o Tectonic, `/cost` para ver quanto da janela de contexto está ocupada, e `/resume`.
+o Tectonic, `/cost` para ver quanto da janela de contexto está ocupada, `/resume`, e
+`/monitors` para gerenciar os monitores em segundo plano (experimental; também `opalatex monitors`).
 
 **Instalar só isso** — a interface de linha de comando é a instalação base:
 `pip install opalatex` ou `uv tool install opalatex` entrega o agente sem a pilha do

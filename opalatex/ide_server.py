@@ -2486,6 +2486,15 @@ class AsyncHTTPServer:
                 self.send_response(writer, 500, json.dumps({"error": str(e), "current": req_path, "dirs": []}).encode('utf-8'), "application/json")
 
         # Hardware Inference Endpoints
+        elif path == '/api/monitors' or path.startswith('/api/monitors/'):
+            from opalatex.monitors import api as monitors_api
+            status, body = await monitors_api.handle(
+                path, method, data, query,
+                turn_active=self._agent_turn_active(),
+                focus_window=_focus_main_window,
+            )
+            self.send_response(writer, status, json.dumps(body, default=str).encode('utf-8'), "application/json")
+
         elif path == '/api/hardware' and method == 'GET':
             from opalatex.hardware_store import get_or_detect_hardware
             info = get_or_detect_hardware()
@@ -3748,7 +3757,13 @@ class AsyncHTTPServer:
                 fut.get_loop().call_soon_threadsafe(fut.set_result, value)
                 self.send_response(writer, 200, b'{"ok":true}', "application/json")
             else:
-                self.send_response(writer, 404, b'{"error":"No pending request with that id"}', "application/json")
+                # A question asked by a monitor's background turn (another
+                # process) is answered through the same dialogs, by its id.
+                from opalatex.monitors.api import answer_remote_input
+                if await asyncio.to_thread(answer_remote_input, req_id, value):
+                    self.send_response(writer, 200, b'{"ok":true,"remote":true}', "application/json")
+                else:
+                    self.send_response(writer, 404, b'{"error":"No pending request with that id"}', "application/json")
             return
 
         # 7a1. IDE command result (the window's answer to an agent's open_file/close_file)
@@ -6649,6 +6664,21 @@ def load_splash_page(static_dir, lang=""):
     return page
 
 
+#: The desktop window, once created; a monitor notification click raises it.
+_MAIN_WINDOW = None
+
+
+def _focus_main_window() -> None:
+    window = _MAIN_WINDOW
+    if window is None:
+        return
+    for method in ("restore", "show"):
+        try:
+            getattr(window, method)()
+        except Exception:
+            pass
+
+
 def start_gui_server(host="127.0.0.1", port=3000):
     import os
     from opalatex import crash_report
@@ -6771,6 +6801,10 @@ def start_gui_server(host="127.0.0.1", port=3000):
                 thread = threading.Thread(target=_run_asyncio_server, daemon=True)
                 thread.start()
                 backend["thread"] = thread
+                # Monitors outlive the window; one left active before a reboot
+                # restarts its daemon here if the login service did not.
+                from opalatex.monitors.api import on_server_start
+                threading.Thread(target=on_server_start, daemon=True).start()
         # Nothing may load the URL before the server accepts connections.
         server_ready.wait(timeout=10)
         return backend["thread"]
@@ -7011,7 +7045,8 @@ def start_gui_server(host="127.0.0.1", port=3000):
         if splash is None:
             print("[OpalaTex] gui/splash.html not found in the front-end bundle; starting without a splash screen.")
             _start_backend()
-        window = webview.create_window(
+        global _MAIN_WINDOW
+        window = _MAIN_WINDOW = webview.create_window(
             title="OpalaTex",
             url=None if splash else url,
             html=splash,

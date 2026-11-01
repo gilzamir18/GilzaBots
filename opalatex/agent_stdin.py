@@ -2324,9 +2324,70 @@ async def _run_off_loop(fn, *args, **kwargs):
                 task.cancel()
 
 
+_TURN_LEASE_AGENTS = ("orchestrator", "chat_orchestrator")
+
+
+def _take_turn_lease(data: dict):
+    """Claim the chat for this process for the length of an orchestrator turn.
+
+    The window, the CLI and the monitor daemon's wake-up turns are separate
+    processes sharing one ``sessions.db``, and an orchestrator's working state is
+    saved per chat; two turns of the same chat at once would each overwrite the
+    other's. Returns ``(project, chat_id)`` when held, ``None`` when this turn
+    takes no lease, and ``False`` when another live process holds the chat.
+    """
+    if (data.get("agent") or "chat_orchestrator") not in _TURN_LEASE_AGENTS:
+        return None
+    project = str(data.get("project_name") or "").strip()
+    chat_id = str(data.get("chat_id") or "").strip()
+    if not project or not chat_id:
+        return None
+    try:
+        from opalatex.monitors.store import MonitorStore
+
+        holder = MonitorStore().acquire_lease(project, chat_id, os.getpid(), "turn")
+    except Exception as exc:
+        # The lease guards against a background turn; being unable to take it
+        # must not stop the user's own turn.
+        _logging.getLogger(__name__).warning("Could not take the chat's turn lease: %s", exc)
+        return None
+    if holder is not None:
+        from opalatex.i18n import _ as _translate
+
+        print_event("error", {
+            "agent": data.get("agent") or "chat_orchestrator",
+            "message": _translate("chat_busy_in_background", holder=holder.get("holder", "")),
+        })
+        print_event("agent_finished", {})
+        return False
+    return (project, chat_id)
+
+
+def _release_turn_lease(lease) -> None:
+    if not lease:
+        return
+    try:
+        from opalatex.monitors.store import MonitorStore
+
+        MonitorStore().release_lease(lease[0], lease[1], os.getpid())
+    except Exception:
+        pass
+
+
 async def handle_run(data: dict):
+    """Run one agent turn, holding the chat's cross-process lease while it runs."""
+    lease = _take_turn_lease(data)
+    if lease is False:
+        return
+    try:
+        return await _handle_run(data)
+    finally:
+        _release_turn_lease(lease)
+
+
+async def _handle_run(data: dict):
     global current_project, current_store, current_memgpt
-    
+
     import opalatex.tools
     opalatex.tools._DENIED_TOOLS.clear()
     

@@ -1529,12 +1529,15 @@ def chat_orchestrator_system_prompt(project, store=None) -> str:
         else desktop_workspace_block()
     )
 
+    from .monitors.agent_tools import MONITORS_PROMPT_BLOCK
+
     system_prompt = (
         f"{_current_date_instruction()}\n\n"
         f"{body}\n\n"
         f"{project_block}\n"
         f"{catalog}\n"
         f"{_HELPER_POLICY_BLOCKS[orchestrator_policy]}\n"
+        f"{MONITORS_PROMPT_BLOCK}"
         f"{native_tool_block}"
         f"{tutorial_block}"
         f"{surface_block}"
@@ -1702,6 +1705,12 @@ def build_chat_orchestrator(project, store=None) -> MemGPTAgentBlock:
     # (opalatex/prompt_surface.py).
     from .prompt_surface import tools_for_surface
     orchestrator_tools = tools_for_surface(orchestrator_tools)
+
+    # Monitors (PROJECT_DESIGN 2.24). Listing, pausing and cancelling are safe;
+    # registering is gated like any execution, since a monitor keeps reaching the
+    # network or running a command with nobody watching.
+    from .monitors.agent_tools import build_monitor_tools
+    orchestrator_tools.extend(wrap_tool(tool) for tool in build_monitor_tools())
 
     # `create_plan` halts the turn on an approval dialog, which only means
     # something where the mode is "propose, then execute". In `auto` the mode's

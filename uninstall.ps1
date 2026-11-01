@@ -80,6 +80,16 @@ if ($Purge) {
     }
 }
 
+# The monitor daemon (`OpalaTex.exe monitors daemon`) and the background turns it
+# starts have no window to close, so they are stopped here rather than reported
+# as "still running". Its login entry and notification registrations go too.
+Get-CimInstance Win32_Process -Filter "Name = 'OpalaTex.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -match '\smonitors\s' } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "OpalaTexMonitors" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "HKCU:\Software\Classes\opalatex-monitor" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "HKCU:\Software\Classes\AppUserModelId\com.opalacoder.OpalaTex" -ErrorAction SilentlyContinue
+
 if (Get-Process -Name "OpalaTex" -ErrorAction SilentlyContinue) {
     Stop-Uninstall "OpalaTex is still running. Close it and run the uninstaller again."
 }

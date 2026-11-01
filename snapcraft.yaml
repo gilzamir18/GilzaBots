@@ -80,6 +80,27 @@ apps:
       - network
       - network-bind
       - removable-media
+  # The monitor daemon (opalatex/monitors/, PROJECT_DESIGN 2.24). A confined
+  # snap can neither write ~/.config/systemd nor run systemctl, so the login
+  # start is snapd's own: the app writes opalatex-monitors.desktop into
+  # $SNAP_USER_DATA/.config/autostart when "Start at login" is on, and the
+  # session agent starts this app at the next login. Notifications go through
+  # org.freedesktop.Notifications (the gnome extension's desktop plug) with
+  # gdbus, staged from libglib2.0-bin below.
+  monitors:
+    command: bin/opalatex-launch monitors daemon
+    autostart: opalatex-monitors.desktop
+    extensions:
+      - gnome
+    environment:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: utf-8
+      OMP_NUM_THREADS: "4"
+    plugs:
+      - docker
+      - home
+      - network
+      - removable-media
 
 parts:
   opalatex:
@@ -126,6 +147,8 @@ parts:
       - libgl1
       - libgl1-mesa-dri
       - libglx0
+      # gdbus: desktop notifications and their click actions (opalatex/monitors/notify.py).
+      - libglib2.0-bin
       - libgtk-3-0t64
       - libice6
       - libminizip1t64

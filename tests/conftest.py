@@ -55,3 +55,38 @@ def _isolated_sandbox_config(monkeypatch, tmp_path_factory):
 
     home = str(tmp_path_factory.mktemp("sandbox-home"))
     monkeypatch.setattr(sandbox_config, "get_opalatex_home", lambda: home)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_monitors(monkeypatch, tmp_path_factory):
+    """Keep monitor state, login services and daemons out of every test.
+
+    Every orchestrator turn takes a chat lease in `<opalatex home>/monitors.db`
+    (`agent_stdin._take_turn_lease`), and registering a monitor starts the
+    monitor daemon and installs a login service (`monitors.service`). A test
+    must touch neither the real data folder nor the user's systemd/autostart
+    configuration, nor leave a daemon running. Spawns are recorded instead of
+    made; tests of those paths read `monitors_spawned` or patch further.
+    """
+    from opalatex.monitors import service, store
+
+    root = tmp_path_factory.mktemp("monitors-home")
+    db_path = str(root / "monitors.db")
+    monkeypatch.setattr(store, "default_db_path", lambda: db_path)
+    monkeypatch.setattr(service, "monitors_dir", lambda: str(root))
+    monkeypatch.setattr(service, "autostart_backend", lambda: None)
+    spawned: list = []
+
+    class _FakeProcess:
+        pid = 0
+
+        def poll(self):
+            return 0
+
+    def _record_spawn(argv, **kwargs):
+        spawned.append(list(argv))
+        return _FakeProcess()
+
+    monkeypatch.setattr(service, "spawn_detached", _record_spawn)
+    monkeypatch.setattr(service, "daemon_running", lambda: False)
+    return spawned

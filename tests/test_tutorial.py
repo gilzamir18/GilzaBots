@@ -75,6 +75,7 @@ def test_guide_covers_the_topics_the_tutorial_promises(lang):
         "providers", "models", "settings", "projects",
         "project-settings", "asset-store", "tools-features",
         "docker-sandbox", "local-models", "local-skills", "cloud-for-big-data",
+        "monitors",
     } <= ids
 
 
@@ -85,6 +86,20 @@ def test_docker_sandbox_topic_clarifies_experimental_status(lang):
     assert topic is not None, f"[{lang}] topic 'docker-sandbox' missing"
     answer = topic["answer"]
     assert "experimental" in answer.lower(), f"[{lang}] 'docker-sandbox' answer must state it is experimental"
+
+
+@pytest.mark.parametrize("lang", ["en", "pt"])
+def test_monitors_topic_clarifies_experimental_status(lang):
+    """The user requires making it clear that monitor agents are experimental."""
+    topic = get_topic("monitors", lang)
+    assert topic is not None, f"[{lang}] topic 'monitors' missing"
+    answer = topic["answer"]
+    assert "EXPERIMENTAL" in answer, f"[{lang}] 'monitors' answer must state it is experimental"
+    # The warning opens the answer, before anything about how to use the feature.
+    assert answer.lstrip().startswith(">") and "EXPERIMENTAL" in answer.split("\n\n", 1)[0]
+    assert "opalatex monitors" in answer and "register" not in answer.split("\n\n", 1)[0]
+    tools = get_topic("tools-features", lang)["answer"]
+    assert "(Experimental)" in tools and ("Monitor Agents" in tools or "Agentes Monitores" in tools)
 
 
 @pytest.mark.parametrize("lang", ["en", "pt"])
