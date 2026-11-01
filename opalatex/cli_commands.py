@@ -1190,11 +1190,11 @@ async def cmd_compile(state: REPLState, args: list[str]) -> str | None:
 #: The `opalatex monitors` subcommands that make sense inside the REPL. The
 #: daemon would block it, and the internal ones are started by the daemon or OS.
 _REPL_MONITOR_COMMANDS = ("list", "info", "pause", "resume", "cancel", "delete", "test",
-                          "inputs", "answer", "service", "notify-test")
+                          "service", "notify-test")
 
 
 @_registry.register(
-    "/monitors", usage="[list|info|pause|resume|cancel|delete|test|inputs|answer|service] ...",
+    "/monitors", usage="[list|info|pause|resume|cancel|delete|test|service] ...",
     cli_only=True,
     description="Manage background monitors (the same as `opalatex monitors`)",
     details="Examples:\n  /monitors                  active and paused monitors\n"
@@ -1203,8 +1203,6 @@ _REPL_MONITOR_COMMANDS = ("list", "info", "pause", "resume", "cancel", "delete",
             "  /monitors pause <id>       stop checking until resumed\n"
             "  /monitors cancel <id>      stop it for good\n"
             "  /monitors test <id>        check now, changing nothing\n"
-            "  /monitors inputs           questions background turns wait on\n"
-            "  /monitors answer <id> yes  answer one of them\n"
             "  /monitors service status   the login service that starts the daemon",
 )
 async def cmd_monitors(_state: REPLState, args: list[str]) -> str:

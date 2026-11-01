@@ -6,8 +6,6 @@ User commands::
     opalatex monitors info <id>
     opalatex monitors add --json '<spec>' | --file spec.json
     opalatex monitors pause|resume|cancel|delete|test <id>
-    opalatex monitors inputs
-    opalatex monitors answer <input-id> <answer>
     opalatex monitors daemon [--status | --stop]
     opalatex monitors service status|install|uninstall
     opalatex monitors notify-test
@@ -61,10 +59,6 @@ def _parser() -> argparse.ArgumentParser:
     source.add_argument("--file", help="A file holding the specification as JSON")
     add.add_argument("--no-probe", action="store_true", help="Do not run the check once before registering")
 
-    sub.add_parser("inputs", help="List the questions background turns are waiting on")
-    answer = sub.add_parser("answer", help="Answer a question a background turn is waiting on")
-    answer.add_argument("input_id")
-    answer.add_argument("answer")
 
     daemon = sub.add_parser("daemon", help="Run the monitor daemon in the foreground")
     group = daemon.add_mutually_exclusive_group()
@@ -207,29 +201,6 @@ def _cmd_add(store: st.MonitorStore, args) -> int:
     return 0
 
 
-def _cmd_inputs(store: st.MonitorStore, _args) -> int:
-    items = store.list_inputs(st.INPUT_WAITING)
-    if not items:
-        print("No background turn is waiting for an answer.")
-        return 0
-    for item in items:
-        request = item["request"]
-        options = request.get("options") or []
-        print(f"- {item['id']}  [{item['monitor_name']}] project {item['project']}, since {_when(item['created_at'])}")
-        print(f"  {request.get('prompt', '')}")
-        if options:
-            print(f"  answers: {', '.join(map(str, options))}")
-    return 0
-
-
-def _cmd_answer(store: st.MonitorStore, args) -> int:
-    if not store.answer_input(args.input_id, args.answer):
-        print(f"Nothing is waiting under '{args.input_id}'.", file=sys.stderr)
-        return 1
-    print("Answer delivered.")
-    return 0
-
-
 def _cmd_daemon(store: st.MonitorStore, args) -> int:
     from . import service
 
@@ -321,8 +292,6 @@ _COMMANDS = {
     "delete": _cmd_status_change,
     "test": _cmd_test,
     "add": _cmd_add,
-    "inputs": _cmd_inputs,
-    "answer": _cmd_answer,
     "daemon": _cmd_daemon,
     "service": _cmd_service,
     "notify-test": _cmd_notify_test,

@@ -247,7 +247,7 @@ Recognized commands:
 * `/resume` or `/continue`: continue the turn that was interrupted in this chat *(command-line interface only)*
 * `/thoughts [on|off]` / `/tools [on|off]`: show or hide reasoning and tool calls *(command-line interface only)*
 * `/compile [file.tex]`: compile the project with Tectonic *(command-line interface only)*
-* `/monitors [list|info|pause|resume|cancel|test|inputs|answer]`: manage the background monitors, the same as `opalatex monitors` *(command-line interface only)*
+* `/monitors [list|info|pause|resume|cancel|test]`: manage the background monitors, the same as `opalatex monitors` *(command-line interface only)*
 * `/exit` or `/quit`: exit OpalaTex
 
 If the user types a command without `/`, guide them to use the slashed form in normal text instead of executing or guessing.

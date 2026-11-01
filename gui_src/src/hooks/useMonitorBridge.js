@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
 // How often the window tells the monitor daemon it is alive and asks for work.
 // The daemon treats a window that has not polled for 20 s as closed
@@ -15,18 +15,16 @@ export const MONITOR_POLL_MS = 4000;
  *  - hands it a wake-up of that project when no turn is running. The wake-up
  *    runs as an ordinary turn (`runWake`), streamed in the chat it belongs to,
  *    and its outcome is reported back so a refused one returns to the queue;
- *  - delivers a notification click (`openChat`) and the questions background
- *    turns are waiting on (`inputs`).
+ *  - delivers a notification click (`openChat`) and the latest monitor events
+ *    with how many are unseen (`onEvents`).
  *
  * Callbacks are read through a ref: the poll loop is started once per project,
  * and the callbacks it calls change on every render.
  */
-export default function useMonitorBridge({ activeProject, isTurnBusy, runWake, openChat, onInputs }) {
-  const [inputs, setInputs] = useState([]);
+export default function useMonitorBridge({ activeProject, isTurnBusy, runWake, openChat, onEvents }) {
   const callbacks = useRef({});
-  callbacks.current = { isTurnBusy, runWake, openChat, onInputs };
+  callbacks.current = { isTurnBusy, runWake, openChat, onEvents };
   const wakeInFlight = useRef(false);
-  const inputsKey = useRef('');
   const projectName = activeProject?.name || '';
   const projectPath = activeProject?.project_path || '';
 
@@ -69,15 +67,7 @@ export default function useMonitorBridge({ activeProject, isTurnBusy, runWake, o
         });
         if (res.ok && !stopped) {
           const data = await res.json();
-          const waiting = Array.isArray(data.inputs) ? data.inputs : [];
-          // Only a change re-renders: `inputs` lives in App, and a fresh array
-          // on every poll re-rendered the whole application every few seconds.
-          const key = waiting.map(item => `${item.id}:${item.status}`).join('|');
-          if (key !== inputsKey.current) {
-            inputsKey.current = key;
-            setInputs(waiting);
-          }
-          callbacks.current.onInputs?.(waiting);
+          if (Array.isArray(data.events)) callbacks.current.onEvents?.(data.events, data.unseen_events || 0);
           if (data.open) callbacks.current.openChat?.(data.open);
           if (data.wake) handleWake(data.wake);
         }
@@ -94,6 +84,4 @@ export default function useMonitorBridge({ activeProject, isTurnBusy, runWake, o
       if (timer) clearTimeout(timer);
     };
   }, [projectName, projectPath]);
-
-  return { inputs };
 }

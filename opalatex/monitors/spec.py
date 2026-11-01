@@ -255,8 +255,10 @@ def normalize_spec(raw: dict) -> dict:
     max_checks = _optional_int(raw, "max_checks", minimum=1, maximum=100000)
     ttl = _optional_int(raw, "ttl_seconds", minimum=MIN_INTERVAL_SECONDS, maximum=365 * 24 * 3600)
     resumes = action["type"] in RESUMING_ACTIONS
-    # A wake-up is done once it has woken the chat; a watchdog keeps watching.
-    repeat = _bool(raw, "repeat", not resumes)
+    # An explicit choice always holds. Unset, a wake-up of the registering chat
+    # is a task wait, done once it has woken the chat; a watch, and a monitor
+    # that opens a new chat each time, keep going.
+    repeat = _bool(raw, "repeat", not (resumes and action.get("chat") == WAKE_CHAT_ORIGIN))
 
     project = _text(raw, "project", limit=500)
     chat_id = _text(raw, "chat_id", limit=200)
@@ -277,7 +279,9 @@ def normalize_spec(raw: dict) -> dict:
     return {
         "name": name,
         "description": _text(raw, "description"),
-        "owner": _text(raw, "owner") or ("agent" if resumes else "user"),
+        # "agent": a task wait, which wakes the chat that registered it; "user":
+        # a watch -- a notification, or work in a new chat at each firing.
+        "owner": _text(raw, "owner") or ("agent" if resumes and action["chat"] == WAKE_CHAT_ORIGIN else "user"),
         "project": project,
         "project_path": _text(raw, "project_path", limit=4096),
         "chat_id": chat_id,

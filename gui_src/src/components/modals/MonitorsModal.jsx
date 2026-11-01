@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Radar, Pause, Play, FlaskConical, Trash2, Plus, ChevronDown, ChevronRight } from 'lucide-react';
+import { Radar, Pause, Play, FlaskConical, Trash2, Plus, ChevronDown, ChevronRight, MessageSquare } from 'lucide-react';
 
 // Conditions that apply to each check type; mirrors opalatex/monitors/spec.py
 // (_CONDITIONS_FOR_CHECK). The server validates again and its message is shown.
@@ -59,11 +59,11 @@ const buttonStyle = {
 
 /**
  * Monitors panel: the monitors of every project, the daemon and its login
- * service, the questions background turns wait on, and a form to add one.
+ * service, and a form to add one.
  */
-export default function MonitorsModal({ onClose, activeProject, activeChatId, onAnswerInput }) {
+export default function MonitorsModal({ onClose, activeProject, activeChatId, onOpenChat, onEventsSeen }) {
   const { t } = useTranslation();
-  const [data, setData] = useState({ monitors: [], inputs: [], daemon: null });
+  const [data, setData] = useState({ monitors: [], events: [], daemon: null });
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [expanded, setExpanded] = useState(null);
@@ -89,6 +89,14 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
     const timer = setInterval(refresh, REFRESH_MS);
     return () => clearInterval(timer);
   }, [refresh]);
+
+  // Opening the panel is seeing its events: the activity-bar count clears.
+  // Events arriving while it stays open are listed here as they come.
+  useEffect(() => {
+    fetch('/api/monitors/events/seen', { method: 'POST' })
+      .then(() => onEventsSeen?.())
+      .catch(() => { });
+  }, [(data.events || []).length ? data.events[0].id : 0]);
 
   const post = async (url, body) => {
     const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -140,6 +148,17 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
     }
   };
 
+  const clearEvents = async () => {
+    setError('');
+    try {
+      await post('/api/monitors/events/clear', {});
+      onEventsSeen?.();
+      refresh();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const startDaemon = async () => {
     setError('');
     try {
@@ -168,6 +187,9 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
     setForm(prev => {
       const next = { ...prev, [key]: value };
       if (key === 'checkType') next.condition = CONDITIONS_FOR_CHECK[value][0];
+      // Waking the current chat is usually a task wait (once); a watch and a
+      // new chat each time keep going. Only a default: the box stays editable.
+      if (key === 'wakeMode') next.once = value === 'origin';
       return next;
     });
   };
@@ -195,7 +217,8 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
       interval_seconds: minutes(form.intervalMinutes),
       first_check_seconds: minutes(form.firstMinutes),
       ttl_seconds: form.ttlHours === '' ? null : Math.round(parseFloat(form.ttlHours) * 3600),
-      repeat: wakes ? false : !form.once,
+      // The user's choice; the form preselects it per wake mode (update below).
+      repeat: !form.once,
       project: activeProject?.name || '',
       project_path: activeProject?.project_path || '',
       chat_id: form.wakeMode === 'new' ? '' : (activeChatId || ''),
@@ -237,7 +260,7 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
     const wakes = ['resume_chat', 'notify_and_resume'].includes(action.type)
       ? (action.chat === 'new' ? t('monitors.wakesNewChat') : t('monitors.wakesSameChat'))
       : '';
-    return { target, cond, every: formatInterval(monitor.interval_seconds, t), wakes };
+    return { target, cond, every: formatInterval(monitor.interval_seconds, t), wakes, once: !monitor.repeat };
   };
 
   const visible = useMemo(() => (data.monitors || [])
@@ -287,19 +310,45 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
         {notice && <div style={{ background: 'rgba(0,255,0,0.08)', color: 'var(--vscode-fg-success)', padding: '8px', borderRadius: '6px', fontSize: '12px' }}>{notice}</div>}
 
         <div style={{ overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px', minHeight: 0 }}>
-          {(data.inputs || []).length > 0 && (
+          {(data.events || []).length > 0 && (
             <section>
-              <h3 style={{ fontSize: '13px', margin: '0 0 6px' }}>{t('monitors.pendingTitle')}</h3>
-              {data.inputs.map(item => (
-                <div key={item.id} style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', justifyContent: 'space-between', padding: '8px', border: '1px solid var(--vscode-fg-warning, #d29922)', borderRadius: '8px', marginBottom: '6px', fontSize: '12px' }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 600 }}>{item.monitor_name} · {item.project}</div>
-                    <div style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{item.request?.prompt}</div>
-                    <div style={{ opacity: 0.7 }}>{formatTime(item.created_at)}</div>
-                  </div>
-                  <button style={buttonStyle} onClick={() => onAnswerInput?.(item)}>{t('monitors.answer')}</button>
-                </div>
-              ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <h3 style={{ fontSize: '13px', margin: 0 }}>{t('monitors.eventsTitle')}</h3>
+                <button style={buttonStyle} onClick={clearEvents} title={t('monitors.clearEventsHint')}>
+                  <Trash2 size={12} /> {t('monitors.clearEvents')}
+                </button>
+              </div>
+              <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {data.events.map(event => {
+                  const failed = event.status !== 'done';
+                  const description = (failed ? (event.error || t('monitors.eventFailed')) : (event.result || event.display || '')).replace(/\s+/g, ' ').trim();
+                  return (
+                    <div key={event.id} style={{
+                      display: 'flex', gap: '10px', alignItems: 'flex-start', justifyContent: 'space-between',
+                      padding: '8px', borderRadius: '8px', fontSize: '12px',
+                      border: `1px solid ${failed ? 'var(--vscode-fg-danger, #f85149)' : 'var(--vscode-border)'}`,
+                      background: event.seen ? 'transparent' : 'rgba(74,163,255,0.08)',
+                    }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div>
+                          <strong>{t('monitors.eventHeadline', { name: event.monitor_name })}</strong>
+                          {': '}
+                          <span style={{ overflowWrap: 'anywhere' }}>{description.length > 280 ? `${description.slice(0, 279)}…` : description}</span>
+                        </div>
+                        <div style={{ opacity: 0.7 }}>
+                          {formatTime(event.finished_at || event.created_at)} · {event.project}
+                          {event.new_chat ? ` · ${t('monitors.eventNewChat')}` : ''}
+                        </div>
+                      </div>
+                      {event.chat_id && (
+                        <button style={{ ...buttonStyle, whiteSpace: 'nowrap' }} onClick={() => onOpenChat?.(event)}>
+                          <MessageSquare size={12} /> {t('monitors.openChat')}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </section>
           )}
 
@@ -393,7 +442,7 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
                   <input className="vscode-settings-input" style={fieldStyle} value={form.message} placeholder={t('monitors.form.messagePlaceholder')} onChange={update('message')} />
                 </label>
                 <label style={{ ...labelStyle, flexDirection: 'row', alignItems: 'center' }}>
-                  <input type="checkbox" checked={form.once} disabled={form.wakeMode !== 'none'} onChange={update('once')} /> {t('monitors.form.once')}
+                  <input type="checkbox" checked={form.once} onChange={update('once')} /> {t('monitors.form.once')}
                 </label>
                 <label style={labelStyle}>{t('monitors.form.wakeMode')}
                   <select className="vscode-settings-input" style={fieldStyle} value={form.wakeMode} onChange={update('wakeMode')}>
@@ -447,18 +496,20 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
                               <div style={{ opacity: 0.7 }}>{monitor.project || '—'}{monitor.description ? ` · ${monitor.description}` : ''}</div>
                             </td>
                             <td style={{ padding: '6px', whiteSpace: 'nowrap' }}>
-                              {monitor.owner === 'agent' ? t('monitors.typeTaskWait') : t('monitors.typeWatch')}
+                              {/* From the action, not the stored owner: a monitor that wakes a new chat at each firing is a watch. */}
+                              {['resume_chat', 'notify_and_resume'].includes(monitor.action?.type) && monitor.action?.chat !== 'new'
+                                ? t('monitors.typeTaskWait') : t('monitors.typeWatch')}
                             </td>
                             <td style={{ padding: '6px', maxWidth: 280 }}>
                               <div style={{ overflowWrap: 'anywhere' }}>{trigger.target}</div>
-                              <div style={{ opacity: 0.8 }}>{trigger.cond} · {trigger.every}</div>
+                              <div style={{ opacity: 0.8 }}>{trigger.cond} · {trigger.every}{trigger.once ? ` · ${t('monitors.firesOnce')}` : ''}</div>
                               {trigger.wakes && <div style={{ opacity: 0.8 }}>→ {trigger.wakes}</div>}
                             </td>
                             <td style={{ padding: '6px', minWidth: 150 }}>
                               <div style={{ color: statusColor(monitor.status), fontWeight: 600 }}>{t(`monitors.status.${monitor.status}`, monitor.status)}</div>
                               <div style={{ opacity: 0.8 }}>{t('monitors.lastCheck')}: {formatTime(monitor.last_check_at)}</div>
                               {monitor.status === 'active' && <div style={{ opacity: 0.8 }}>{t('monitors.nextCheck')}: {formatTime(monitor.next_check_at)}</div>}
-                              {monitor.has_value && <div style={{ overflowWrap: 'anywhere' }}>{t('monitors.lastValue')}: {shortValue(monitor.last_value).slice(0, 120)}</div>}
+                              {monitor.has_value && shortValue(monitor.last_value) && <div style={{ overflowWrap: 'anywhere' }}>{t('monitors.lastValue')}: {shortValue(monitor.last_value).slice(0, 120)}</div>}
                               {monitor.last_error && <div style={{ color: 'var(--vscode-fg-danger)', overflowWrap: 'anywhere' }}>{monitor.last_error}</div>}
                             </td>
                             <td style={{ padding: '6px', whiteSpace: 'nowrap' }}>

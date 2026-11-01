@@ -145,6 +145,10 @@ def background_command_runner():
 # `![..](..)`. The system prompt reads this to tell the model which surface it
 # is writing for (`memgpt_runtime.chat_orchestrator_system_prompt`).
 REPLY_SURFACE_TERMINAL = "terminal"
+# A monitor's wake-up run by the daemon (PROJECT_DESIGN 2.24): the reply is read
+# later in the desktop chat, so it is written as for the desktop, but no window
+# is open while the turn runs and nobody is watching it.
+REPLY_SURFACE_BACKGROUND = "background"
 _reply_surface: str | None = None
 
 
@@ -156,6 +160,33 @@ def set_reply_surface(surface: str | None) -> None:
 
 def reply_surface() -> str | None:
     return _reply_surface
+
+
+# A turn a monitor started (PROJECT_DESIGN 2.24) runs with nobody present, and
+# its only channel to the user is its reply in its own chat. It names the
+# monitor while such a turn runs, and every way a tool asks a person -- tool
+# permission, plan approval, ask_question, an interactive terminal -- refuses
+# with `unattended_refusal` instead of opening a question outside the chat.
+_unattended_monitor: str | None = None
+
+
+class UnattendedTurnError(RuntimeError):
+    """A question asked during a turn nobody is present to answer."""
+
+
+def unattended_turn() -> str | None:
+    """The monitor whose wake-up is running, or None in an ordinary turn."""
+    return _unattended_monitor
+
+
+def unattended_refusal(what: str) -> str:
+    """The tool result for an attempt to ask the user during a monitor's turn."""
+    return (
+        f"Not done: {what}. This turn was started by the monitor \"{_unattended_monitor}\" and nobody "
+        "is present to answer outside the chat. Do not retry it in this turn. Carry out the task with the "
+        "information you have; if something is missing or needs the user's approval, say so in your reply "
+        "in this chat and end the turn -- the user answers there."
+    )
 
 
 async def request_user_input(
@@ -190,6 +221,11 @@ async def request_user_input(
     ``command`` and ``term_id``.
     """
     import uuid
+
+    if _unattended_monitor is not None:
+        # Every caller in a turn refuses before reaching here; one that does
+        # not fails loudly instead of waiting for an answer that cannot come.
+        raise UnattendedTurnError(unattended_refusal(f"the question {prompt[:120]!r} was not asked"))
 
     loop = asyncio.get_event_loop()
     req_id = str(uuid.uuid4())
@@ -2375,13 +2411,21 @@ def _release_turn_lease(lease) -> None:
 
 
 async def handle_run(data: dict):
-    """Run one agent turn, holding the chat's cross-process lease while it runs."""
+    """Run one agent turn, holding the chat's cross-process lease while it runs.
+
+    ``monitor_wake`` (the monitor's name) marks a turn a monitor started: it runs
+    unattended (`unattended_turn`), whichever front-end runs it.
+    """
+    global _unattended_monitor
     lease = _take_turn_lease(data)
     if lease is False:
         return
+    monitor = str(data.get("monitor_wake") or "").strip()
+    _unattended_monitor = monitor or None
     try:
         return await _handle_run(data)
     finally:
+        _unattended_monitor = None
         _release_turn_lease(lease)
 
 

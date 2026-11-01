@@ -14,9 +14,6 @@ Tables:
 - ``wake_requests``: a chat a monitor asked to wake. Claimed atomically by the
   process that will run the turn -- the window when it has that project open,
   the daemon otherwise.
-- ``pending_inputs``: a question a turn without a front-end is waiting on
-  (tool permission, plan approval, ``ask_question``), answered from the window
-  or the CLI.
 - ``notifications``: the OS notifications to deliver. The daemon owns
   delivery, because it is the long-lived process that can receive the click.
 - ``hosts``: liveness of the front-ends, so the daemon knows whether a window
@@ -53,10 +50,6 @@ WAKE_CLAIMED = "claimed"
 WAKE_DONE = "done"
 WAKE_FAILED = "failed"
 WAKE_INTERRUPTED = "interrupted"
-
-INPUT_WAITING = "waiting"
-INPUT_ANSWERED = "answered"
-INPUT_CLOSED = "closed"
 
 #: Events kept per monitor; older ones are dropped as new ones arrive.
 MAX_EVENTS_PER_MONITOR = 200
@@ -120,21 +113,9 @@ CREATE TABLE IF NOT EXISTS wake_requests (
     claimed_at REAL,
     finished_at REAL,
     error TEXT NOT NULL DEFAULT '',
-    new_chat INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS pending_inputs (
-    id TEXT PRIMARY KEY,
-    wake_request_id INTEGER,
-    project TEXT NOT NULL DEFAULT '',
-    project_path TEXT NOT NULL DEFAULT '',
-    chat_id TEXT NOT NULL DEFAULT '',
-    monitor_name TEXT NOT NULL DEFAULT '',
-    request_json TEXT NOT NULL,
-    holder_pid INTEGER,
-    created_at REAL NOT NULL,
-    status TEXT NOT NULL,
-    answer TEXT,
-    answered_at REAL
+    new_chat INTEGER NOT NULL DEFAULT 0,
+    result TEXT NOT NULL DEFAULT '',
+    seen INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS notifications (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -219,10 +200,16 @@ class MonitorStore:
     def _migrate(conn: sqlite3.Connection) -> None:
         """Add the columns a database created by an earlier version lacks."""
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(wake_requests)")}
-        if "new_chat" not in columns:
-            # Whether the monitor opened this chat for the wake-up, so the
-            # window shows it instead of running it out of sight.
-            conn.execute("ALTER TABLE wake_requests ADD COLUMN new_chat INTEGER NOT NULL DEFAULT 0")
+        for column, definition in (
+            # Whether the monitor opened this chat for the wake-up.
+            ("new_chat", "INTEGER NOT NULL DEFAULT 0"),
+            # The start of the turn's answer, shown with the event.
+            ("result", "TEXT NOT NULL DEFAULT ''"),
+            # Whether the user has seen the event in the Monitors panel.
+            ("seen", "INTEGER NOT NULL DEFAULT 0"),
+        ):
+            if column not in columns:
+                conn.execute(f"ALTER TABLE wake_requests ADD COLUMN {column} {definition}")
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -532,68 +519,55 @@ class MonitorStore:
             )
             return cursor.rowcount == 1
 
-    def finish_wake(self, wake_id: int, status: str, error: str = "") -> bool:
+    def finish_wake(self, wake_id: int, status: str, error: str = "", result: str = "",
+                    seen: bool = False) -> bool:
         with self._connect() as conn:
             cursor = conn.execute(
-                "UPDATE wake_requests SET status = ?, finished_at = ?, error = ? WHERE id = ? AND status = ?",
-                (status, self.clock(), error[:2000], int(wake_id), WAKE_CLAIMED),
+                "UPDATE wake_requests SET status = ?, finished_at = ?, error = ?, result = ?, seen = ?"
+                " WHERE id = ? AND status = ?",
+                (status, self.clock(), error[:2000], result[:2000], 1 if seen else 0, int(wake_id), WAKE_CLAIMED),
             )
             return cursor.rowcount == 1
 
-    # ── Pending inputs ──────────────────────────────────────────────────────
+    # A finished wake-up is a monitor *event* the user is told about: in the
+    # Monitors panel, with a link to its chat, and counted on the activity bar
+    # until seen.
+    _EVENT_STATUSES = (WAKE_DONE, WAKE_FAILED, WAKE_INTERRUPTED)
 
-    def add_input(self, request: dict, *, wake_request_id: int | None, project: str, project_path: str,
-                  chat_id: str, monitor_name: str, pid: int) -> None:
+    def recent_events(self, limit: int = 30) -> list[dict]:
+        marks = ",".join("?" for _ in self._EVENT_STATUSES)
         with self._connect() as conn:
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO pending_inputs (
-                    id, wake_request_id, project, project_path, chat_id, monitor_name,
-                    request_json, holder_pid, created_at, status
-                ) VALUES (?,?,?,?,?,?,?,?,?,?)
-                """,
-                (
-                    str(request["id"]), wake_request_id, project, project_path, chat_id, monitor_name,
-                    _dumps(request), int(pid), self.clock(), INPUT_WAITING,
-                ),
-            )
+            rows = conn.execute(
+                f"SELECT * FROM wake_requests WHERE status IN ({marks})"
+                " ORDER BY COALESCE(finished_at, created_at) DESC, id DESC LIMIT ?",
+                (*self._EVENT_STATUSES, int(limit)),
+            ).fetchall()
+        return [dict(row) for row in rows]
 
-    @staticmethod
-    def _input_from_row(row: sqlite3.Row) -> dict:
-        data = dict(row)
-        data["request"] = _loads(data.pop("request_json"), {})
-        return data
-
-    def get_input(self, input_id: str) -> dict | None:
+    def unseen_events(self) -> int:
+        marks = ",".join("?" for _ in self._EVENT_STATUSES)
         with self._connect() as conn:
-            row = conn.execute("SELECT * FROM pending_inputs WHERE id = ?", (str(input_id),)).fetchone()
-        return self._input_from_row(row) if row else None
+            row = conn.execute(
+                f"SELECT COUNT(*) AS n FROM wake_requests WHERE seen = 0 AND status IN ({marks})",
+                self._EVENT_STATUSES,
+            ).fetchone()
+        return int(row["n"])
 
-    def list_inputs(self, status: str = INPUT_WAITING, project: str | None = None) -> list[dict]:
-        query = "SELECT * FROM pending_inputs WHERE status = ?"
-        params: list[Any] = [status]
-        if project is not None:
-            query += " AND project = ?"
-            params.append(project)
-        query += " ORDER BY created_at"
-        with self._connect() as conn:
-            return [self._input_from_row(row) for row in conn.execute(query, params).fetchall()]
+    def clear_events(self) -> int:
+        """Delete the finished wake-ups (the events); returns how many.
 
-    def answer_input(self, input_id: str, answer: str) -> bool:
-        """Record an answer. False when nothing is waiting under that id."""
+        A pending or running wake-up is not an event yet and is never touched.
+        """
+        marks = ",".join("?" for _ in self._EVENT_STATUSES)
         with self._connect() as conn:
-            cursor = conn.execute(
-                "UPDATE pending_inputs SET status = ?, answer = ?, answered_at = ? WHERE id = ? AND status = ?",
-                (INPUT_ANSWERED, str(answer), self.clock(), str(input_id), INPUT_WAITING),
-            )
-            return cursor.rowcount == 1
+            cursor = conn.execute(f"DELETE FROM wake_requests WHERE status IN ({marks})", self._EVENT_STATUSES)
+            return cursor.rowcount
 
-    def close_input(self, input_id: str) -> None:
+    def mark_events_seen(self) -> None:
+        marks = ",".join("?" for _ in self._EVENT_STATUSES)
         with self._connect() as conn:
-            conn.execute(
-                "UPDATE pending_inputs SET status = ? WHERE id = ? AND status = ?",
-                (INPUT_CLOSED, str(input_id), INPUT_WAITING),
-            )
+            conn.execute(f"UPDATE wake_requests SET seen = 1 WHERE seen = 0 AND status IN ({marks})",
+                         self._EVENT_STATUSES)
 
     # ── Notifications ───────────────────────────────────────────────────────
 
@@ -626,13 +600,6 @@ class MonitorStore:
             conn.execute(
                 "DELETE FROM notifications WHERE id NOT IN (SELECT id FROM notifications ORDER BY id DESC LIMIT 300)"
             )
-
-    def recent_notifications(self, limit: int = 30) -> list[dict]:
-        with self._connect() as conn:
-            rows = conn.execute(
-                "SELECT * FROM notifications ORDER BY id DESC LIMIT ?", (int(limit),)
-            ).fetchall()
-        return [dict(row) for row in rows]
 
     # ── Hosts ───────────────────────────────────────────────────────────────
 

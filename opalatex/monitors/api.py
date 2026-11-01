@@ -8,13 +8,14 @@ every few seconds. The poll is how the window
 - claims a wake-up of its project when it is idle, and runs it as an ordinary
   turn the user sees streaming (``App.jsx``); it reports the outcome with
   ``/api/monitors/wake/finish``;
-- receives a notification click (``open_requests``) and the questions
-  background turns are waiting on (``pending_inputs``), which it shows in the
-  same dialogs as its own turn's questions and answers through
-  ``/api/opalatex/input_response``.
+- receives a notification click (``open_requests``).
+
+A wake-up the window runs is marked ``monitor_wake`` like one the daemon runs,
+so it asks nothing outside its chat either (``agent_stdin.unattended_turn``).
 """
 from __future__ import annotations
 
+import asyncio
 import os
 from typing import Any, Callable
 
@@ -25,14 +26,6 @@ GUI_HOST = "gui"
 
 def _store() -> st.MonitorStore:
     return st.MonitorStore()
-
-
-def answer_remote_input(input_id: str, value: Any) -> bool:
-    """Answer a question a background turn waits on. False when none matches."""
-    try:
-        return _store().answer_input(str(input_id or ""), str(value if value is not None else ""))
-    except Exception:
-        return False
 
 
 def on_server_start() -> None:
@@ -55,11 +48,11 @@ async def handle(path: str, method: str, data: dict, query: dict, *,
     if path == "/api/monitors" and method == "GET":
         from .service import daemon_status
 
+        # daemon_status runs the service manager: off the server's event loop.
         return 200, {
             "monitors": store.list_monitors(),
-            "inputs": store.list_inputs(st.INPUT_WAITING),
-            "daemon": daemon_status(),
-            "notifications": store.recent_notifications(20),
+            "daemon": await asyncio.to_thread(daemon_status),
+            "events": store.recent_events(30),
         }
 
     if path == "/api/monitors/events" and method == "GET":
@@ -81,8 +74,10 @@ async def handle(path: str, method: str, data: dict, query: dict, *,
                 return 409, {"error": f"The monitor is {monitor['status']}, not paused."}
             from .service import ensure_daemon_running
 
-            ensure_daemon_running(store)
+            await asyncio.to_thread(ensure_daemon_running, store)
         elif action == "cancel":
+            if monitor["status"] in st.FINAL_STATUSES:
+                return 409, {"error": f"The monitor is already {monitor['status']}."}
             store.set_status(monitor_id, st.STATUS_CANCELLED, "cancelled in the Monitors panel")
         elif action == "delete":
             store.delete_monitor(monitor_id)
@@ -114,6 +109,8 @@ async def handle(path: str, method: str, data: dict, query: dict, *,
             monitor, observed, daemon = await register(spec)
         except MonitorSpecError as exc:
             return 400, {"error": str(exc)}
+        except Exception as exc:
+            return 500, {"error": f"The monitor could not be registered: {type(exc).__name__}: {exc}"}
         return 200, {
             "monitor": monitor,
             "value": display_value(observed["value"]) if observed else None,
@@ -124,20 +121,20 @@ async def handle(path: str, method: str, data: dict, query: dict, *,
     if path == "/api/monitors/autostart" and method == "POST":
         from .service import set_autostart
 
-        result = set_autostart(store, bool(data.get("enabled")))
+        result = await asyncio.to_thread(set_autostart, store, bool(data.get("enabled")))
         return (200 if result.get("ok") else 500), result
 
     if path == "/api/monitors/daemon/start" and method == "POST":
         from .service import ensure_daemon_running
 
-        return 200, ensure_daemon_running(store, wait=3.0)
+        return 200, await asyncio.to_thread(ensure_daemon_running, store, wait=3.0)
 
     if path == "/api/monitors/notify-test" and method == "POST":
         from .notify import NotifyError, default_notifier
 
         notifier = default_notifier()
         try:
-            notifier.send(str(data.get("title") or "OpalaTex"), str(data.get("body") or ""))
+            await asyncio.to_thread(notifier.send, str(data.get("title") or "OpalaTex"), str(data.get("body") or ""))
         except NotifyError as exc:
             return 500, {"ok": False, "backend": notifier.backend, "error": str(exc)}
         return 200, {"ok": True, "backend": notifier.backend}
@@ -147,9 +144,10 @@ async def handle(path: str, method: str, data: dict, query: dict, *,
         project_path = str(data.get("project_path") or "")
         store.touch_host(GUI_HOST, os.getpid(), project, project_path)
         result: dict[str, Any] = {
-            "inputs": store.list_inputs(st.INPUT_WAITING),
             "open": None,
             "wake": None,
+            "unseen_events": store.unseen_events(),
+            "events": store.recent_events(10),
         }
         opened = store.take_open_request()
         if opened:
@@ -162,6 +160,8 @@ async def handle(path: str, method: str, data: dict, query: dict, *,
         if project and data.get("idle") and not turn_active:
             store.fail_unrunnable_wakes(GUI_HOST, os.getpid())
             for wake in store.list_wakes((st.WAKE_PENDING,), project=project):
+                if wake.get("new_chat"):
+                    continue  # run by the daemon, out of the user's way
                 if store.lease_holder(project, wake["chat_id"]):
                     continue
                 if store.claim_wake(wake["id"], GUI_HOST, os.getpid()):
@@ -169,13 +169,21 @@ async def handle(path: str, method: str, data: dict, query: dict, *,
                     break
         return 200, result
 
+    if path == "/api/monitors/events/seen" and method == "POST":
+        store.mark_events_seen()
+        return 200, {"ok": True}
+
+    if path == "/api/monitors/events/clear" and method == "POST":
+        return 200, {"ok": True, "cleared": store.clear_events()}
+
     if path == "/api/monitors/wake/finish" and method == "POST":
         wake_id = int(data.get("id") or 0)
         status = str(data.get("status") or "")
         if status == "released":
             ok = store.release_wake(wake_id, GUI_HOST)
         elif status in (st.WAKE_DONE, st.WAKE_FAILED, st.WAKE_INTERRUPTED):
-            ok = store.finish_wake(wake_id, status, str(data.get("error") or ""))
+            # The window ran it in front of the user: already seen.
+            ok = store.finish_wake(wake_id, status, str(data.get("error") or ""), seen=True)
         else:
             return 400, {"error": f"Unknown status '{status}'."}
         return 200, {"ok": ok}

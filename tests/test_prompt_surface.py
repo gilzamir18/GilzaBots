@@ -178,3 +178,39 @@ def test_an_entry_inside_a_surviving_bullet_is_still_removed():
 def test_a_comma_inside_brackets_does_not_split_an_entry():
     body = "`/models` (list, show, add), `/chat` (list, new), `/mode`\n"
     assert strip_items(body, {"/chat"}).strip() == "`/models` (list, show, add), `/mode`"
+
+
+# ── A monitor's background turn (PROJECT_DESIGN 2.24) ───────────────────────
+
+
+@pytest.fixture
+def background():
+    """Run as a monitor's wake-up does without a window (monitors/wake_runner.py)."""
+    agent_stdin.set_reply_surface(agent_stdin.REPLY_SURFACE_BACKGROUND)
+    yield
+    agent_stdin.set_reply_surface(None)
+
+
+def test_the_orchestrator_built_for_a_background_turn_has_no_window(tmp_path, background):
+    from opalatex.memgpt_runtime import build_chat_orchestrator
+    from opalatex.project import ProjectStore
+
+    store = ProjectStore(db_path=str(tmp_path / "s.db"))
+    project = store.create(name="p", mode="auto", model="ollama/test",
+                           project_name="P", project_path=str(tmp_path))
+
+    agent = build_chat_orchestrator(project, store)
+    names = {str(getattr(t, "name", "")) for t in agent.tools}
+    assert not (names & GUI_ONLY_TOOLS)
+    assert "register_monitor" in names
+    assert "Where this turn runs: in the background" in agent.system_prompt
+    assert "The IDE you work in" not in agent.system_prompt
+    assert "plain-text terminal" not in agent.system_prompt
+
+
+@pytest.mark.parametrize("variant", VARIANTS)
+def test_a_background_prompt_offers_neither_window_tools_nor_terminal_commands(variant, background):
+    body = body_for_surface(_body(variant))
+    named = set(NAMES.findall(body))
+    assert not (named & GUI_ONLY_TOOLS)
+    assert not (named & cli_only_command_names())

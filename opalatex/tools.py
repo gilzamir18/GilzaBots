@@ -494,6 +494,12 @@ def opalatex_tool(name: str, description: str, is_safe: bool = False):
                 return "Execution blocked: In 'plan' mode, you are not allowed to execute operations that modify the system."
                 
             if mode == "edit":
+                # A monitor's turn has nobody to ask (PROJECT_DESIGN 2.24).
+                from .agent_stdin import unattended_refusal, unattended_turn
+                if unattended_turn() is not None:
+                    return "Execution blocked: " + unattended_refusal(
+                        f"'{name}' needs the user's approval in 'edit' mode, which cannot be asked now"
+                    )
                 return question
                 
             return True
@@ -2022,6 +2028,12 @@ async def run_interactive_command(command: str) -> str:
     import opalatex.terminal as T
     
     AGENT_PROGRESS.update("interactive_cmd", _preview(command))
+    from .agent_stdin import unattended_refusal, unattended_turn
+    if unattended_turn() is not None:
+        return unattended_refusal(
+            f"the interactive command {command!r} needs a person at a terminal; use run_command or "
+            "run_background_command for commands that need no input"
+        )
     term_id = "temp_" + str(uuid.uuid4())[:8]
 
     actual_command = command
@@ -2203,6 +2215,9 @@ async def ask_question(
     is_multi_select: bool = False
 ) -> str:
     AGENT_PROGRESS.update("ask_question", _preview(question))
+    from .agent_stdin import unattended_refusal, unattended_turn
+    if unattended_turn() is not None:
+        return unattended_refusal(f"the question {question[:120]!r} was not asked")
     
     import opalatex.terminal as T
     ans = await T.aask(question, options=options, is_multi_select=is_multi_select)
@@ -4011,6 +4026,9 @@ async def create_plan(plan_content: str) -> str:
     AGENT_PROGRESS.update("create_plan")
     if not _PROJECT_SESSION:
         return "Failed: No active session."
+    from .agent_stdin import unattended_refusal, unattended_turn
+    if unattended_turn() is not None:
+        return unattended_refusal("the plan was not submitted for approval; write it in your reply instead")
 
     # The tool list is composed once per turn, so withholding this tool in
     # non-plan modes cannot cover the case where the mode changes *during* a

@@ -605,10 +605,18 @@ both. Monitors keep running when the OpalaTex window is closed.
   conversation and everything it remembers from it. This is the right choice for waiting
   on a task.
 - **in a new chat every time** — each wake-up opens a fresh chat in the same project (named
-  *⏰ monitor name · date and time*), and the original conversation is left untouched.
+  *⏰ monitor name · date and time*), and the original conversation is left untouched. It
+  works **in the background**: the window never switches away from what you are doing.
+  When it finishes you get a notification, the radar icon shows a count, and the Monitors
+  panel lists it under *Recent events* ("New event from monitor …") with **Open chat**.
   This suits recurring work, such as *"each time the dollar moves, write a short analysis"*.
   The new chat starts empty, so the monitor's instructions must say everything the
   assistant needs.
+
+**Once or every time.** A monitor fires every time its condition holds unless you ask for a
+single time (**Fire only once** in the form, or say so in the chat). If you say nothing, a
+monitor that wakes the chat it was created in fires once (it is waiting for a task), and
+every other monitor keeps firing.
 
 Ask for it in your own words (*"…and open a new chat each time"*), or pick it in the
 **Wake a chat** field of the New monitor form. If the chat a monitor should wake was
@@ -647,17 +655,20 @@ The service stops by itself after a while when there is nothing left to watch.
 - **When the window is open** on that project, a wake-up runs right there as a normal,
   streamed turn. Otherwise it runs in the background and a notification brings you its
   answer.
-- **Decisions while you are away** — if a background turn needs your approval (a command
-  in `edit` mode, a plan, a question), it **waits**: a notification asks for your
-  decision, and the question appears in the usual dialog when you open the chat or the
-  Monitors panel. Nothing is approved for you.
+- **Everything happens in the chat** — a monitor's turn runs on its own and never opens a
+  question or approval dialog outside its chat (the new one or the original, as you
+  chose). If it needs something from you — an answer, or approval for an action that
+  `edit` mode would ask about — it says so in its reply in that chat, and you answer there.
+  Nothing is approved for you. So when you ask for a monitor, give the assistant enough
+  detail (what to look for, where, how to report it) for it to finish without asking.
 - **One turn per chat** — while a background turn is running in a chat, a new message to
   that same chat is refused until it finishes.
 
 ### Managing monitors
 
-- **Monitors panel** — the radar icon in the left activity bar (a badge counts the
-  decisions waiting for you). It lists every monitor with its type (*Task wait* or
+- **Monitors panel** — the radar icon in the left activity bar (a count shows events you have not
+  seen). It shows the *Recent events* with **Open chat** (**Clear** empties that list; the chats
+  stay), and lists every monitor with its type (*Task wait* or
   *Watch*), trigger, last check, last value and errors, with **Pause/Resume**, **Test**
   (checks now without changing anything), **Cancel/Remove**, the history of each monitor,
   a **New monitor** form, the service status, **Start at login** and **Test
@@ -665,7 +676,7 @@ The service stops by itself after a while when there is nothing left to watch.
 - **In the chat** — ask the assistant to list, pause or cancel monitors
   (`list_monitors`, `pause_monitor`, `cancel_monitor`).
 - **In the terminal** — `opalatex monitors list`, `info <id>`, `pause <id>`,
-  `resume <id>`, `cancel <id>`, `test <id>`, `inputs` and `answer <id> <answer>`,
+  `resume <id>`, `cancel <id>`, `test <id>`,
   `daemon --status`, `service status|install|uninstall`, `notify-test`; `/monitors` does
   the same inside `opalatex --cli`.
 

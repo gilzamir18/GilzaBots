@@ -21,6 +21,7 @@ running a command with nobody watching, so ``edit`` mode asks the user and
 """
 from __future__ import annotations
 
+import asyncio
 import datetime
 
 from . import store as st
@@ -82,7 +83,7 @@ def build_spec(
     first_check_seconds: int = -1,
     max_checks: int = 0,
     ttl_seconds: int = 0,
-    once: bool = False,
+    once: bool | None = None,
     wake_in: str = "same_chat",
     description: str = "",
     project=None,
@@ -110,9 +111,9 @@ def build_spec(
         "first_check_seconds": None if first_check_seconds is None or first_check_seconds < 0 else first_check_seconds,
         "max_checks": max_checks or None,
         "ttl_seconds": ttl_seconds or None,
-        # A wake-up is done once it has woken the chat; a watchdog keeps going
-        # unless it was asked for a single notice.
-        "repeat": False if action in RESUMING_ACTIONS else not once,
+        # Unset, the specification's default applies (once for a wake-up of
+        # this chat, recurring otherwise); a choice is never overridden.
+        "repeat": None if once is None else not once,
         "project": getattr(project, "name", "") or "",
         "project_path": getattr(project, "project_path", "") or "",
         "chat_id": getattr(project, "current_chat_id", "") or "",
@@ -157,7 +158,9 @@ async def register(spec: dict, *, run_probe: bool = True) -> tuple[dict, dict | 
             "initial_reference": evaluation.reference,
         }
     monitor = store.create_monitor(spec, **kwargs)
-    daemon = ensure_daemon_running(store)
+    # Runs the service manager: off the event loop of the caller (the window's
+    # server, or the agent turn).
+    daemon = await asyncio.to_thread(ensure_daemon_running, store)
     return monitor, observed, daemon
 
 
@@ -181,7 +184,8 @@ def describe(monitor: dict) -> str:
     lines = [
         f"- {monitor['id']} \"{monitor['name']}\" [{monitor['status']}]"
         + (f" ({monitor['status_reason']})" if monitor.get("status_reason") else ""),
-        f"  watches: {target}; fires on: {cond_text}; every {monitor['interval_seconds']} s;"
+        f"  watches: {target}; fires on: {cond_text} ({'every time' if monitor['repeat'] else 'once'});"
+        f" checked every {monitor['interval_seconds']} s;"
         f" action: {monitor['action']['type']}"
         + (" (wakes a new chat)" if monitor["action"].get("chat") == WAKE_CHAT_NEW
            else " (wakes this chat)" if monitor["action"]["type"] in RESUMING_ACTIONS else ""),
@@ -209,13 +213,18 @@ def build_monitor_tools():
             "action='resume_chat', with resume_prompt saying what to do when woken. This chat is woken "
             "with a [Monitor event] message when the condition holds, or when max_checks/ttl run out. "
             "After registering, END YOUR TURN with one sentence telling the user what you are waiting for.\n"
+            "The wake-up turn runs unattended: it cannot ask the user anything (no ask_question, no approvals), so "
+            "resume_prompt must contain every detail needed to finish the task and report in the chat.\n"
             "wake_in: 'same_chat' (default) wakes THIS chat, with this conversation and your working memory -- "
             "use it to continue a task. 'new_chat' opens a fresh chat in this project for every wake-up and "
             "leaves this conversation untouched -- use it for recurring work triggered by a watch (e.g. write a "
             "report each time a price moves); the new chat sees only the monitor's message, so resume_prompt "
             "must say everything needed.\n"
             "2. WATCH something for the user ('tell me when the dollar rises 10 cents'): action='notify', "
-            "with message as the notification text. It fires an OS notification each time; once=true for a single notice.\n"
+            "with message as the notification text. It fires an OS notification each time.\n"
+            "once: true fires a single time and ends the monitor; false keeps firing every time the condition "
+            "holds. Leave it out for the default: once for wake_in='same_chat' (a task wait), recurring otherwise "
+            "(watches, and wake_in='new_chat', which opens a new chat at every firing). Follow what the user asked.\n"
             "check_type: 'timer' (no check, just wake after first_check_seconds/interval), 'http' (GET url; "
             "json_path like 'USDBRL.bid' or regex extracts the value), 'command' (shell command in the project; "
             "value is its output), 'file' (path; watch='mtime' or 'content'), 'llm' (a model answers question "
@@ -249,7 +258,7 @@ def build_monitor_tools():
         first_check_seconds: int = -1,
         max_checks: int = 0,
         ttl_seconds: int = 0,
-        once: bool = False,
+        once: bool | None = None,
         wake_in: str = "same_chat",
         description: str = "",
     ) -> str:
@@ -276,6 +285,8 @@ def build_monitor_tools():
             + (f", until {_when(monitor['expires_at'])}" if monitor.get("expires_at") else "")
             + ".",
         ]
+        lines.append("It fires every time the condition holds." if monitor["repeat"]
+                     else "It fires once, then ends.")
         if observed is not None:
             lines.append(
                 f"Current value: {display_value(observed['value'], 200)} "
@@ -335,7 +346,7 @@ def build_monitor_tools():
         is_safe=True,
         description="Pause a monitor (paused=true) or resume a paused one (paused=false), by its id. A paused monitor does not check.",
     )
-    def pause_monitor(monitor_id: str, paused: bool = True) -> str:
+    async def pause_monitor(monitor_id: str, paused: bool = True) -> str:
         store = _store()
         monitor = store.get_monitor(str(monitor_id or "").strip())
         if monitor is None:
@@ -349,7 +360,7 @@ def build_monitor_tools():
             return f"Monitor {monitor['id']} is {monitor['status']}, not paused; only a paused monitor can be resumed."
         from .service import ensure_daemon_running
 
-        ensure_daemon_running(store)
+        await asyncio.to_thread(ensure_daemon_running, store)
         return f"Resumed monitor {monitor['id']} \"{monitor['name']}\"."
 
     return [register_monitor, list_monitors, cancel_monitor, pause_monitor]
@@ -362,8 +373,10 @@ MONITORS_PROMPT_BLOCK = (
     "Register a monitor with register_monitor (action='resume_chat', with resume_prompt saying "
     "what to do next), tell the user in one sentence what you are waiting for, and end your turn. "
     "The chat is woken with a [Monitor event] message: if the work is done, continue; if the "
-    "monitor ran out of checks, either register another one or ask the user with ask_question "
-    "whether to keep waiting or cancel. The wake-up runs in this chat by default; wake_in='new_chat' "
+    "monitor ran out of checks, either register another one or say so in your reply and let the user "
+    "decide there. A monitor's turn runs with nobody present and cannot ask anything outside its "
+    "chat, so settle the details with the user BEFORE registering and write a resume_prompt complete "
+    "enough to act on without questions (what to look for, where, in what form to report it). The wake-up runs in this chat by default; wake_in='new_chat' "
     "opens a fresh chat for each wake-up instead, for recurring work that should not crowd this "
     "conversation.\n"
     "When the user asks to be told about something later (a price, a page, a file, a condition), "

@@ -26,7 +26,7 @@
     "projectSettingsBadge": "P",
     "projectSettingsDisabled": "Abra um projeto para alterar suas configurações",
     "monitors": "Monitores",
-    "monitorsPending": "Monitores: {{count}} aguardando sua decisão"
+    "monitorsNewEvents": "Monitores: {{count}} evento(s) novo(s)"
   },
   "tutorial": {
     "menuTitle": "Tópicos do tutorial",
@@ -1268,7 +1268,6 @@
     "noChatWhileRunning": "Nenhum chat aberto. Aguarde o agente terminar e envie a mensagem para começar um novo chat.",
     "autoCreateChatFailed": "Não foi possível criar um chat para esta mensagem: {{error}}",
     "monitorProjectMissing": "O projeto \"{{project}}\" do monitor não está na lista de projetos.",
-    "monitorAnswerBusy": "Responda primeiro a pergunta já aberta.",
     "monitorWakeWithoutChat": "Um despertar de monitor não indicava nenhum chat e não foi executado.",
     "editNoProject": "Nenhum projeto está aberto.",
     "editNotUserMessage": "Só as suas próprias mensagens podem ser editadas.",
@@ -1276,7 +1275,8 @@
     "editAlreadyInFlight": "Outra edição ainda está sendo aplicada. Tente de novo em instantes.",
     "editEmpty": "A mensagem editada está vazia.",
     "editNotSent": "A mensagem editada não foi enviada.",
-    "editBranchNotSent": "A branch \"{{name}}\" foi criada, mas a mensagem editada não foi enviada ({{error}}). Ela está na caixa de mensagem: envie-a por lá."
+    "editBranchNotSent": "A branch \"{{name}}\" foi criada, mas a mensagem editada não foi enviada ({{error}}). Ela está na caixa de mensagem: envie-a por lá.",
+    "monitorChatMissing": "O chat deste evento de monitor não existe mais."
   },
   "onboarding": {
     "welcome": "Bem-vindo ao OpalaTex! 🚀",
@@ -1754,8 +1754,6 @@
     "testNotificationBody": "As notificações dos monitores do OpalaTex funcionam.",
     "testNotificationSent": "Notificação enviada via {{backend}}.",
     "testNotificationFailed": "A notificação não pôde ser exibida: {{error}}",
-    "pendingTitle": "Aguardando sua decisão",
-    "answer": "Responder",
     "listTitle": "Monitores",
     "showFinished": "Mostrar encerrados",
     "newMonitor": "Novo monitor",
@@ -1854,7 +1852,7 @@
       "ttlHours": "Encerrar após (horas, opcional)",
       "message": "Texto da notificação",
       "messagePlaceholder": "{name}: {value} ({delta})",
-      "once": "Avisar só uma vez",
+      "once": "Disparar só uma vez",
       "noChat": "Abra um chat para acordá-lo",
       "resumePrompt": "O que o agente deve fazer ao acordar",
       "checking": "Verificando…",
@@ -1866,6 +1864,14 @@
       "wakeNewHint": "O chat novo começa vazio: escreva aqui tudo o que o agente precisa saber."
     },
     "wakesSameChat": "acorda este chat",
-    "wakesNewChat": "acorda um chat novo"
+    "wakesNewChat": "acorda um chat novo",
+    "eventsTitle": "Eventos recentes",
+    "eventHeadline": "Novo evento do monitor “{{name}}”",
+    "eventFailed": "o turno em segundo plano falhou",
+    "eventNewChat": "chat novo",
+    "openChat": "Abrir chat",
+    "firesOnce": "dispara uma vez",
+    "clearEvents": "Limpar",
+    "clearEventsHint": "Remove os eventos recentes desta lista (os chats que eles abriram são mantidos)"
   }
 }

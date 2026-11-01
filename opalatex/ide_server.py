@@ -3757,13 +3757,7 @@ class AsyncHTTPServer:
                 fut.get_loop().call_soon_threadsafe(fut.set_result, value)
                 self.send_response(writer, 200, b'{"ok":true}', "application/json")
             else:
-                # A question asked by a monitor's background turn (another
-                # process) is answered through the same dialogs, by its id.
-                from opalatex.monitors.api import answer_remote_input
-                if await asyncio.to_thread(answer_remote_input, req_id, value):
-                    self.send_response(writer, 200, b'{"ok":true,"remote":true}', "application/json")
-                else:
-                    self.send_response(writer, 404, b'{"error":"No pending request with that id"}', "application/json")
+                self.send_response(writer, 404, b'{"error":"No pending request with that id"}', "application/json")
             return
 
         # 7a1. IDE command result (the window's answer to an agent's open_file/close_file)

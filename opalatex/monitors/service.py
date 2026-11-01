@@ -215,6 +215,7 @@ def daemon_status() -> dict:
     running = daemon_running()
     state = read_state() if running else {}
     backend = autostart_backend()
+    available, reason = backend.available() if backend else (False, "No login service is supported on this platform.")
     return {
         "running": running,
         "pid": state.get("pid") if running else None,
@@ -222,8 +223,8 @@ def daemon_status() -> dict:
         "version": state.get("version") if running else None,
         "autostart": {
             "backend": backend.name if backend else None,
-            "available": bool(backend and backend.available()[0]),
-            "reason": backend.available()[1] if backend else "No login service is supported on this platform.",
+            "available": available,
+            "reason": reason,
             "installed": bool(backend and backend.installed()),
             "other_folder": backend.foreign_owner() if backend else None,
         },
@@ -331,7 +332,22 @@ class SystemdUserAutostart(AutostartBackend):
         base = config_home or os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
         self.unit_path = os.path.join(base, "systemd", "user", f"{SERVICE_NAME}.service")
 
+    #: (time, answer) of the last probe. Probing runs ``systemctl``; the panel
+    #: asks for the status every few seconds, and the answer does not change
+    #: within a session.
+    _probe: tuple[float, tuple[bool, str]] | None = None
+    PROBE_TTL_SECONDS = 300.0
+
     def available(self) -> tuple[bool, str]:
+        cached = SystemdUserAutostart._probe
+        if cached and time.monotonic() - cached[0] < self.PROBE_TTL_SECONDS:
+            return cached[1]
+        answer = self._probe_systemd()
+        SystemdUserAutostart._probe = (time.monotonic(), answer)
+        return answer
+
+    @staticmethod
+    def _probe_systemd() -> tuple[bool, str]:
         if not shutil.which("systemctl"):
             return False, "systemctl was not found."
         try:

@@ -627,10 +627,18 @@ uma tarefa, ou os dois. Os monitores continuam rodando com a janela do OpalaTex 
 - **no chat em que foi criado** (o padrão) — o assistente continua com aquela conversa e
   tudo o que lembra dela. É a escolha certa para esperar uma tarefa.
 - **num chat novo a cada vez** — cada despertar abre um chat novo no mesmo projeto
-  (chamado *⏰ nome do monitor · data e hora*), e a conversa original fica intacta. Serve
+  (chamado *⏰ nome do monitor · data e hora*), e a conversa original fica intacta. Ele
+  trabalha **em segundo plano**: a janela nunca sai do que você está fazendo. Ao terminar,
+  chega uma notificação, o ícone de radar mostra um contador e o painel de Monitores lista o
+  evento em *Eventos recentes* ("Novo evento do monitor …") com **Abrir chat**. Serve
   para trabalho recorrente, como *"toda vez que o dólar variar, escreva uma análise curta"*.
   O chat novo começa vazio, então as instruções do monitor precisam dizer tudo o que o
   assistente precisa saber.
+
+**Uma vez ou sempre.** Um monitor dispara toda vez que a condição é atendida, a menos que
+você peça uma única vez (**Disparar só uma vez** no formulário, ou diga no chat). Se você não
+disser nada, um monitor que acorda o chat em que foi criado dispara uma vez (ele está
+esperando uma tarefa), e os demais continuam disparando.
 
 Peça com suas palavras (*"…e abra um chat novo a cada vez"*) ou escolha no campo
 **Acordar um chat** do formulário de Novo monitor. Se o chat que o monitor deveria acordar
@@ -670,17 +678,20 @@ há mais nada para observar.
   Windows) abre o OpalaTex no chat a que ela pertence.
 - **Com a janela aberta** naquele projeto, o despertar roda ali mesmo, como um turno normal
   com streaming. Caso contrário, roda em segundo plano e uma notificação traz a resposta.
-- **Decisões enquanto você está fora** — se um turno em segundo plano precisa da sua
-  aprovação (um comando no modo `edit`, um plano, uma pergunta), ele **espera**: uma
-  notificação pede sua decisão, e a pergunta aparece no diálogo de sempre quando você abre
-  o chat ou o painel de Monitores. Nada é aprovado por você.
+- **Tudo acontece no chat** — o turno de um monitor trabalha sozinho e nunca abre pergunta
+  ou pedido de aprovação fora do seu chat (o novo ou o original, conforme você escolheu).
+  Se precisar de algo de você — uma resposta, ou aprovação para uma ação que o modo `edit`
+  perguntaria —, ele diz isso na resposta naquele chat, e você responde ali. Nada é aprovado
+  por você. Por isso, ao pedir um monitor, dê ao assistente detalhes suficientes (o que
+  procurar, onde, como relatar) para ele terminar sem perguntar.
 - **Um turno por chat** — enquanto um turno em segundo plano roda num chat, uma nova
   mensagem para esse mesmo chat é recusada até ele terminar.
 
 ### Gerenciando os monitores
 
-- **Painel de Monitores** — o ícone de radar na barra de atividades à esquerda (um selo
-  conta as decisões que esperam por você). Lista todos os monitores com tipo (*Espera de
+- **Painel de Monitores** — o ícone de radar na barra de atividades à esquerda (um contador
+  mostra os eventos que você ainda não viu). Mostra os *Eventos recentes* com **Abrir chat** (**Limpar** esvazia essa lista; os chats
+  continuam) e lista todos os monitores com tipo (*Espera de
   tarefa* ou *Observação*), gatilho, última verificação, último valor e erros, com
   **Pausar/Retomar**, **Testar** (verifica agora sem alterar nada), **Cancelar/Remover**,
   o histórico de cada monitor, um formulário de **Novo monitor**, o estado do serviço,
@@ -688,7 +699,7 @@ há mais nada para observar.
 - **No chat** — peça ao assistente para listar, pausar ou cancelar monitores
   (`list_monitors`, `pause_monitor`, `cancel_monitor`).
 - **No terminal** — `opalatex monitors list`, `info <id>`, `pause <id>`, `resume <id>`,
-  `cancel <id>`, `test <id>`, `inputs` e `answer <id> <resposta>`, `daemon --status`,
+  `cancel <id>`, `test <id>`, `daemon --status`,
   `service status|install|uninstall`, `notify-test`; `/monitors` faz o mesmo dentro do
   `opalatex --cli`.
 

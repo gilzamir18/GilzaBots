@@ -14,9 +14,12 @@ Lifecycle, in the order it is applied on a check:
 3. fired and not ``repeat`` -> ``completed``;
 4. ``max_checks`` used up -> ``expired``.
 
-A monitor that wakes a chat also wakes it when it ends in 1, 2 or 4, with the
-reason, so the orchestrator that was waiting can decide whether to wait longer
-or ask the user -- it is never left waiting for a wake-up that will not come.
+A task wait (a monitor that wakes the chat it was registered from) also wakes
+it when it ends in 1, 2 or 4, with the reason, so the orchestrator that was
+waiting can decide whether to wait longer or tell the user -- it is never left
+waiting for a wake-up that will not come. Any other monitor that ends gets a
+notification instead (2 already sends a critical one); no chat is opened just
+to report an ending.
 """
 from __future__ import annotations
 
@@ -105,10 +108,14 @@ def wake_prompt(monitor: dict, event: str, value: Any, variables: dict, error: s
     if instructions:
         lines.append(f"What you asked to be told to do when woken: {instructions}")
     lines.append(
-        "This message was written by the monitor, not typed by the user. "
-        + ("Do what the instructions above ask. " if new_chat else "Continue the task from where you stopped. ")
-        + "To keep waiting, register a new monitor with register_monitor and end your turn; to let the "
-        "user decide whether to keep waiting or give up, ask with ask_question."
+        "This message was written by the monitor, not typed by the user, and nobody is watching this "
+        "turn. " + ("Do what the instructions above ask. " if new_chat else "Continue the task from where you stopped. ")
+        + "Work autonomously: do not ask questions (ask_question, plan approval and actions that need "
+        "the user's approval are unavailable in this turn). Where the instructions leave a choice open, "
+        "make the reasonable choice and say which one you made. Your reply in this chat is how the user "
+        "receives the result; if something blocks the task, say in that reply what you need and end the "
+        "turn -- the user answers in this chat. To keep waiting, register a new monitor with "
+        "register_monitor and end your turn."
     )
     return "\n".join(lines)
 
@@ -212,8 +219,21 @@ class MonitorEngine:
             "checks": checks if checks is not None else monitor.get("check_count", 0),
         }
         action = monitor.get("action") or {}
-        if wake and action.get("type") in RESUMING_ACTIONS:
+        task_wait = action.get("type") in RESUMING_ACTIONS and action.get("chat") != WAKE_CHAT_NEW
+        if wake and task_wait:
+            # The chat that is waiting must learn the wait is over, or it waits forever.
             self._enqueue_wake(monitor, event, value, variables, error)
+        elif event != EVENT_ERROR:
+            # A watch that ends (out of checks or time) says so, without opening
+            # a chat only to report it.
+            self.store.enqueue_notification(
+                _t("monitor_wake_done_title", name=monitor["name"]),
+                _t(f"monitor_wake_display_{event}", name=monitor["name"]),
+                urgency="low",
+                project=monitor.get("project", ""),
+                project_path=monitor.get("project_path", ""),
+                chat_id=monitor.get("chat_id", ""),
+            )
         if event == EVENT_ERROR:
             self.store.enqueue_notification(
                 _t("monitor_error_title", name=monitor["name"]),

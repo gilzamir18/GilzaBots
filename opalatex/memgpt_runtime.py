@@ -1523,9 +1523,10 @@ def chat_orchestrator_system_prompt(project, store=None) -> str:
         if _needs_native_tool_call_reminder(model) else ""
     )
 
-    from .agent_stdin import REPLY_SURFACE_TERMINAL, reply_surface
+    from .agent_stdin import REPLY_SURFACE_BACKGROUND, REPLY_SURFACE_TERMINAL, reply_surface
     surface_block = (
         _TERMINAL_REPLY_BLOCK if reply_surface() == REPLY_SURFACE_TERMINAL
+        else _BACKGROUND_REPLY_BLOCK if reply_surface() == REPLY_SURFACE_BACKGROUND
         else desktop_workspace_block()
     )
 
@@ -1543,6 +1544,19 @@ def chat_orchestrator_system_prompt(project, store=None) -> str:
         f"{surface_block}"
     )
     return system_prompt
+
+
+#: Appended for a monitor's wake-up run without a window (PROJECT_DESIGN 2.24):
+#: the desktop workspace block would tell the model the user is watching the
+#: window and hand it tools that need one.
+_BACKGROUND_REPLY_BLOCK = (
+    "\n## Where this turn runs: in the background\n"
+    "A monitor started this turn while no OpalaTex window has this chat open, and nobody is "
+    "watching. There is no editor, PDF pane or terminal tab to show things in; work with the "
+    "project's files and your tools. Your reply is stored in this chat and read later in the "
+    "desktop app, which renders Markdown and typesets math, so write it as you would there -- it "
+    "is the user's only account of what you did.\n"
+)
 
 
 #: Appended when the replies are read in a terminal (`agent_stdin.reply_surface`).

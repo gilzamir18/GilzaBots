@@ -20,7 +20,7 @@ export default function ActivityBar({
   onEditModels,
   onOpenHardware,
   onOpenMonitors,
-  monitorsPendingCount = 0,
+  monitorsUnseenEvents = 0,
   onOpenAssetStore,
   onOpenCloudSync,
   cloudEnabled,
@@ -287,19 +287,19 @@ export default function ActivityBar({
         <button
           onClick={onOpenMonitors}
           className="vscode-activitybar-btn"
-          title={monitorsPendingCount > 0
-            ? t('activityBar.monitorsPending', { count: monitorsPendingCount })
+          title={monitorsUnseenEvents > 0
+            ? t('activityBar.monitorsNewEvents', { count: monitorsUnseenEvents })
             : t('activityBar.monitors', 'Monitors')}
           aria-label={t('activityBar.monitors', 'Monitors')}
           style={{ position: 'relative' }}
         >
           <Radar size={density.secondaryIconSize} />
-          {monitorsPendingCount > 0 && (
+          {monitorsUnseenEvents > 0 && (
             <span aria-hidden="true" style={{
               position: 'absolute', top: 2, right: 2, minWidth: 14, height: 14, padding: '0 3px',
-              borderRadius: 7, background: 'var(--vscode-fg-warning, #d29922)', color: '#000',
+              borderRadius: 7, background: 'var(--vscode-textLink-foreground, #4aa3ff)', color: '#fff',
               fontSize: 9, fontWeight: 700, lineHeight: '14px', textAlign: 'center',
-            }}>{monitorsPendingCount}</span>
+            }}>{monitorsUnseenEvents > 99 ? '99+' : monitorsUnseenEvents}</span>
           )}
         </button>
 

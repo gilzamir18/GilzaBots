@@ -26,7 +26,7 @@
     "projectSettingsBadge": "P",
     "projectSettingsDisabled": "Open a project to change its settings",
     "monitors": "Monitors",
-    "monitorsPending": "Monitors: {{count}} waiting for your decision"
+    "monitorsNewEvents": "Monitors: {{count}} new event(s)"
   },
   "tutorial": {
     "menuTitle": "Tutorial topics",
@@ -1268,7 +1268,6 @@
     "noChatWhileRunning": "No chat is open. Wait for the agent to finish, then send the message to start a new chat.",
     "autoCreateChatFailed": "Could not create a chat for this message: {{error}}",
     "monitorProjectMissing": "The monitor's project \"{{project}}\" is not in the project list.",
-    "monitorAnswerBusy": "Answer the question already open first.",
     "monitorWakeWithoutChat": "A monitor wake-up named no chat and was not run.",
     "editNoProject": "No project is open.",
     "editNotUserMessage": "Only your own messages can be edited.",
@@ -1276,7 +1275,8 @@
     "editAlreadyInFlight": "Another edit is still being applied. Try again in a moment.",
     "editEmpty": "The edited message is empty.",
     "editNotSent": "The edited message was not sent.",
-    "editBranchNotSent": "The branch \"{{name}}\" was created, but the edited message was not sent ({{error}}). It is in the message box: send it from there."
+    "editBranchNotSent": "The branch \"{{name}}\" was created, but the edited message was not sent ({{error}}). It is in the message box: send it from there.",
+    "monitorChatMissing": "The chat of this monitor event no longer exists."
   },
   "onboarding": {
     "welcome": "Welcome to OpalaTex! ",
@@ -1754,8 +1754,6 @@
     "testNotificationBody": "Desktop notifications from OpalaTex monitors work.",
     "testNotificationSent": "Notification sent through {{backend}}.",
     "testNotificationFailed": "The notification could not be shown: {{error}}",
-    "pendingTitle": "Waiting for your decision",
-    "answer": "Answer",
     "listTitle": "Monitors",
     "showFinished": "Show finished",
     "newMonitor": "New monitor",
@@ -1854,7 +1852,7 @@
       "ttlHours": "Stop after (hours, optional)",
       "message": "Notification text",
       "messagePlaceholder": "{name}: {value} ({delta})",
-      "once": "Notify only once",
+      "once": "Fire only once",
       "noChat": "Open a chat to wake it",
       "resumePrompt": "What the agent should do when woken",
       "checking": "Checking…",
@@ -1866,6 +1864,14 @@
       "wakeNewHint": "The new chat starts empty: write here everything the agent needs to know."
     },
     "wakesSameChat": "wakes this chat",
-    "wakesNewChat": "wakes a new chat"
+    "wakesNewChat": "wakes a new chat",
+    "eventsTitle": "Recent events",
+    "eventHeadline": "New event from monitor “{{name}}”",
+    "eventFailed": "the background turn failed",
+    "eventNewChat": "new chat",
+    "openChat": "Open chat",
+    "firesOnce": "fires once",
+    "clearEvents": "Clear",
+    "clearEventsHint": "Remove the recent events from this list (the chats they opened are kept)"
   }
 }

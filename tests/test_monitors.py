@@ -124,6 +124,17 @@ class TestSpec:
         assert _spec()["repeat"] is True
         assert _spec()["owner"] == "user"
 
+    def test_repeat_follows_the_choice_and_defaults_by_kind(self):
+        new_chat = {"type": "resume_chat", "prompt": "p", "chat": "new"}
+        # Unset: a wake-up of this chat is a task wait; a new chat each time recurs.
+        assert _wake_spec()["repeat"] is False
+        assert _wake_spec(action=new_chat)["repeat"] is True
+        assert _wake_spec(action={**new_chat, "type": "notify_and_resume"})["repeat"] is True
+        # A choice always holds, whichever the kind.
+        assert _wake_spec(action=new_chat, repeat=False)["repeat"] is False
+        assert _wake_spec(repeat=True)["repeat"] is True
+        assert _spec(repeat=False)["repeat"] is False
+
     def test_invalid_regex_and_json_path_are_refused(self):
         with pytest.raises(MonitorSpecError, match="not a valid regular expression"):
             _spec(check={"type": "http", "url": "https://x", "regex": "("}, condition={"type": "changed"})
@@ -229,13 +240,6 @@ class TestStore:
         assert mstore.acquire_lease("p", "c3", dead.pid, "monitor") is None
         assert mstore.acquire_lease("p", "c3", os.getpid(), "turn") is None
 
-    def test_an_input_is_answered_once(self, mstore):
-        mstore.add_input({"id": "q1", "prompt": "Allow?"}, wake_request_id=None, project="p",
-                         project_path="", chat_id="c", monitor_name="m", pid=os.getpid())
-        assert mstore.answer_input("q1", "yes") is True
-        assert mstore.answer_input("q1", "no") is False
-        assert mstore.get_input("q1")["answer"] == "yes"
-
     def test_open_requests_are_consumed(self, mstore):
         mstore.add_open_request("p", "/p", "c1")
         mstore.add_open_request("p", "/p", "c2")
@@ -254,6 +258,8 @@ class TestStore:
                          " claimed_by TEXT NOT NULL DEFAULT '', claimed_pid INTEGER, claimed_at REAL, finished_at REAL,"
                          " error TEXT NOT NULL DEFAULT '')")
         upgraded = st.MonitorStore(db_path=path)
+        columns = {row[1] for row in sqlite3.connect(path).execute("PRAGMA table_info(wake_requests)")}
+        assert {"new_chat", "result", "seen"} <= columns
         monitor = upgraded.create_monitor(_wake_spec())
         wake_id = upgraded.enqueue_wake(monitor, "p", "d", new_chat=True)
         assert upgraded.get_wake(wake_id)["new_chat"] == 1
@@ -471,6 +477,32 @@ class TestAgentTools:
         assert result.startswith("register_monitor failed: The first check failed")
         assert "not a number" in result
         assert len(st.MonitorStore().list_monitors()) == 1
+
+    def test_the_tool_never_overrides_the_choice_to_repeat(self, session):
+        register = _tools()["register_monitor"]
+        recurring = asyncio.run(register(name="news", interval_seconds=3600, resume_prompt="list the news",
+                                         wake_in="new_chat", action="notify_and_resume"))
+        assert "It fires every time the condition holds." in recurring
+        single = asyncio.run(register(name="news once", interval_seconds=3600, resume_prompt="p",
+                                      wake_in="new_chat", once=True))
+        assert "It fires once, then ends." in single
+        wait = asyncio.run(register(name="build", interval_seconds=120, resume_prompt="continue"))
+        assert "It fires once, then ends." in wait
+        again = asyncio.run(register(name="poll", interval_seconds=120, resume_prompt="continue", once=False))
+        assert "It fires every time" in again
+        by_name = {m["name"]: m["repeat"] for m in st.MonitorStore().list_monitors()}
+        assert by_name == {"news": True, "news once": False, "build": False, "poll": True}
+
+    def test_a_recurring_new_chat_monitor_keeps_firing(self, mstore, clock):
+        monitor = mstore.create_monitor(_wake_spec(action={"type": "resume_chat", "prompt": "p", "chat": "new"}))
+        clock.advance(120)
+        eng = FakeEngine(mstore, [None, None, None], clock)
+        eng.chat_creator = lambda _monitor: f"chat-{len(mstore.list_wakes())}"
+        for _ in range(3):
+            asyncio.run(eng.tick())
+            clock.advance(120)
+        assert len(mstore.list_wakes()) == 3
+        assert mstore.get_monitor(monitor["id"])["status"] == st.STATUS_ACTIVE
 
     def test_wake_in_a_new_chat(self, session):
         tools_ = _tools()
@@ -721,6 +753,15 @@ class TestDaemon:
         wake = mstore.get_wake(wake_id)
         assert wake["status"] == st.WAKE_FAILED and "exited with code 0" in wake["error"]
 
+    def test_a_new_chat_wakeup_runs_here_even_with_the_window_open(self, mstore, clock):
+        monitor = mstore.create_monitor(_wake_spec())
+        wake_id = mstore.enqueue_wake(monitor, "p", "d", chat_id="fresh", new_chat=True)
+        mstore.touch_host("gui", os.getpid(), "proj", "")
+        daemon = self._daemon(mstore, clock)
+        assert daemon.dispatch_wakes() == 1
+        assert mstore.get_wake(wake_id)["claimed_by"] == "daemon"
+        daemon.children[wake_id][0].wait()
+
     def test_a_busy_chat_waits(self, mstore, clock):
         monitor = mstore.create_monitor(_wake_spec())
         mstore.enqueue_wake(monitor, "p", "d")
@@ -733,11 +774,8 @@ class TestDaemon:
         monitor = mstore.create_monitor(_wake_spec())
         wake_id = mstore.enqueue_wake(monitor, "p", "d")
         mstore.claim_wake(wake_id, "gui", dead.pid)
-        mstore.add_input({"id": "q"}, wake_request_id=wake_id, project="proj", project_path="",
-                         chat_id="chat-1", monitor_name="m", pid=dead.pid)
         self._daemon(mstore, clock).reconcile()
         assert mstore.get_wake(wake_id)["status"] == st.WAKE_INTERRUPTED
-        assert mstore.get_input("q")["status"] == st.INPUT_CLOSED
 
     def test_idle_daemon_exits(self, mstore, clock):
         daemon = self._daemon(mstore, clock)
@@ -837,43 +875,6 @@ class TestWakeRunner:
         wake_id = mstore.enqueue_wake(monitor, "p", "d")
         return mstore.get_wake(wake_id)
 
-    def test_questions_wait_for_an_answer_from_elsewhere(self, mstore):
-        wake = self._wake(mstore)
-        transport = wake_runner.make_input_transport(mstore, wake, poll=0.01)
-
-        async def scenario():
-            task = asyncio.ensure_future(transport({"id": "q1", "prompt": "Run **rm**?", "type": "confirm"}))
-            await asyncio.sleep(0.05)
-            assert mstore.get_input("q1")["status"] == st.INPUT_WAITING
-            assert mstore.answer_input("q1", "yes")
-            return await asyncio.wait_for(task, 2)
-
-        assert asyncio.run(scenario()) == "yes"
-        note = mstore.undelivered_notifications()[0]
-        assert note["urgency"] == "critical" and note["body"] == "Run rm?"
-        assert note["chat_id"] == "chat-1"
-
-    def test_a_cancelled_question_is_closed(self, mstore):
-        wake = self._wake(mstore)
-        transport = wake_runner.make_input_transport(mstore, wake, poll=0.01)
-
-        async def scenario():
-            task = asyncio.ensure_future(transport({"id": "q2", "prompt": "?", "type": "ask"}))
-            await asyncio.sleep(0.05)
-            task.cancel()
-            with pytest.raises(asyncio.CancelledError):
-                await task
-
-        asyncio.run(scenario())
-        assert mstore.get_input("q2")["status"] == st.INPUT_CLOSED
-
-    def test_interactive_commands_are_declined(self, mstore, monkeypatch):
-        events = []
-        monkeypatch.setattr("opalatex.agent_stdin.print_event", lambda event, data: events.append((event, data)))
-        transport = wake_runner.make_input_transport(mstore, self._wake(mstore))
-        assert asyncio.run(transport({"id": "t", "type": "interactive_terminal"})) == "cancel"
-        assert events[0][0] == "problem" and "no terminal" in events[0][1]["message"]
-
     def test_an_unclaimed_request_is_not_run(self, mstore):
         wake = self._wake(mstore)
         assert asyncio.run(wake_runner.run_wake(wake["id"], store=mstore)) == 2
@@ -887,6 +888,115 @@ class TestWakeRunner:
         assert wake["status"] == st.WAKE_FAILED and "no longer exists" in wake["error"]
         assert mstore.lease_holder("proj", "chat-1") is None
         assert mstore.undelivered_notifications()[-1]["urgency"] == "critical"
+
+
+class TestUnattendedTurn:
+    """A monitor's turn asks nothing outside its chat; it reports in its reply."""
+
+    def _run_unattended(self, monkeypatch, body):
+        from opalatex import agent_stdin
+
+        seen = {}
+
+        async def fake_body(data):
+            seen["during"] = agent_stdin.unattended_turn()
+            seen["result"] = await body()
+
+        monkeypatch.setattr(agent_stdin, "_handle_run", fake_body)
+        asyncio.run(agent_stdin.handle_run({"project_name": "proj", "chat_id": "c-un", "monitor_wake": "News"}))
+        seen["after"] = agent_stdin.unattended_turn()
+        return seen
+
+    def test_the_turn_is_marked_only_while_it_runs(self, monkeypatch):
+        async def nothing():
+            return None
+
+        seen = self._run_unattended(monkeypatch, nothing)
+        assert seen["during"] == "News" and seen["after"] is None
+
+    def test_no_question_reaches_a_front_end(self, monkeypatch):
+        from opalatex import agent_stdin, tools
+
+        events = []
+        monkeypatch.setattr(agent_stdin, "print_event", lambda event, data: events.append(event))
+        project = types.SimpleNamespace(name="proj", project_path=os.getcwd(), current_chat_id="c-un",
+                                        mode="edit", results={})
+        monkeypatch.setattr(tools, "_PROJECT_SESSION", project)
+
+        async def body():
+            ask = await tools.ask_question._func("Which topic?", options=["a", "b"])
+            write = await tools.write_file._func("x.txt", "data")
+            interactive = await tools.run_interactive_command._func("ssh host")
+            project.mode = "plan"
+            plan = await tools.create_plan._func("1. do it")
+            project.mode = "edit"
+            try:
+                await agent_stdin.request_user_input("anything?")
+                direct = "asked"
+            except agent_stdin.UnattendedTurnError as exc:
+                direct = str(exc)
+            return ask, write, interactive, plan, direct
+
+        ask, write, interactive, plan, direct = self._run_unattended(monkeypatch, body)["result"]
+        assert ask.startswith("Not done: the question 'Which topic?' was not asked")
+        assert "say so in your reply in this chat" in ask and '"News"' in ask
+        assert write.startswith("Execution blocked: Not done: 'write_file' needs the user's approval")
+        assert not os.path.exists("x.txt")
+        assert interactive.startswith("Execution blocked: Not done: 'run_interactive_command'")
+        assert "write it in your reply" in plan
+        assert direct.startswith("Not done: the question 'anything?'")
+        assert "input_request" not in events
+
+    def test_auto_mode_tools_still_run(self, monkeypatch, tmp_path):
+        from opalatex import tools
+
+        project = types.SimpleNamespace(name="proj", project_path=str(tmp_path), current_chat_id="c-un",
+                                        mode="auto", results={})
+        monkeypatch.setattr(tools, "_PROJECT_SESSION", project)
+        tools.set_project_context(project, None)
+
+        async def body():
+            written = await tools.write_file._func("note.txt", "ok")
+            interactive = await tools.run_interactive_command._func("ssh host")
+            return written, interactive
+
+        written, interactive = self._run_unattended(monkeypatch, body)["result"]
+        assert "Execution blocked" not in str(written)
+        assert (tmp_path / "note.txt").read_text() == "ok"
+        # Auto mode needs no approval, but an interactive command still needs a person.
+        assert "needs a person at a terminal" in interactive
+
+    def test_the_wake_message_says_nobody_is_watching(self):
+        prompt = engine_mod.wake_prompt({"id": "m", "name": "News", "action": {"prompt": "list today's AI news"}},
+                                        engine_mod.EVENT_CONDITION_MET, None, {"checks": 1}, new_chat=True)
+        assert "nobody is watching this turn" in prompt and "do not ask questions" in prompt
+        assert "with ask_question" not in prompt and "list today's AI news" in prompt
+
+    def test_the_headless_runner_marks_its_turn(self, mstore, tmp_path, monkeypatch):
+        from opalatex import agent_stdin
+        from opalatex.project import ProjectStore
+
+        sessions = ProjectStore(db_path=str(tmp_path / "s.db"))
+        sessions.create("proj", "auto", "", project_path=str(tmp_path / "p"))
+        sessions.create_chat("proj", "chat-1", "c")
+        monitor = mstore.create_monitor(_wake_spec(sessions_db=str(tmp_path / "s.db")))
+        wake_id = mstore.enqueue_wake(monitor, "p", "d")
+        mstore.claim_wake(wake_id, "daemon", os.getpid())
+        captured = {}
+
+        async def fake_run(data):
+            captured.update(data)
+            agent_stdin.event_hook({"event": "agent_response", "response": "Three new **AI** stories today."})
+
+        monkeypatch.setattr(agent_stdin, "handle_run", fake_run)
+        asyncio.run(wake_runner.run_wake(wake_id, store=mstore))
+        assert captured["monitor_wake"] == "build" and captured["chat_id"] == "chat-1"
+        assert agent_stdin._input_transport is None
+        wake = mstore.get_wake(wake_id)
+        assert wake["status"] == st.WAKE_DONE and wake["result"] == "Three new **AI** stories today."
+        note = mstore.undelivered_notifications()[-1]
+        assert note["title"] == "New event from monitor \u201cbuild\u201d"
+        assert note["body"] == "Three new AI stories today." and note["chat_id"] == "chat-1"
 
 
 class TestTurnLease:
@@ -939,6 +1049,23 @@ class TestApi:
         assert self._call("/api/monitors/wake/finish", "POST", {"id": wake_id, "status": "released"})[1]["ok"]
         assert mstore.get_wake(wake_id)["status"] == st.WAKE_PENDING
 
+    def test_poll_leaves_new_chat_wakeups_to_the_daemon_and_reports_events(self):
+        mstore = st.MonitorStore()
+        monitor = mstore.create_monitor(_wake_spec())
+        fresh = mstore.enqueue_wake(monitor, "p", "d", chat_id="fresh", new_chat=True)
+        body = self._call("/api/monitors/poll", "POST", {"project_name": "proj", "idle": True})[1]
+        assert body["wake"] is None and mstore.get_wake(fresh)["status"] == st.WAKE_PENDING
+        assert body["unseen_events"] == 0 and body["events"] == []
+        mstore.claim_wake(fresh, "daemon", os.getpid())
+        mstore.finish_wake(fresh, st.WAKE_DONE, result="Summary of the news")
+        body = self._call("/api/monitors/poll", "POST", {"project_name": "proj"})[1]
+        assert body["unseen_events"] == 1
+        event = body["events"][0]
+        assert (event["monitor_name"], event["chat_id"], event["result"], event["new_chat"]) == ("build", "fresh", "Summary of the news", 1)
+        assert self._call("/api/monitors")[1]["events"][0]["id"] == fresh
+        self._call("/api/monitors/events/seen", "POST")
+        assert self._call("/api/monitors/poll", "POST", {"project_name": "proj"})[1]["unseen_events"] == 0
+
     def test_poll_delivers_a_click_and_raises_the_window(self):
         mstore = st.MonitorStore()
         mstore.add_open_request("proj", "/p", "c9")
@@ -946,16 +1073,12 @@ class TestApi:
         body = self._call("/api/monitors/poll", "POST", {"project_name": "x"}, focus=lambda: focused.append(1))[1]
         assert body["open"]["chat_id"] == "c9" and focused == [1]
 
-    def test_actions_and_remote_answers(self):
+    def test_actions(self):
         mstore = st.MonitorStore()
         monitor = mstore.create_monitor(_spec())
         assert self._call("/api/monitors/action", "POST", {"id": monitor["id"], "action": "pause"})[0] == 200
         assert self._call("/api/monitors/action", "POST", {"id": monitor["id"], "action": "pause"})[0] == 409
         assert self._call("/api/monitors/action", "POST", {"id": monitor["id"], "action": "explode"})[0] == 400
-        mstore.add_input({"id": "q"}, wake_request_id=None, project="p", project_path="", chat_id="c",
-                         monitor_name="m", pid=os.getpid())
-        assert api.answer_remote_input("q", "no") is True
-        assert api.answer_remote_input("q", "yes") is False
         listing = self._call("/api/monitors")[1]
         assert listing["monitors"][0]["status"] == st.STATUS_PAUSED
 
@@ -974,7 +1097,7 @@ class TestCli:
         assert _monitors_argv(["monitors"]) == []
         assert _monitors_argv(["--cli"]) is None
 
-    def test_list_pause_and_answer(self, capsys):
+    def test_list_and_pause(self, capsys):
         from opalatex.monitors.cli import main
 
         mstore = st.MonitorStore()
@@ -983,7 +1106,6 @@ class TestCli:
         assert monitor["id"] in capsys.readouterr().out
         assert main(["pause", monitor["id"]]) == 0
         assert mstore.get_monitor(monitor["id"])["status"] == st.STATUS_PAUSED
-        assert main(["answer", "nothing", "yes"]) == 1
         assert main(["open", "https://x"]) == 2
 
     def test_llm_verdict_parsing(self):
@@ -995,3 +1117,106 @@ class TestCli:
             parse_answer('{"met": "yes"}')
         with pytest.raises(CheckError, match="JSON verdict"):
             parse_answer("The dollar went up.")
+
+
+class TestConsistencyReview:
+    """Defects found reviewing the whole feature; each is pinned here."""
+
+    def test_the_type_follows_the_action(self):
+        assert _wake_spec()["owner"] == "agent"  # wakes its own chat: a task wait
+        assert _wake_spec(action={"type": "resume_chat", "prompt": "p", "chat": "new"})["owner"] == "user"
+        assert _spec()["owner"] == "user"
+
+    def test_a_watch_that_ends_notifies_instead_of_opening_a_chat(self, mstore, clock):
+        watch = _wake_spec(action={"type": "resume_chat", "prompt": "p", "chat": "new"},
+                           check={"type": "http", "url": "https://x"}, condition={"type": "gt", "value": 5},
+                           max_checks=1)
+        monitor = mstore.create_monitor(watch)
+        clock.advance(120)
+        eng = FakeEngine(mstore, ["1"], clock)
+        eng.chat_creator = lambda _m: pytest.fail("no chat may be opened to report an ending")
+        asyncio.run(eng.tick())
+        assert mstore.get_monitor(monitor["id"])["status"] == st.STATUS_EXPIRED
+        assert mstore.list_wakes() == []
+        note = mstore.undelivered_notifications()[0]
+        assert note["urgency"] == "low" and "checks used up" in note["body"]
+
+    def test_a_notify_only_watch_that_expires_says_so(self, mstore, clock):
+        monitor = mstore.create_monitor(_spec(ttl_seconds=60))
+        clock.advance(120)
+        asyncio.run(FakeEngine(mstore, [], clock).tick())
+        assert mstore.get_monitor(monitor["id"])["status"] == st.STATUS_EXPIRED
+        assert "time limit" in mstore.undelivered_notifications()[0]["body"]
+
+    def test_cancelling_a_finished_monitor_is_refused_everywhere(self):
+        mstore = st.MonitorStore()
+        monitor = mstore.create_monitor(_spec())
+        mstore.set_status(monitor["id"], st.STATUS_COMPLETED, "fired")
+        status, body = asyncio.run(api.handle("/api/monitors/action", "POST",
+                                              {"id": monitor["id"], "action": "cancel"}, {}, turn_active=False))
+        assert status == 409 and "already completed" in body["error"]
+        assert mstore.get_monitor(monitor["id"])["status"] == st.STATUS_COMPLETED
+
+    def test_a_wakeup_the_user_watched_is_not_an_unseen_event(self):
+        mstore = st.MonitorStore()
+        monitor = mstore.create_monitor(_wake_spec())
+        wake_id = mstore.enqueue_wake(monitor, "p", "d")
+        mstore.claim_wake(wake_id, "gui", os.getpid())
+        asyncio.run(api.handle("/api/monitors/wake/finish", "POST", {"id": wake_id, "status": "done"}, {},
+                               turn_active=False))
+        assert mstore.get_wake(wake_id)["seen"] == 1 and mstore.unseen_events() == 0
+
+    def test_the_status_probes_the_service_manager_once_per_period(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(service.SystemdUserAutostart, "_probe", None)
+        monkeypatch.setattr(service.SystemdUserAutostart, "_probe_systemd",
+                            staticmethod(lambda: calls.append(1) or (True, "")))
+        backend = service.SystemdUserAutostart(config_home="/nonexistent")
+        for _ in range(5):
+            backend.available()
+        assert calls == [1]
+
+    def test_the_panel_status_runs_off_the_event_loop(self, monkeypatch):
+        import threading as _threading
+
+        main = _threading.get_ident()
+        seen = []
+        monkeypatch.setattr(service, "daemon_status", lambda: seen.append(_threading.get_ident()) or {})
+        asyncio.run(api.handle("/api/monitors", "GET", {}, {}, turn_active=False))
+        assert seen and seen[0] != main
+
+    def test_a_background_turn_gets_no_window_tools_and_no_window_prompt(self, monkeypatch):
+        from opalatex import agent_stdin
+        from opalatex.prompt_surface import GUI_ONLY_TOOLS, body_for_surface, tools_for_surface
+
+        tools = [types.SimpleNamespace(name=name) for name in ("read_file", *GUI_ONLY_TOOLS)]
+        body = "- `open_file` opens a file\n- `/compile` builds the PDF\n- `read_file` reads"
+        monkeypatch.setattr(agent_stdin, "_reply_surface", agent_stdin.REPLY_SURFACE_BACKGROUND)
+        assert [tool.name for tool in tools_for_surface(tools)] == ["read_file"]
+        filtered = body_for_surface(body)
+        assert "open_file" not in filtered and "/compile" not in filtered and "read_file" in filtered
+        monkeypatch.setattr(agent_stdin, "_reply_surface", None)
+        assert len(tools_for_surface(tools)) == len(tools)
+
+    def test_the_background_prompt_block_replaces_the_window_block(self):
+        from opalatex import memgpt_runtime
+
+        block = memgpt_runtime._BACKGROUND_REPLY_BLOCK
+        assert "nobody is watching" in block and "renders Markdown" in block
+        assert "The IDE you work in" not in block
+
+
+def test_clearing_events_keeps_what_has_not_finished():
+    mstore = st.MonitorStore()
+    monitor = mstore.create_monitor(_wake_spec())
+    done = mstore.enqueue_wake(monitor, "p", "d")
+    mstore.claim_wake(done, "daemon", os.getpid())
+    mstore.finish_wake(done, st.WAKE_DONE, result="r")
+    running = mstore.enqueue_wake(monitor, "p", "d")
+    mstore.claim_wake(running, "daemon", os.getpid())
+    pending = mstore.enqueue_wake(monitor, "p", "d")
+    status, body = asyncio.run(api.handle("/api/monitors/events/clear", "POST", {}, {}, turn_active=False))
+    assert status == 200 and body["cleared"] == 1
+    assert mstore.recent_events() == [] and mstore.unseen_events() == 0
+    assert mstore.get_wake(running)["status"] == st.WAKE_CLAIMED
+    assert mstore.get_wake(pending)["status"] == st.WAKE_PENDING

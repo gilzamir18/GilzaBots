@@ -3923,6 +3923,7 @@ export default function App() {
           chat_id: targetChatId,
           client_message_id: clientMessageId,
           attachments: attachmentsSnapshot,
+          ...(options.monitorWake ? { monitor_wake: options.monitorWake } : {}),
         }),
       });
       const runConflict = await readRunConflict(res);
@@ -3960,32 +3961,62 @@ export default function App() {
   };
 
   // ── Monitors (PROJECT_DESIGN 2.24) ─────────────────────────────────────
-  // Questions a monitor's background turn is waiting on are shown in the same
-  // dialogs as this window's own (marked `remote`), and answered through the
-  // same /api/opalatex/input_response, which routes them by id.
-  const presentedRemoteInputsRef = useRef(new Set());
+  // A wake-up runs as an ordinary turn of its chat, marked `monitor_wake`: the
+  // backend then refuses every question outside the chat (tool approval, plan
+  // approval, ask_question), and the agent reports in its reply instead.
   const pendingMonitorOpenRef = useRef(null);
-  const presentRemoteInput = (item) => {
-    const raw = item?.request || {};
-    const request = { ...normalizeInputRequest(raw), remote: true, monitorName: item.monitor_name };
-    if (raw.markdown_content) {
-      if (planRequest) return false;
-      setPlanRequest(request);
-    } else if (request.type === 'ask') {
-      if (askRequest) return false;
-      setAskRequest(request);
-    } else {
-      if (confirmRequest) return false;
-      setConfirmRequest(request);
+  const lastMonitorEventRef = useRef(null);
+  // The chats of the open project, reloaded when a monitor created one.
+  const refreshChatList = async () => {
+    if (!activeProject) return [];
+    try {
+      const res = await fetch(`/api/chat/list?project_name=${encodeURIComponent(activeProject.name)}&t=${Date.now()}`);
+      const data = res.ok ? await res.json() : null;
+      if (data?.chats) {
+        setChats(data.chats);
+        return data.chats;
+      }
+    } catch (err) {
+      console.error(err);
     }
-    presentedRemoteInputsRef.current.add(item.id);
-    return true;
+    return [];
+  };
+  const [monitorUnseenEvents, setMonitorUnseenEvents] = useState(0);
+  // Reload the history of the chat on screen, when something other than this
+  // window wrote to it (a monitor's background turn).
+  const reloadChatOnScreen = async (chatId) => {
+    if (!activeProject || !chatId) return;
+    try {
+      const res = await fetch(`/api/chat/history?project_name=${encodeURIComponent(activeProject.name)}&chat_id=${encodeURIComponent(chatId)}&t=${Date.now()}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (activeChatIdRef.current !== chatId || isTurnBusy()) return;
+      startTransition(() => {
+        setChatContextUsage(contextUsageFromPayload(data.context_usage));
+        if (data.history && data.history.length > 0) {
+          setChatMessages(attachThoughtActivityToMessages(data.history, data.activity || [], data.thought_windows || []));
+        }
+        setTerminalLogs(activityToTerminalLogs(data.activity || []));
+      });
+    } catch (err) {
+      console.error(err);
+    }
   };
   const showMonitorChat = (target) => {
     if (!target?.project) return;
     setIsChatVisible(true);
     if (activeProject?.name === target.project) {
-      if (target.chat_id && target.chat_id !== activeChatIdRef.current) handleSwitchChat(target.chat_id);
+      if (!target.chat_id || target.chat_id === activeChatIdRef.current) return;
+      // A chat a monitor created may not be in the list yet; the selector
+      // cannot show a chat it does not list.
+      if (chats.some(chat => chat.id === target.chat_id)) {
+        handleSwitchChat(target.chat_id);
+      } else {
+        refreshChatList().then(list => {
+          if (list.some(chat => chat.id === target.chat_id)) handleSwitchChat(target.chat_id);
+          else addLog('error', t('app.monitorChatMissing', 'The chat of this monitor event no longer exists.'));
+        });
+      }
       return;
     }
     const proj = projects.find(p => p.name === target.project);
@@ -3996,13 +4027,13 @@ export default function App() {
     pendingMonitorOpenRef.current = target;
     handleSelectProject(proj);
   };
-  const { inputs: monitorInputs } = useMonitorBridge({
+  useMonitorBridge({
     activeProject,
     isTurnBusy,
-    // A wake-up is an ordinary turn of its chat: streamed there, and shown
-    // only while that chat is on screen, like any turn the user started. A
-    // monitor that wakes a new chat each time created that chat in the store,
-    // so the sidebar list is reloaded to show it.
+    // A wake-up of the chat a monitor was registered from is an ordinary turn
+    // of that chat: streamed there, and shown only while it is on screen. A
+    // wake-up in a new chat never reaches the window (the daemon runs it, out
+    // of the user's way); it arrives as an event (onEvents below).
     runWake: (wake) => {
       // Never fall back to the chat on screen: handleSendMessage reads an
       // empty chatIdOverride as "the active chat".
@@ -4010,50 +4041,29 @@ export default function App() {
         addLog('error', t('app.monitorWakeWithoutChat', 'A monitor wake-up named no chat and was not run.'));
         return Promise.resolve('failed');
       }
-      if (activeProject && !chats.some(chat => chat.id === wake.chat_id)) {
-        fetch(`/api/chat/list?project_name=${encodeURIComponent(activeProject.name)}&t=${Date.now()}`)
-          .then(r => (r.ok ? r.json() : null))
-          .then(d => { if (d?.chats) setChats(d.chats); })
-          .catch(() => { });
-      }
-      if (wake.new_chat) {
-        // The monitor opened this chat for the wake-up: show it, the way a
-        // chat created for a task is shown (createChatForTask), so the turn
-        // streams in front of the user instead of in a chat they never see.
-        // Its history is empty, so the base messages are known without a load.
-        setActiveChatId(wake.chat_id);
-        setActiveProject(prev => (prev ? { ...prev, current_chat_id: wake.chat_id } : null));
-        setChatContextUsage(null);
-        setIsChatVisible(true);
-        const greeting = activeProject?.project_name || activeProject?.name || '';
-        const baseMessages = [{ role: 'assistant', content: t('app.greeting', { projectName: greeting }) }];
-        setChatMessages(baseMessages);
-        return handleSendMessage(null, null, {
-          overrideText: wake.prompt,
-          displayText: wake.display || wake.prompt,
-          chatIdOverride: wake.chat_id,
-          baseMessages,
-        });
-      }
       return handleSendMessage(null, null, {
         overrideText: wake.prompt,
         displayText: wake.display || wake.prompt,
         chatIdOverride: wake.chat_id,
         skipUserMessageAppend: wake.chat_id !== activeChatIdRef.current,
+        monitorWake: wake.monitor_name || 'monitor',
       });
     },
     openChat: showMonitorChat,
-    onInputs: (items) => {
-      const waiting = new Set(items.map(item => item.id));
-      const withdraw = (prev) => (prev?.remote && !waiting.has(prev.id) ? null : prev);
-      setConfirmRequest(withdraw);
-      setAskRequest(withdraw);
-      setPlanRequest(withdraw);
-      presentedRemoteInputsRef.current = new Set([...presentedRemoteInputsRef.current].filter(id => waiting.has(id)));
-      for (const item of items) {
-        if (presentedRemoteInputsRef.current.has(item.id)) continue;
-        if (item.project !== activeProject?.name || item.chat_id !== activeChatIdRef.current) continue;
-        presentRemoteInput(item);
+    onEvents: (events, unseen) => {
+      setMonitorUnseenEvents(unseen);
+      const newest = events.reduce((max, event) => Math.max(max, event.id), 0);
+      const known = lastMonitorEventRef.current;
+      lastMonitorEventRef.current = Math.max(known, newest);
+      // The first poll only learns where the list stands (null until then;
+      // an empty list stands at 0, so its first event is news).
+      if (known === null) return;
+      const mine = events.filter(event => event.id > known && event.project === activeProject?.name);
+      if (!mine.length) return;
+      if (mine.some(event => !chats.some(chat => chat.id === event.chat_id))) refreshChatList();
+      // The user opened the chat while the monitor was writing to it.
+      if (mine.some(event => event.chat_id === activeChatIdRef.current)) {
+        reloadChatOnScreen(activeChatIdRef.current);
       }
     },
   });
@@ -4962,7 +4972,7 @@ export default function App() {
           onEditModels={() => setShowEditModelsModal(true)}
           onOpenHardware={() => setIsHardwareModalOpen(true)}
           onOpenMonitors={() => setIsMonitorsModalOpen(true)}
-          monitorsPendingCount={monitorInputs.length}
+          monitorsUnseenEvents={monitorUnseenEvents}
           onOpenAssetStore={() => setIsAssetStoreOpen(true)}
           onOpenCloudSync={() => setIsCloudSyncOpen(true)}
           cloudEnabled={!!cloudStatus?.settings?.enabled}
@@ -5518,9 +5528,10 @@ export default function App() {
           onClose={() => setIsMonitorsModalOpen(false)}
           activeProject={activeProject}
           activeChatId={activeChatId}
-          onAnswerInput={(item) => {
-            if (presentRemoteInput(item)) setIsMonitorsModalOpen(false);
-            else addLog('info', t('app.monitorAnswerBusy', 'Answer the question already open first.'));
+          onEventsSeen={() => setMonitorUnseenEvents(0)}
+          onOpenChat={(event) => {
+            setIsMonitorsModalOpen(false);
+            showMonitorChat({ project: event.project, chat_id: event.chat_id });
           }}
         />
       )}

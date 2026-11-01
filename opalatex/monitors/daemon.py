@@ -10,11 +10,11 @@ One per user (``service.DaemonLock``). Every ``POLL_SECONDS`` it
    here, in a child process (``opalatex monitors run-wake <id>``), never in
    this process, because a turn binds the project, store and orchestrator in
    module globals and the daemon serves every project;
-4. reconciles: a claimed wake-up or a pending question whose process died is
-   closed, so nothing waits on a process that no longer exists.
+4. reconciles: a claimed wake-up whose process died is closed, so nothing waits
+   on a process that no longer exists.
 
 It exits on its own after ``IDLE_EXIT_SECONDS`` with nothing to do -- no active
-monitor, no wake-up, no question, no child, no recent notification whose
+monitor, no wake-up, no child, no recent notification whose
 click it should still be able to receive. Registering a monitor starts it
 again (``service.ensure_daemon_running``).
 """
@@ -132,8 +132,12 @@ class MonitorDaemon:
         running_chats = {chat for _proc, chat in self.children.values()}
         for wake in self.store.list_wakes((st.WAKE_PENDING,)):
             chat = (wake["project"], wake["chat_id"])
-            if self._window_has(wake, gui_hosts):
-                continue  # the window runs it, visibly
+            # A wake-up of the origin chat is left to a window that has its
+            # project open, which runs it visibly. A new chat's always runs
+            # here: the window has one turn at a time, and a monitor working
+            # there would hold the chat the user is busy in.
+            if not wake.get("new_chat") and self._window_has(wake, gui_hosts):
+                continue
             if chat in running_chats or self.store.lease_holder(*chat):
                 continue  # one turn per chat; it waits for the current one
             if len(self.children) >= MAX_WAKE_CHILDREN:
@@ -173,10 +177,6 @@ class MonitorDaemon:
             pid = int(wake.get("claimed_pid") or 0)
             if pid and not pid_alive(pid):
                 self.store.finish_wake(wake["id"], st.WAKE_INTERRUPTED, "the process running the turn ended")
-        for item in self.store.list_inputs(st.INPUT_WAITING):
-            pid = int(item.get("holder_pid") or 0)
-            if pid and not pid_alive(pid):
-                self.store.close_input(item["id"])
 
     # ── Loop ────────────────────────────────────────────────────────────────
 
@@ -185,7 +185,6 @@ class MonitorDaemon:
             self.store.count_active()
             or self.children
             or self.store.list_wakes((st.WAKE_PENDING, st.WAKE_CLAIMED))
-            or self.store.list_inputs(st.INPUT_WAITING)
             or self.store.undelivered_notifications()
             or (self._last_notification and self.clock() - self._last_notification < CLICK_WINDOW_SECONDS)
         )

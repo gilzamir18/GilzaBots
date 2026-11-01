@@ -52,6 +52,13 @@ def is_terminal_surface() -> bool:
     return reply_surface() == REPLY_SURFACE_TERMINAL
 
 
+def has_window() -> bool:
+    """Whether a desktop window is attached to this run (its tools can work)."""
+    from .agent_stdin import REPLY_SURFACE_BACKGROUND, REPLY_SURFACE_TERMINAL, reply_surface
+
+    return reply_surface() not in (REPLY_SURFACE_TERMINAL, REPLY_SURFACE_BACKGROUND)
+
+
 def cli_only_command_names() -> frozenset[str]:
     """Every command name the desktop chat refuses, aliases included."""
     from .cli_commands import _registry
@@ -119,8 +126,12 @@ def strip_items(text: str, removed: frozenset[str] | set[str]) -> str:
 
 def body_for_surface(body: str) -> str:
     """The orchestrator body with the other front-end's affordances removed."""
-    if is_terminal_surface():
+    if not has_window():
         text = strip_items(body, GUI_ONLY_TOOLS)
+        if not is_terminal_surface():
+            # A background turn's reply is read in the desktop chat, where the
+            # terminal's commands do not exist either.
+            text = strip_items(text, cli_only_command_names())
         # The fallback body lists its tools as bare prose rather than a list, so
         # the subject rule above cannot see them.
         for name in GUI_ONLY_TOOLS:
@@ -131,6 +142,6 @@ def body_for_surface(body: str) -> str:
 
 def tools_for_surface(tools: list) -> list:
     """The tool list with the tools this front-end cannot serve removed."""
-    if not is_terminal_surface():
+    if has_window():
         return list(tools)
     return [tool for tool in tools if str(getattr(tool, "name", "")) not in GUI_ONLY_TOOLS]
