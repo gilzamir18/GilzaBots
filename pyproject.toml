@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "opalatex"
-version = "0.2.30"
+version = "0.2.31"
 description = "Autonomous coding agent with interactive planning and modular execution"
 readme = "README.md"
 requires-python = ">=3.10"
