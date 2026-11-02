@@ -660,6 +660,8 @@ def ensure_daemon_running(store=None, *, wait: float = 0.0) -> dict:
             break
         time.sleep(0.1)
     result["running"] = daemon_running() if wait else True
+    if wait and not result["running"] and not result["error"]:
+        result["error"] = f"The monitor daemon did not stay running. Check {log_path()}."
     return result
 
 

@@ -754,6 +754,12 @@ class TestService:
         assert result["started"] is True
         assert _isolated_monitors[-1][-2:] == ["monitors", "daemon"]
 
+    def test_ensure_reports_error_when_daemon_exits_before_wait_finishes(self, mstore, _isolated_monitors):
+        result = service.ensure_daemon_running(mstore, wait=0.05)
+        assert result["started"] is True
+        assert result["running"] is False
+        assert "did not stay running" in result["error"]
+
     def test_open_chat_uses_the_running_window_or_starts_one(self, mstore, monkeypatch, _isolated_monitors):
         saved = {}
         monkeypatch.setattr("opalatex.ui_settings.save_ui_settings", lambda data: saved.update(data))
