@@ -168,6 +168,7 @@ def reply_surface() -> str | None:
 # permission, plan approval, ask_question, an interactive terminal -- refuses
 # with `unattended_refusal` instead of opening a question outside the chat.
 _unattended_monitor: str | None = None
+_unattended_monitor_id: str | None = None
 
 
 class UnattendedTurnError(RuntimeError):
@@ -177,6 +178,11 @@ class UnattendedTurnError(RuntimeError):
 def unattended_turn() -> str | None:
     """The monitor whose wake-up is running, or None in an ordinary turn."""
     return _unattended_monitor
+
+
+def unattended_monitor_id() -> str | None:
+    """The id of the monitor whose wake-up is running, or None when unknown."""
+    return _unattended_monitor_id
 
 
 def unattended_refusal(what: str) -> str:
@@ -2413,19 +2419,23 @@ def _release_turn_lease(lease) -> None:
 async def handle_run(data: dict):
     """Run one agent turn, holding the chat's cross-process lease while it runs.
 
-    ``monitor_wake`` (the monitor's name) marks a turn a monitor started: it runs
-    unattended (`unattended_turn`), whichever front-end runs it.
+    ``monitor_wake`` (the monitor's name) and ``monitor_wake_id`` mark a turn a
+    monitor started: it runs unattended (`unattended_turn`), whichever front-end
+    runs it.
     """
-    global _unattended_monitor
+    global _unattended_monitor, _unattended_monitor_id
     lease = _take_turn_lease(data)
     if lease is False:
         return
     monitor = str(data.get("monitor_wake") or "").strip()
+    monitor_id = str(data.get("monitor_wake_id") or "").strip()
     _unattended_monitor = monitor or None
+    _unattended_monitor_id = monitor_id or None
     try:
         return await _handle_run(data)
     finally:
         _unattended_monitor = None
+        _unattended_monitor_id = None
         _release_turn_lease(lease)
 
 

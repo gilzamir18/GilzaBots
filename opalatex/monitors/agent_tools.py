@@ -164,6 +164,57 @@ async def register(spec: dict, *, run_probe: bool = True) -> tuple[dict, dict | 
     return monitor, observed, daemon
 
 
+def _active_waking_monitor(store: st.MonitorStore, project) -> dict | None:
+    """When this turn was woken by a monitor that is still active, return it.
+
+    A recurring monitor stays ``active`` after firing and schedules its next
+    check itself; a wake-up turn that registers another monitor to "keep it
+    going" creates duplicates on every cycle.
+    """
+    from opalatex.agent_stdin import unattended_monitor_id, unattended_turn
+
+    wake_name = unattended_turn()
+    if not wake_name:
+        return None
+    wake_id = unattended_monitor_id()
+    if wake_id:
+        monitor = store.get_monitor(wake_id)
+        if monitor is not None:
+            return monitor if monitor["status"] == st.STATUS_ACTIVE else None
+    project_name = getattr(project, "name", "") or ""
+    chat_id = getattr(project, "current_chat_id", "") or ""
+    if project_name and chat_id:
+        for wake in reversed(store.list_wakes((st.WAKE_CLAIMED,), project=project_name)):
+            if wake.get("chat_id") == chat_id and wake.get("monitor_id"):
+                monitor = store.get_monitor(wake["monitor_id"])
+                if monitor is not None:
+                    return monitor if monitor["status"] == st.STATUS_ACTIVE else None
+    wanted = wake_name.casefold()
+    for monitor in store.list_monitors((st.STATUS_ACTIVE,), project=project_name or None):
+        if monitor["name"].casefold() == wanted:
+            return monitor
+    return None
+
+
+def _find_duplicate_active(store: st.MonitorStore, spec: dict) -> dict | None:
+    """An already-active monitor in the same project with the same name, check, condition and target."""
+    wanted_name = spec["name"].casefold()
+    wanted_chat = spec["action"].get("chat")
+    for existing in store.list_monitors((st.STATUS_ACTIVE,), project=spec.get("project") or None):
+        if existing.get("project", "") != spec.get("project", ""):
+            continue
+        if existing["name"].casefold() != wanted_name:
+            continue
+        if existing["check"] != spec["check"] or existing["condition"] != spec["condition"]:
+            continue
+        if existing["action"].get("chat") != wanted_chat:
+            continue
+        if wanted_chat == WAKE_CHAT_ORIGIN and existing.get("chat_id") != spec.get("chat_id"):
+            continue
+        return existing
+    return None
+
+
 def describe(monitor: dict) -> str:
     check = monitor["check"]
     target = {
@@ -224,7 +275,10 @@ def build_monitor_tools():
             "with message as the notification text. It fires an OS notification each time.\n"
             "once: true fires a single time and ends the monitor; false keeps firing every time the condition "
             "holds. Leave it out for the default: once for wake_in='same_chat' (a task wait), recurring otherwise "
-            "(watches, and wake_in='new_chat', which opens a new chat at every firing). Follow what the user asked.\n"
+            "(watches, and wake_in='new_chat', which opens a new chat at every firing). Follow what the user asked. "
+            "A recurring monitor remains active and fires again on its own schedule -- never tell resume_prompt "
+            "to call register_monitor again, and never call register_monitor in a woken chat while the original "
+            "monitor continues.\n"
             "check_type: 'timer' (no check, just wake after first_check_seconds/interval), 'http' (GET url; "
             "json_path like 'USDBRL.bid' or regex extracts the value), 'command' (shell command in the project; "
             "value is its output), 'file' (path; watch='mtime' or 'content'), 'llm' (a model answers question "
@@ -275,6 +329,22 @@ def build_monitor_tools():
                 once=once, wake_in=wake_in, description=description, project=project,
                 sessions_db=getattr(project_store, "db_path", "") or "",
             )
+            store = _store()
+            waking = _active_waking_monitor(store, project)
+            if waking is not None:
+                return (
+                    f"register_monitor was not run: this turn was woken by monitor {waking['id']} "
+                    f"\"{waking['name']}\", which is recurring and remains active "
+                    f"(next check at {_when(waking.get('next_check_at'))}, every {waking['interval_seconds']} s). "
+                    "Do not re-register it; finish this turn's task and reply."
+                )
+            duplicate = _find_duplicate_active(store, spec)
+            if duplicate is not None:
+                return (
+                    f"register_monitor was not run: monitor {duplicate['id']} \"{duplicate['name']}\" is already active "
+                    f"(next check at {_when(duplicate.get('next_check_at'))}, every {duplicate['interval_seconds']} s). "
+                    "Cancel it with cancel_monitor first if you need to replace it."
+                )
             monitor, observed, daemon = await register(spec)
         except MonitorSpecError as exc:
             return f"register_monitor failed: {exc}"
@@ -378,7 +448,9 @@ MONITORS_PROMPT_BLOCK = (
     "chat, so settle the details with the user BEFORE registering and write a resume_prompt complete "
     "enough to act on without questions (what to look for, where, in what form to report it). The wake-up runs in this chat by default; wake_in='new_chat' "
     "opens a fresh chat for each wake-up instead, for recurring work that should not crowd this "
-    "conversation.\n"
+    "conversation. A recurring monitor (once=False or wake_in='new_chat') stays active and schedules "
+    "every cycle itself: never instruct resume_prompt to call register_monitor again, and in a woken "
+    "chat never re-register a monitor that is still active.\n"
     "When the user asks to be told about something later (a price, a page, a file, a condition), "
     "register a monitor with action='notify'; it shows an OS notification and keeps working while "
     "OpalaTex is closed. Read a value from a JSON API with json_path when one exists; use an llm "

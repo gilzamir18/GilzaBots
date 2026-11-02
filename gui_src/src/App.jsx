@@ -3924,6 +3924,7 @@ export default function App() {
           client_message_id: clientMessageId,
           attachments: attachmentsSnapshot,
           ...(options.monitorWake ? { monitor_wake: options.monitorWake } : {}),
+          ...(options.monitorWakeId ? { monitor_wake_id: options.monitorWakeId } : {}),
         }),
       });
       const runConflict = await readRunConflict(res);
@@ -4047,6 +4048,7 @@ export default function App() {
         chatIdOverride: wake.chat_id,
         skipUserMessageAppend: wake.chat_id !== activeChatIdRef.current,
         monitorWake: wake.monitor_name || 'monitor',
+        monitorWakeId: wake.monitor_id || '',
       });
     },
     openChat: showMonitorChat,

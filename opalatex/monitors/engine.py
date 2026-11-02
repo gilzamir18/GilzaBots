@@ -78,11 +78,15 @@ def create_wake_chat(monitor: dict) -> str:
 
 
 def wake_prompt(monitor: dict, event: str, value: Any, variables: dict, error: str = "",
-                new_chat: bool = False) -> str:
+                new_chat: bool = False, continues: bool | None = None) -> str:
     """The message the orchestrator receives when its monitor wakes the chat.
 
     Model-facing, so always English, like the rest of the system prompt.
     """
+    if continues is None:
+        max_checks = monitor.get("max_checks")
+        exhausted = bool(max_checks and int(variables.get("checks") or 0) >= int(max_checks))
+        continues = bool(event == EVENT_CONDITION_MET and monitor.get("repeat") and not exhausted)
     what = {
         EVENT_CONDITION_MET: "fired: its condition was met",
         EVENT_EXHAUSTED: f"used all {monitor.get('max_checks')} of its checks without its condition being met",
@@ -107,6 +111,24 @@ def wake_prompt(monitor: dict, event: str, value: Any, variables: dict, error: s
     instructions = (monitor.get("action") or {}).get("prompt", "")
     if instructions:
         lines.append(f"What you asked to be told to do when woken: {instructions}")
+    if continues:
+        lines.append(
+            f"Monitor status: \"{monitor['name']}\" ({monitor['id']}) is recurring and remains active "
+            f"(it checks every {monitor.get('interval_seconds')} s on its own). Do NOT call register_monitor "
+            "to re-create or renew this monitor, even if the instructions above ask to maintain recurrence -- "
+            "the original monitor continues running, and re-registering it creates duplicate monitors."
+        )
+        tail = "Do not call register_monitor to renew this monitor; end your turn once you have replied."
+    elif new_chat:
+        tail = (
+            f"The monitor \"{monitor['name']}\" ({monitor['id']}) was set to fire once and has now ended; "
+            "do not re-register it."
+        )
+    else:
+        tail = (
+            f"The monitor \"{monitor['name']}\" ({monitor['id']}) has ended. "
+            "To keep waiting, register a new monitor with register_monitor and end your turn."
+        )
     lines.append(
         "This message was written by the monitor, not typed by the user, and nobody is watching this "
         "turn. " + ("Do what the instructions above ask. " if new_chat else "Continue the task from where you stopped. ")
@@ -114,8 +136,7 @@ def wake_prompt(monitor: dict, event: str, value: Any, variables: dict, error: s
         "the user's approval are unavailable in this turn). Where the instructions leave a choice open, "
         "make the reasonable choice and say which one you made. Your reply in this chat is how the user "
         "receives the result; if something blocks the task, say in that reply what you need and end the "
-        "turn -- the user answers in this chat. To keep waiting, register a new monitor with "
-        "register_monitor and end your turn."
+        f"turn -- the user answers in this chat. {tail}"
     )
     return "\n".join(lines)
 
@@ -191,17 +212,23 @@ class MonitorEngine:
         detail = {"met": evaluation.met, "fired": evaluation.fire, **(evaluation.details or {})}
         self.store.add_event(monitor["id"], "check", display_value(value), detail)
 
+        max_checks = monitor.get("max_checks")
+        exhausted = bool(max_checks and checks >= int(max_checks))
         if evaluation.fire:
-            variables = self._variables(monitor, value, evaluation, checks)
-            self.fire(monitor, EVENT_CONDITION_MET, value, variables)
+            continues = bool(monitor.get("repeat") and not exhausted)
+            # Finalize status before queueing the wake-up so the turn it starts
+            # sees whether this monitor is still active or has ended.
             if not monitor.get("repeat"):
                 self.store.set_status(monitor["id"], st.STATUS_COMPLETED, "fired")
-                return
-        max_checks = monitor.get("max_checks")
-        if max_checks and checks >= int(max_checks):
+            elif exhausted:
+                refreshed = self.store.get_monitor(monitor["id"]) or monitor
+                self._end(refreshed, st.STATUS_EXPIRED, EVENT_EXHAUSTED, value, checks=checks, wake=False)
+            variables = self._variables(monitor, value, evaluation, checks)
+            self.fire(monitor, EVENT_CONDITION_MET, value, variables, continues=continues)
+            return
+        if exhausted:
             refreshed = self.store.get_monitor(monitor["id"]) or monitor
-            self._end(refreshed, st.STATUS_EXPIRED, EVENT_EXHAUSTED, value, checks=checks,
-                      wake=not evaluation.fire)
+            self._end(refreshed, st.STATUS_EXPIRED, EVENT_EXHAUSTED, value, checks=checks, wake=True)
 
     def _record_error(self, monitor: dict, error: str, next_check: float) -> None:
         failures = self.store.record_check_error(monitor["id"], error, next_check)
@@ -260,7 +287,8 @@ class MonitorEngine:
             variables["summary"] = value.get("summary", "")
         return variables
 
-    def fire(self, monitor: dict, event: str, value: Any, variables: dict) -> None:
+    def fire(self, monitor: dict, event: str, value: Any, variables: dict, *,
+             continues: bool | None = None) -> None:
         action = monitor.get("action") or {}
         kind = action.get("type")
         message = ""
@@ -277,10 +305,11 @@ class MonitorEngine:
                 chat_id=monitor.get("chat_id", ""),
             )
         if kind in RESUMING_ACTIONS:
-            self._enqueue_wake(monitor, event, value, variables)
+            self._enqueue_wake(monitor, event, value, variables, continues=continues)
         self.store.add_event(monitor["id"], "fired", message or display_value(value), {"event": event})
 
-    def _enqueue_wake(self, monitor: dict, event: str, value: Any, variables: dict, error: str = "") -> None:
+    def _enqueue_wake(self, monitor: dict, event: str, value: Any, variables: dict, error: str = "",
+                      *, continues: bool | None = None) -> None:
         new_chat = (monitor.get("action") or {}).get("chat") == WAKE_CHAT_NEW
         chat_id = monitor.get("chat_id", "")
         if new_chat:
@@ -304,7 +333,7 @@ class MonitorEngine:
                 project=monitor.get("project", ""), project_path=monitor.get("project_path", ""),
             )
             return
-        prompt = wake_prompt(monitor, event, value, variables, error, new_chat=new_chat)
+        prompt = wake_prompt(monitor, event, value, variables, error, new_chat=new_chat, continues=continues)
         display = _t(f"monitor_wake_display_{event}", name=monitor["name"])
         wake_id = self.store.enqueue_wake(monitor, prompt, display, chat_id=chat_id, new_chat=new_chat)
         self.store.add_event(monitor["id"], "wake_queued", display,

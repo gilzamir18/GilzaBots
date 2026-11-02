@@ -24,7 +24,7 @@ nor with a click on a GNOME notification** — see *Open items*.
 | Code updated while the daemon runs | The daemon restarts itself on the new code (checked every 30 s). |
 | A login service and several data folders | The service records the data folder it serves; another folder can neither replace nor remove it. |
 | A wake-up in a new chat with the window open | It runs in the background (the daemon), never in the window: the user's chat is not taken over and the window stays free for their own turns. A notification and a *Recent events* entry with *Open chat* announce it; the activity bar counts unseen events. *Superseded:* the window switched to the new chat. |
-| Firing once or every time | The user's choice, never overridden. Unset: a task wait (wakes its own chat) fires once; a watch and a new chat at every firing keep going. |
+| Firing once or every time | The user's choice, never overridden. Unset: a task wait (wakes its own chat) fires once; a watch and a new chat at every firing keep going. A wake-up whose monitor remains `active` is told so in `wake_prompt` and `register_monitor` refuses to re-register while the waking monitor continues (or when an identical active monitor already exists in the project). |
 | A watch that ends (checks or time used up) | A low-urgency notification; no chat is opened to report it. A task wait still wakes its chat with the reason. |
 | Which chat a wake-up runs in | Chosen per monitor: the chat it was registered from (default — continues a task with its context) or a new chat in the same project for every wake-up (recurring work that should not crowd the original conversation). A chat that no longer exists or cannot be created fails the wake-up with a notification; it is never redirected to another chat. |
 
@@ -54,7 +54,10 @@ background applications use.
 
 No new dependency: `gdbus` ships with GLib wherever GNOME runs, and the snap
 stages it (`libglib2.0-bin`). The daemon keeps one `gdbus monitor` for
-`ActionInvoked`; every call passes typed GVariant text.
+`ActionInvoked`; every call passes typed GVariant text (`uint32 0`, `@as []`,
+`<byte …>`, `int32 -1`), because under Snap confinement the `desktop` plug
+denies `Introspect` on `/org/freedesktop/Notifications` and `gdbus` parses
+untyped integer literals as `int32`.
 
 ## Open items
 

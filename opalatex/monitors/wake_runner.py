@@ -111,6 +111,7 @@ async def run_wake(wake_id: int, *, store: st.MonitorStore | None = None) -> int
             "chat_id": wake["chat_id"],
             "db": sessions.db_path,
             "monitor_wake": wake["monitor_name"] or "monitor",
+            "monitor_wake_id": wake["monitor_id"],
         })
         if collector.errors and not collector.response:
             error = collector.errors[-1]

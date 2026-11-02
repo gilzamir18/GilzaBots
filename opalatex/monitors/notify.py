@@ -131,7 +131,12 @@ class FreedesktopNotifier(Notifier):
         hints = f"{{'urgency': <byte {URGENCIES.get(urgency, 1)}>}}"
         argv = self._bus_args() + [
             "--method", "org.freedesktop.Notifications.Notify",
-            _gvariant_string(APP_NAME), "0", _gvariant_string(icon_path()),
+            # Every non-string argument must carry its explicit GVariant type
+            # so the signature is (susssasa{sv}i) even when D-Bus introspection
+            # is blocked (e.g. under Snap's desktop AppArmor plug, which denies
+            # Introspect on /org/freedesktop/Notifications and makes gdbus parse
+            # an untyped "0" as int32 instead of uint32).
+            _gvariant_string(APP_NAME), "uint32 0", _gvariant_string(icon_path()),
             _gvariant_string(title),
             # body-markup servers read the body as markup, so it is escaped.
             _gvariant_string(html.escape(body, quote=False)),

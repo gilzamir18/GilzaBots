@@ -576,6 +576,14 @@ class TestNotify:
         assert "'It\\'s <done>'" in argv
         assert "'a &amp; b\\nline'" in argv
         assert "['default', 'Open chat']" in argv
+        # Under Snap confinement, AppArmor denies org.freedesktop.DBus.Introspectable.Introspect
+        # on /org/freedesktop/Notifications, so gdbus parses each argument without introspection;
+        # an untyped "0" defaults to int32 ("i") instead of uint32 ("u") and fails with InvalidArgs.
+        method_idx = argv.index("org.freedesktop.Notifications.Notify")
+        notify_args = argv[method_idx + 1:]
+        assert len(notify_args) == 8
+        assert notify_args[1] == "uint32 0"
+        assert notify_args[7] == "int32 -1"
         # No positional argument may look like an option to gdbus.
         assert not any(arg.startswith("-") and not arg.startswith("--") for arg in argv[1:])
         opened = []
@@ -1061,6 +1069,118 @@ class TestUnattendedTurn:
         assert "nobody is watching this turn" in prompt and "do not ask questions" in prompt
         assert "with ask_question" not in prompt and "list today's AI news" in prompt
 
+    def test_wake_message_distinguishes_a_continuing_monitor_from_an_ended_one(self):
+        recurring = engine_mod.wake_prompt(
+            {"id": "mon_1", "name": "News", "repeat": True, "interval_seconds": 3600,
+             "action": {"prompt": "summarize news"}},
+            engine_mod.EVENT_CONDITION_MET, None, {"checks": 1}, new_chat=True,
+        )
+        assert "is recurring and remains active" in recurring
+        assert "Do NOT call register_monitor" in recurring
+        assert "To keep waiting, register a new monitor" not in recurring
+
+        one_shot_wait = engine_mod.wake_prompt(
+            {"id": "mon_2", "name": "Build", "repeat": False, "interval_seconds": 60,
+             "action": {"prompt": "check build"}},
+            engine_mod.EVENT_CONDITION_MET, None, {"checks": 1}, new_chat=False,
+        )
+        assert 'The monitor "Build" (mon_2) has ended.' in one_shot_wait
+        assert "To keep waiting, register a new monitor with register_monitor" in one_shot_wait
+
+        one_shot_new_chat = engine_mod.wake_prompt(
+            {"id": "mon_3", "name": "Once", "repeat": False, "interval_seconds": 60,
+             "action": {"prompt": "report once"}},
+            engine_mod.EVENT_CONDITION_MET, None, {"checks": 1}, new_chat=True,
+        )
+        assert "was set to fire once and has now ended; do not re-register it" in one_shot_new_chat
+        assert "To keep waiting, register a new monitor" not in one_shot_new_chat
+
+    def test_a_woken_turn_cannot_re_register_while_its_monitor_continues(self, session, mstore, monkeypatch):
+        from opalatex import agent_stdin
+
+        recurring = mstore.create_monitor(_wake_spec(
+            name="Notícias de IA",
+            action={"type": "resume_chat", "prompt": "summarize news", "chat": "new"},
+            repeat=True,
+        ))
+        wake_id = mstore.enqueue_wake(recurring, "p", "d", chat_id="chat-wake", new_chat=True)
+        mstore.claim_wake(wake_id, "daemon", os.getpid())
+        session.current_chat_id = "chat-wake"
+
+        async def try_register():
+            # Even if the woken agent tweaks the name, description or action type,
+            # the turn's waking monitor is still active and registration is refused.
+            return await _tools()["register_monitor"](
+                name="Notícias de IA (próximo ciclo)",
+                interval_seconds=11400,
+                resume_prompt="summarize news again",
+                wake_in="new_chat",
+            )
+
+        captured = {}
+
+        async def fake_body(_data):
+            captured["id"] = agent_stdin.unattended_monitor_id()
+            captured["result"] = await try_register()
+
+        monkeypatch.setattr(agent_stdin, "_handle_run", fake_body)
+        asyncio.run(agent_stdin.handle_run({
+            "project_name": "proj",
+            "chat_id": "chat-wake",
+            "monitor_wake": recurring["name"],
+            "monitor_wake_id": recurring["id"],
+        }))
+        assert captured["id"] == recurring["id"]
+        assert agent_stdin.unattended_monitor_id() is None
+        assert f"woken by monitor {recurring['id']}" in captured["result"]
+        assert "remains active" in captured["result"]
+        assert [m["id"] for m in mstore.list_monitors()] == [recurring["id"]]
+
+        # Fallback when monitor_wake_id was not passed: still resolves from the claimed wake / name.
+        asyncio.run(agent_stdin.handle_run({
+            "project_name": "proj",
+            "chat_id": "chat-wake",
+            "monitor_wake": recurring["name"],
+        }))
+        assert f"woken by monitor {recurring['id']}" in captured["result"]
+        assert [m["id"] for m in mstore.list_monitors()] == [recurring["id"]]
+
+    def test_a_woken_turn_can_register_a_followup_once_its_task_wait_ended(self, session, mstore, clock, monkeypatch):
+        from opalatex import agent_stdin
+
+        wait = mstore.create_monitor(_wake_spec(name="step 1", repeat=False))
+        clock.advance(120)
+        asyncio.run(FakeEngine(mstore, [None], clock).tick())
+        assert mstore.get_monitor(wait["id"])["status"] == st.STATUS_COMPLETED
+
+        async def fake_body(_data):
+            return await _tools()["register_monitor"](
+                name="step 2", interval_seconds=120, resume_prompt="finish deploy",
+            )
+
+        monkeypatch.setattr(agent_stdin, "_handle_run", fake_body)
+        result = asyncio.run(agent_stdin.handle_run({
+            "project_name": "proj",
+            "chat_id": "chat-1",
+            "monitor_wake": wait["name"],
+            "monitor_wake_id": wait["id"],
+        }))
+        assert result.startswith("Registered monitor mon_")
+        active = mstore.list_monitors((st.STATUS_ACTIVE,))
+        assert len(active) == 1 and active[0]["name"] == "step 2"
+
+    def test_duplicate_active_monitor_is_refused(self, session):
+        register = _tools()["register_monitor"]
+        first = asyncio.run(register(
+            name="Notícias de IA", interval_seconds=3600, resume_prompt="list news", wake_in="new_chat",
+        ))
+        assert first.startswith("Registered monitor mon_")
+        second = asyncio.run(register(
+            name="notícias de ia", interval_seconds=3600, resume_prompt="list news again", wake_in="new_chat",
+        ))
+        assert "already active" in second
+        assert len(st.MonitorStore().list_monitors((st.STATUS_ACTIVE,))) == 1
+
     def test_the_headless_runner_marks_its_turn(self, mstore, tmp_path, monkeypatch):
         from opalatex import agent_stdin
         from opalatex.project import ProjectStore
@@ -1079,7 +1199,8 @@ class TestUnattendedTurn:
 
         monkeypatch.setattr(agent_stdin, "handle_run", fake_run)
         asyncio.run(wake_runner.run_wake(wake_id, store=mstore))
-        assert captured["monitor_wake"] == "build" and captured["chat_id"] == "chat-1"
+        assert captured["monitor_wake"] == "build" and captured["monitor_wake_id"] == monitor["id"]
+        assert captured["chat_id"] == "chat-1"
         assert agent_stdin._input_transport is None
         wake = mstore.get_wake(wake_id)
         assert wake["status"] == st.WAKE_DONE and wake["result"] == "Three new **AI** stories today."
