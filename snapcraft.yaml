@@ -1,6 +1,6 @@
 name: opalatex
 title: OpalaTex
-version: "0.2.29"
+version: "0.2.30"
 summary: AI-assisted LaTeX editor and project IDE
 description: |
   OpalaTex is a project-centric, AI-assisted LaTeX editor with a local
