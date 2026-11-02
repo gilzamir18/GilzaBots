@@ -289,6 +289,81 @@ def _migrate_legacy_main_chat_rows(conn) -> int:
     return moved
 
 
+# Tables whose rows make up a project's conversation history, with the column
+# naming the project. The cloud export (`cloud/chats.py`) is built from exactly
+# these, so a change to any of them is a change to the export.
+_REVISION_TRACKED_TABLES = (
+    ("projects", "name"),
+    ("project_chats", "project"),
+    ("project_history", "project"),
+    ("project_activity", "project"),
+)
+
+
+def _install_history_revisions(conn) -> None:
+    """Keep a per-project counter that moves on every write to its history.
+
+    The cloud export used to be rebuilt and compared byte for byte on every sync
+    pass: 950k activity rows and a 309 MB document, rebuilt even when nothing had
+    changed, holding the interpreter for seconds. Comparing the counter with the
+    one recorded at the last export answers "did anything change?" without
+    reading the history at all.
+
+    The counter is kept by triggers rather than by `ProjectStore` methods so that
+    every writer moves it: the store's many write paths, the cloud merge (which
+    writes through its own connection), and an older build that opens the same
+    database. Every UPDATE counts, including columns the export does not carry; a
+    false "changed" only costs one rebuild, while a missed change would leave the
+    export stale. The trigger statements use only syntax that predates UPSERT, so
+    any SQLite build that reads this schema can run them.
+
+    ``project_export_marks`` records, per export file, the counter it was built
+    at and the file's identity on disk, so a file replaced by a download or
+    edited by hand is rebuilt even when the history did not move.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS project_revisions (
+            project  TEXT PRIMARY KEY,
+            revision INTEGER NOT NULL DEFAULT 0
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS project_export_marks (
+            project     TEXT NOT NULL,
+            export_path TEXT NOT NULL,
+            revision    INTEGER NOT NULL,
+            signature   TEXT NOT NULL,
+            PRIMARY KEY (project, export_path)
+        )
+        """
+    )
+
+    def bump(ref: str) -> str:
+        return (
+            f"INSERT OR IGNORE INTO project_revisions (project, revision) VALUES ({ref}, 0); "
+            f"UPDATE project_revisions SET revision = revision + 1 WHERE project = {ref};"
+        )
+
+    for table, column in _REVISION_TRACKED_TABLES:
+        conn.execute(
+            f"CREATE TRIGGER IF NOT EXISTS {table}_revision_insert AFTER INSERT ON {table} "
+            f"BEGIN {bump('NEW.' + column)} END"
+        )
+        conn.execute(
+            f"CREATE TRIGGER IF NOT EXISTS {table}_revision_delete AFTER DELETE ON {table} "
+            f"BEGIN {bump('OLD.' + column)} END"
+        )
+        # Both sides, since an update may move rows from one project to another
+        # (`ProjectStore.rename`).
+        conn.execute(
+            f"CREATE TRIGGER IF NOT EXISTS {table}_revision_update AFTER UPDATE ON {table} "
+            f"BEGIN {bump('OLD.' + column)} {bump('NEW.' + column)} END"
+        )
+
+
 def _init_schema(db_path: str) -> None:
     with _conn(db_path) as conn:
         conn.executescript("""
@@ -503,6 +578,8 @@ def _init_schema(db_path: str) -> None:
             ON project_activity(project, chat_id, id)
             """
         )
+
+        _install_history_revisions(conn)
 
         # Runs after the indexes exist, so the move honours them. Idempotent:
         # once the rows carry a real chat id there is nothing left to match.
@@ -1231,9 +1308,17 @@ class ProjectStore:
         content: str = "",
         agent: str = "",
         payload: dict | None = None,
+        timestamp: str | None = None,
     ) -> int:
+        """Store one activity row; *timestamp* defaults to now.
+
+        A caller that writes a row after the moment it describes passes that
+        moment: the reasoning of a turn is stored in segments flushed after
+        their last token arrived, and `thought_windows` pairs a row with the
+        assistant message by timestamp.
+        """
         _require_open_chat(project)
-        now = datetime.now(timezone.utc).isoformat()
+        now = str(timestamp) if timestamp else datetime.now(timezone.utc).isoformat()
         clean_payload = payload or {}
         with self._activity_conn() as conn:
             cursor = conn.execute(
@@ -1257,8 +1342,9 @@ class ProjectStore:
     def thought_windows(self, name: str, chat_id: str, history: list[dict]) -> list[dict]:
         """Which stored reasoning belongs to each assistant message, counted only.
 
-        Reasoning is written once per streamed token, so a long chat holds
-        hundreds of thousands of rows -- one measured chat carries 115,605, and
+        Reasoning used to be written once per streamed token (it is now stored
+        in segments, but older rows remain), so a long chat holds hundreds of
+        thousands of rows -- one measured chat carries 115,605, and
         sending them with the transcript cost 24 MB on every open for text that
         stays collapsed behind "AI Thoughts". This returns one row per assistant
         message: how many chunks it has and the id range they span, which is
@@ -1359,8 +1445,19 @@ class ProjectStore:
             # The same four-characters-a-token estimate the panel uses for text
             # that carries no counter of its own.
             cost = max(1, -(-len(text) // 4))
-            if budget and used + cost > budget and chunks:
-                omitted += cost
+            if budget and used + cost > budget:
+                # A row may hold a whole segment of reasoning, so the budget is
+                # met inside it: its most recent part is kept, and everything
+                # older is omitted, which keeps the returned text contiguous.
+                room = budget - used
+                if room > 0:
+                    piece = text[-room * 4:]
+                    piece_cost = max(1, -(-len(piece) // 4))
+                    chunks.append(piece)
+                    used += piece_cost
+                    omitted += cost - piece_cost
+                else:
+                    omitted += cost
                 continue
             used += cost
             chunks.append(text)

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Radar, Pause, Play, FlaskConical, Trash2, Plus, ChevronDown, ChevronRight, MessageSquare } from 'lucide-react';
 
@@ -13,6 +13,48 @@ const CONDITIONS_FOR_CHECK = {
 };
 const VALUE_CONDITIONS = ['equals', 'not_equals', 'contains', 'gt', 'ge', 'lt', 'le', 'exit_code'];
 const REFRESH_MS = 5000;
+
+// Long free text (an LLM check's question, a description) clamped to a few
+// lines; "show more" opens it in a bounded box that scrolls, so one monitor
+// cannot stretch its table row over the whole panel.
+function ClampedText({ text, lines = 3, expandedMaxHeight = 160 }) {
+  const { t } = useTranslation();
+  const ref = useRef(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || expanded) return undefined;
+    // An element with overflow:hidden keeps the scroll offset it had while
+    // expanded; without this the clamped view starts mid-text after a collapse.
+    el.scrollTop = 0;
+    const measure = () => setOverflows(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [text, expanded, lines]);
+
+  if (!text) return null;
+  const clamped = { display: '-webkit-box', WebkitLineClamp: lines, WebkitBoxOrient: 'vertical', overflow: 'hidden' };
+  const open = { maxHeight: expandedMaxHeight, overflowY: 'auto', paddingRight: 4 };
+  return (
+    <div>
+      <div ref={ref} title={expanded ? undefined : text}
+        style={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap', ...(expanded ? open : clamped) }}>
+        {text}
+      </div>
+      {(overflows || expanded) && (
+        <button type="button" onClick={() => setExpanded(v => !v)}
+          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: '11px', color: 'var(--vscode-textLink-foreground, var(--vscode-accent, #4daafc))' }}>
+          {expanded ? t('monitors.showLess') : t('monitors.showMore')}
+        </button>
+      )}
+    </div>
+  );
+}
 
 const formatTime = (epoch) => (epoch ? new Date(epoch * 1000).toLocaleString() : '—');
 
@@ -493,15 +535,15 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
                               <button onClick={() => toggleHistory(monitor.id)} style={{ ...buttonStyle, border: 'none', padding: 0, fontWeight: 600, fontSize: '12px' }} aria-expanded={isOpen}>
                                 {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />} {monitor.name}
                               </button>
-                              <div style={{ opacity: 0.7 }}>{monitor.project || '—'}{monitor.description ? ` · ${monitor.description}` : ''}</div>
+                              <div style={{ opacity: 0.7 }}><ClampedText text={`${monitor.project || '—'}${monitor.description ? ` · ${monitor.description}` : ''}`} /></div>
                             </td>
                             <td style={{ padding: '6px', whiteSpace: 'nowrap' }}>
                               {/* From the action, not the stored owner: a monitor that wakes a new chat at each firing is a watch. */}
                               {['resume_chat', 'notify_and_resume'].includes(monitor.action?.type) && monitor.action?.chat !== 'new'
                                 ? t('monitors.typeTaskWait') : t('monitors.typeWatch')}
                             </td>
-                            <td style={{ padding: '6px', maxWidth: 280 }}>
-                              <div style={{ overflowWrap: 'anywhere' }}>{trigger.target}</div>
+                            <td style={{ padding: '6px', minWidth: 200, maxWidth: 320 }}>
+                              <ClampedText text={trigger.target} />
                               <div style={{ opacity: 0.8 }}>{trigger.cond} · {trigger.every}{trigger.once ? ` · ${t('monitors.firesOnce')}` : ''}</div>
                               {trigger.wakes && <div style={{ opacity: 0.8 }}>→ {trigger.wakes}</div>}
                             </td>
@@ -510,7 +552,7 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
                               <div style={{ opacity: 0.8 }}>{t('monitors.lastCheck')}: {formatTime(monitor.last_check_at)}</div>
                               {monitor.status === 'active' && <div style={{ opacity: 0.8 }}>{t('monitors.nextCheck')}: {formatTime(monitor.next_check_at)}</div>}
                               {monitor.has_value && shortValue(monitor.last_value) && <div style={{ overflowWrap: 'anywhere' }}>{t('monitors.lastValue')}: {shortValue(monitor.last_value).slice(0, 120)}</div>}
-                              {monitor.last_error && <div style={{ color: 'var(--vscode-fg-danger)', overflowWrap: 'anywhere' }}>{monitor.last_error}</div>}
+                              {monitor.last_error && <div style={{ color: 'var(--vscode-fg-danger)' }}><ClampedText text={monitor.last_error} /></div>}
                             </td>
                             <td style={{ padding: '6px', whiteSpace: 'nowrap' }}>
                               <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
@@ -530,8 +572,14 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
                               {result && (
                                 <div style={{ marginTop: '4px', whiteSpace: 'normal', maxWidth: 240 }}>
                                   {result.pending ? t('monitors.testing')
-                                    : result.ok ? t('monitors.testResult', { value: result.value, met: result.met ? t('common.yes', 'yes') : t('common.no', 'no'), fire: result.would_fire ? t('common.yes', 'yes') : t('common.no', 'no') })
-                                      : <span style={{ color: 'var(--vscode-fg-danger)' }}>{result.error}</span>}
+                                    : result.ok ? (
+                                      <>
+                                        {/* The value can be a whole LLM answer: clamp it, keep the verdict visible. */}
+                                        <ClampedText text={t('monitors.testValue', { value: result.value })} />
+                                        <div style={{ opacity: 0.8 }}>{t('monitors.testVerdict', { met: result.met ? t('common.yes', 'yes') : t('common.no', 'no'), fire: result.would_fire ? t('common.yes', 'yes') : t('common.no', 'no') })}</div>
+                                      </>
+                                    )
+                                      : <div style={{ color: 'var(--vscode-fg-danger)' }}><ClampedText text={result.error} /></div>}
                                 </div>
                               )}
                             </td>

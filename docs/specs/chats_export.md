@@ -87,8 +87,11 @@ also what keeps a row folded into the export from appearing twice on the phone.
 - A reader that meets `version` > 1 MUST leave the file alone and say so.
 - A message with a non-empty `deleted_at` or `superseded_by` is not part of the
   visible conversation.
-- Reasoning is persisted token by token as `thought` rows; a row whose payload
-  has `"auxiliary": true` is a status line. A `thought` belongs to the first
+- Reasoning is persisted as `thought` rows. A row holds a single token (rows
+  written before segments existed) or a segment of consecutive reasoning of one
+  agent (up to about 2,000 characters); a reader concatenates a message's rows in
+  order and MUST NOT assume either size. A row whose payload has
+  `"auxiliary": true` is a status line. A `thought` belongs to the first
   assistant message whose timestamp is not earlier than its own, and leftovers to
   the last assistant message (`ProjectStore.thought_windows`).
 

@@ -114,7 +114,7 @@ def test_print_event_persists_thinking_and_stream_activity(monkeypatch):
         current_chat_id = "main"
 
     class FakeStore:
-        def append_activity(self, project, event, content="", agent="", payload=None):
+        def append_activity(self, project, event, content="", agent="", payload=None, timestamp=None):
             saved.append((project.name, event, content, agent, payload or {}))
             return len(saved)
 
@@ -590,7 +590,7 @@ async def test_handle_run_does_not_promote_worker_message_without_orchestrator_r
         def append_message(self, _project, role, content, attachments=None):
             saved_messages.append((role, content))
 
-        def append_activity(self, _project, event, content="", agent="", payload=None):
+        def append_activity(self, _project, event, content="", agent="", payload=None, timestamp=None):
             saved_activity.append((event, content))
 
         def save(self, _project):
@@ -662,7 +662,7 @@ async def test_handle_run_reports_error_when_orchestrator_never_sends_message(mo
         def append_message(self, _project, role, content, attachments=None):
             saved_messages.append((role, content))
 
-        def append_activity(self, _project, event, content="", agent="", payload=None):
+        def append_activity(self, _project, event, content="", agent="", payload=None, timestamp=None):
             saved_activity.append((event, content))
 
         def save(self, _project):
@@ -801,7 +801,7 @@ async def test_handle_run_persists_visible_response_without_thought_snapshot(mon
         def append_message(self, _project, role, content, attachments=None):
             saved_messages.append((role, content))
 
-        def append_activity(self, _project, event, content="", agent="", payload=None):
+        def append_activity(self, _project, event, content="", agent="", payload=None, timestamp=None):
             saved_activity.append((event, content))
 
         def save(self, _project):
@@ -861,7 +861,7 @@ async def test_handle_run_does_not_persist_auxiliary_thought_events_in_chat_hist
         def append_message(self, _project, role, content, attachments=None):
             saved_messages.append((role, content))
 
-        def append_activity(self, _project, event, content="", agent="", payload=None):
+        def append_activity(self, _project, event, content="", agent="", payload=None, timestamp=None):
             saved_activity.append((event, content))
 
         def save(self, _project):
@@ -931,7 +931,7 @@ async def test_handle_run_checkpoints_direct_file_writes(monkeypatch, tmp_path):
         def append_message(self, _project, role, content, attachments=None):
             saved_messages.append((role, content))
 
-        def append_activity(self, _project, event, content="", agent="", payload=None):
+        def append_activity(self, _project, event, content="", agent="", payload=None, timestamp=None):
             saved_activity.append((event, content))
 
         def save(self, _project):
@@ -1015,7 +1015,7 @@ async def test_handle_run_removes_turn_checkpoints_without_file_changes(monkeypa
         def append_message(self, _project, role, content, attachments=None):
             saved_messages.append((role, content))
 
-        def append_activity(self, _project, event, content="", agent="", payload=None):
+        def append_activity(self, _project, event, content="", agent="", payload=None, timestamp=None):
             saved_activity.append((event, content))
 
         def save(self, _project):
@@ -1082,7 +1082,7 @@ async def test_handle_run_finalizes_checkpoint_when_agent_errors(monkeypatch, tm
         def append_message(self, _project, role, content, attachments=None):
             saved_messages.append((role, content))
 
-        def append_activity(self, _project, event, content="", agent="", payload=None):
+        def append_activity(self, _project, event, content="", agent="", payload=None, timestamp=None):
             saved_activity.append((event, content))
 
         def save(self, _project):
@@ -1179,7 +1179,7 @@ async def test_handle_run_finalizes_checkpoint_when_cancelled(monkeypatch, tmp_p
         def append_message(self, _project, role, content, attachments=None, **_kwargs):
             return 1
 
-        def append_activity(self, _project, event, content="", agent="", payload=None):
+        def append_activity(self, _project, event, content="", agent="", payload=None, timestamp=None):
             pass
 
         def save(self, _project):
@@ -1618,7 +1618,7 @@ async def test_thinking_panel_follows_the_resolved_capability_not_a_project_sett
         def append_message(self, _project, role, content, attachments=None):
             pass
 
-        def append_activity(self, _project, event, content="", agent="", payload=None):
+        def append_activity(self, _project, event, content="", agent="", payload=None, timestamp=None):
             pass
 
         def save(self, _project):

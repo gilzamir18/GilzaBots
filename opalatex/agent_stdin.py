@@ -7,6 +7,8 @@ import os
 import time
 import io
 import re
+import threading
+from datetime import datetime, timezone
 
 # ── Force UTF-8 on all I/O streams (critical for PyInstaller --windowed) ─────
 os.environ["PYTHONUTF8"] = "1"
@@ -1365,6 +1367,77 @@ def _record_interrupted_agent_turn(agent_type: str) -> None:
     _persist_unfinished_turn(agent_type, INTERRUPTED_AGENT_HISTORY_MARKER)
 
 
+# Reasoning streams one token at a time, and storing one row per token is what
+# grew one project to 872k `thought` rows averaging three characters: a 454 MB
+# database and a 309 MB cloud export, rebuilt on every sync pass. A segment
+# collects consecutive reasoning of one agent and is stored as a single row
+# once it reaches either bound, before any other activity is stored, before
+# the turn's answer is saved, and when the turn ends. The live stream is not
+# affected: every chunk is still published as it arrives. A crash loses at
+# most the segment not yet stored.
+THOUGHT_SEGMENT_MAX_CHARS = 2000
+THOUGHT_SEGMENT_MAX_SECONDS = 2.0
+
+_THOUGHT_SEGMENTS: dict[tuple, dict] = {}
+# Workers (`run_skill`) publish reasoning from their own threads.
+_THOUGHT_SEGMENTS_LOCK = threading.Lock()
+
+
+def _store_thought_segment(segment: dict) -> None:
+    text = "".join(segment["parts"])
+    if not text.strip():
+        return
+    try:
+        segment["store"].append_activity(
+            segment["project"],
+            "thought",
+            content=text,
+            agent=segment["agent"],
+            payload=segment["payload"],
+            timestamp=segment["timestamp"],
+        )
+    except Exception:
+        pass
+
+
+def flush_thought_segments() -> None:
+    """Store every pending reasoning segment, in the order they were opened."""
+    with _THOUGHT_SEGMENTS_LOCK:
+        pending = list(_THOUGHT_SEGMENTS.values())
+        _THOUGHT_SEGMENTS.clear()
+        for segment in pending:
+            _store_thought_segment(segment)
+
+
+def _buffer_thought(store, project, content: str, agent: str, payload: dict) -> None:
+    key = (id(store), getattr(project, "name", ""), getattr(project, "current_chat_id", ""), agent)
+    now = time.monotonic()
+    with _THOUGHT_SEGMENTS_LOCK:
+        segment = _THOUGHT_SEGMENTS.get(key)
+        if segment is None:
+            segment = {
+                "store": store,
+                "project": project,
+                "agent": agent,
+                "parts": [],
+                "chars": 0,
+                "opened": now,
+            }
+            _THOUGHT_SEGMENTS[key] = segment
+        segment["parts"].append(content)
+        segment["chars"] += len(content)
+        # The newest chunk's payload describes the segment's end, so the running
+        # `thought_tokens` it carries is the turn's count up to the last token.
+        segment["payload"] = payload
+        segment["timestamp"] = datetime.now(timezone.utc).isoformat()
+        if (
+            segment["chars"] >= THOUGHT_SEGMENT_MAX_CHARS
+            or now - segment["opened"] >= THOUGHT_SEGMENT_MAX_SECONDS
+        ):
+            del _THOUGHT_SEGMENTS[key]
+            _store_thought_segment(segment)
+
+
 def _persist_activity_event(event: str, data: dict) -> None:
     """Persist panel diagnostic events outside chat message history."""
     if event not in _PERSISTED_ACTIVITY_EVENTS:
@@ -1374,6 +1447,17 @@ def _persist_activity_event(event: str, data: dict) -> None:
     if not store or not project:
         return
     content = data.get("content", data.get("message", ""))
+    # "trace" is a developer-only stack trace: it stays on the live event
+    # stream but is not persisted, so it can never resurface in a panel.
+    payload = {k: v for k, v in data.items() if k not in {"content", "trace"}}
+    if event == "thought" and not payload.get("auxiliary"):
+        # Whitespace is part of the reasoning (line breaks arrive as tokens of
+        # their own); only a segment with nothing but whitespace is dropped.
+        if str(content or ""):
+            _buffer_thought(store, project, str(content), str(data.get("agent") or ""), payload)
+        return
+    # Everything else is stored as it happens, after the reasoning before it.
+    flush_thought_segments()
     if not str(content or "").strip():
         return
     try:
@@ -1382,9 +1466,7 @@ def _persist_activity_event(event: str, data: dict) -> None:
             event,
             content=str(content),
             agent=str(data.get("agent") or ""),
-            # "trace" is a developer-only stack trace: it stays on the live event
-            # stream but is not persisted, so it can never resurface in a panel.
-            payload={k: v for k, v in data.items() if k not in {"content", "trace"}},
+            payload=payload,
         )
     except Exception:
         pass
@@ -1410,6 +1492,10 @@ def _provider_wait_payload(wait, agent: str) -> dict:
 
 def print_event(event: str, data: dict):
     global _LAST_INTERMEDIATE_AGENT_RESPONSE
+    if event != "thought":
+        # Any other event ends the reasoning before it (a tool call, a provider
+        # wait, a step), so a long tool run never leaves it unstored.
+        flush_thought_segments()
     if event == "agent_response" and data.get("intermediate"):
         response = str(data.get("response") or "").strip()
         if response:
@@ -3065,6 +3151,8 @@ async def _handle_run(data: dict):
 
             # Save assistant response and achievements
             if agent_type in ("orchestrator", "chat_orchestrator") and current_store and current_project:
+                # The reasoning that led to the answer is stored before it.
+                flush_thought_segments()
                 if tools_mod.TURN_ACHIEVEMENTS:
                     current_store.append_activity(
                         current_project,
@@ -3172,6 +3260,9 @@ async def _handle_run(data: dict):
                     "severity": "error",
                     "message": _("checkpoint_finalize_failed"),
                 })
+        # Reasoning still in a segment belongs to this turn, including one that
+        # was interrupted: "Continue" rebuilds the turn from what was stored.
+        flush_thought_segments()
         # The activity connection is kept open for the whole turn because it is
         # written once per streamed token; outside a turn there is nothing to
         # gain from holding the database file open, so release it here.

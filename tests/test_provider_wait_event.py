@@ -57,7 +57,7 @@ async def test_a_turn_binds_the_wait_callback_and_emits_the_event(monkeypatch, t
         def append_message(self, _project, role, content, attachments=None):
             pass
 
-        def append_activity(self, _project, event, content="", agent="", payload=None):
+        def append_activity(self, _project, event, content="", agent="", payload=None, timestamp=None):
             pass
 
         def save(self, _project):

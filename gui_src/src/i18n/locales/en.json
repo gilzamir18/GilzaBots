@@ -1770,7 +1770,8 @@
     "test": "Test",
     "testHint": "Check now and show what would happen, changing nothing",
     "testing": "Checking…",
-    "testResult": "Value: {{value}} · condition holds: {{met}} · would fire: {{fire}}",
+    "testValue": "Value: {{value}}",
+    "testVerdict": "condition holds: {{met}} · would fire: {{fire}}",
     "cancel": "Cancel",
     "delete": "Remove",
     "confirmCancel": "Confirm cancel",
@@ -1871,6 +1872,8 @@
     "eventNewChat": "new chat",
     "openChat": "Open chat",
     "firesOnce": "fires once",
+    "showMore": "show more",
+    "showLess": "show less",
     "clearEvents": "Clear",
     "clearEventsHint": "Remove the recent events from this list (the chats they opened are kept)"
   },

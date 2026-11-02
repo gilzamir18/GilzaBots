@@ -244,39 +244,95 @@ def export_path(project_path: str) -> str:
     return os.path.join(os.path.abspath(project_path), *CHATS_EXPORT_REL_PATH.split("/"))
 
 
+# Characters handed to the file per write while the export is serialized.
+_EXPORT_WRITE_CHARS = 1 << 16
+
+
+def _serialized_chunks(payload: dict[str, Any]):
+    """The export's JSON text, in pieces of about `_EXPORT_WRITE_CHARS`.
+
+    The text is exactly what ``json.dumps(payload, indent=2, ensure_ascii=False,
+    sort_keys=True)`` returns. It is produced incrementally because a single
+    ``dumps`` call holds the interpreter until it returns: since Python 3.14 the
+    C encoder also handles ``indent``, and on a 309 MB export it froze every
+    thread of the app — the HTTP server, the terminal, the window — for about
+    four seconds per sync pass. ``iterencode`` (not one-shot) runs the Python
+    encoder, which lets other threads run between its pieces.
+    """
+    encoder = json.JSONEncoder(indent=2, ensure_ascii=False, sort_keys=True)
+    pending: list[str] = []
+    size = 0
+    for piece in encoder.iterencode(payload):
+        pending.append(piece)
+        size += len(piece)
+        if size >= _EXPORT_WRITE_CHARS:
+            yield "".join(pending)
+            pending.clear()
+            size = 0
+    if pending:
+        yield "".join(pending)
+
+
 def write_export(project_path: str, payload: dict[str, Any]) -> bool:
     """Write the export, returning True only when the bytes actually changed.
 
     Rewriting an identical file would bump its mtime, and the scanner would then
     re-hash and re-upload a document that says exactly what the remote already
     holds — on every single sync pass.
+
+    The new text is compared with the current file piece by piece while it is
+    written to a temporary file, so neither document is ever held whole in
+    memory; when they turn out identical the temporary file is discarded and the
+    current one is left untouched.
     """
     target = export_path(project_path)
-    serialized = json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True)
-    try:
-        with open(target, "r", encoding="utf-8") as handle:
-            if handle.read() == serialized:
-                return False
-    except (FileNotFoundError, OSError):
-        pass
-
     directory = os.path.dirname(target)
     os.makedirs(directory, exist_ok=True)
+    try:
+        current = open(target, "r", encoding="utf-8")
+    except OSError:
+        current = None
+    identical = current is not None
     handle = tempfile.NamedTemporaryFile(
         "w", encoding="utf-8", dir=directory, prefix=".chats-", suffix=".tmp", delete=False
     )
     try:
-        with handle:
-            handle.write(serialized)
-            handle.flush()
-            os.fsync(handle.fileno())
-        replace_file(handle.name, target)
+        try:
+            with handle:
+                for chunk in _serialized_chunks(payload):
+                    if identical:
+                        try:
+                            identical = current.read(len(chunk)) == chunk
+                        except (OSError, UnicodeDecodeError):
+                            identical = False
+                    handle.write(chunk)
+                if identical:
+                    try:
+                        identical = current.read(1) == ""
+                    except (OSError, UnicodeDecodeError):
+                        identical = False
+                if not identical:
+                    handle.flush()
+                    os.fsync(handle.fileno())
+        finally:
+            if current is not None:
+                current.close()
+        if not identical:
+            replace_file(handle.name, target)
     except BaseException:
         try:
             discard_file(handle.name)
         except OSError:
             pass
         raise
+    if identical:
+        # Same handling as a failed write above: a temp file that cannot be
+        # removed stays behind, and its name pattern is excluded from the scan.
+        try:
+            discard_file(handle.name)
+        except OSError:
+            pass
+        return False
     return True
 
 
@@ -579,9 +635,90 @@ def _merge_settings(
 
 # ─── Convenience wrappers used by the sync service ────────────────────────────
 
+def _file_signature(path: str) -> Optional[str]:
+    """Identity of the file on disk, or None when there is none.
+
+    A download that replaces the export, or an edit by hand, changes its inode,
+    size or modification time even when the history in the database did not
+    move. The format version is part of it, so a build that writes another
+    format never trusts a mark left by this one.
+    """
+    try:
+        info = os.stat(path)
+    except OSError:
+        return None
+    return f"v{EXPORT_VERSION}:{info.st_size}:{info.st_mtime_ns}:{info.st_ino}"
+
+
+def history_revision(project_name: str, db_path: Optional[str] = None) -> Optional[int]:
+    """The project's history counter (`project._install_history_revisions`).
+
+    None when the database does not keep one, which only happens before
+    `ProjectStore` has initialized it; the export is then always rebuilt.
+    """
+    path = db_path or _default_db_path()
+    if not os.path.isfile(path):
+        return None
+    with _connect(path) as conn:
+        try:
+            row = conn.execute(
+                "SELECT revision FROM project_revisions WHERE project = ?", (project_name,)
+            ).fetchone()
+        except sqlite3.OperationalError:
+            return None
+    return int(row["revision"]) if row is not None else 0
+
+
+def _export_mark(conn: sqlite3.Connection, project_name: str, target: str) -> Optional[tuple[int, str]]:
+    try:
+        row = conn.execute(
+            "SELECT revision, signature FROM project_export_marks WHERE project = ? AND export_path = ?",
+            (project_name, target),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return None
+    return (int(row["revision"]), str(row["signature"])) if row is not None else None
+
+
+def _record_export_mark(db_path: str, project_name: str, target: str, revision: int) -> None:
+    signature = _file_signature(target)
+    with _connect(db_path) as conn:
+        if signature is None:
+            conn.execute(
+                "DELETE FROM project_export_marks WHERE project = ? AND export_path = ?",
+                (project_name, target),
+            )
+        else:
+            conn.execute(
+                "INSERT OR REPLACE INTO project_export_marks (project, export_path, revision, signature) "
+                "VALUES (?, ?, ?, ?)",
+                (project_name, target, revision, signature),
+            )
+        conn.commit()
+
+
 def refresh_export(project_name: str, project_path: str, db_path: Optional[str] = None) -> bool:
-    """Regenerate the on-disk export. True when the file changed."""
-    return write_export(project_path, export_project(project_name, db_path))
+    """Regenerate the on-disk export. True when the file changed.
+
+    Skipped outright when the history has not moved since the file on disk was
+    built from it: rebuilding a large export only to find it byte-identical cost
+    a measured 8.5 s of reading and 4.5 s of serialization per pass. The counter
+    is read *before* the rows, so a write landing during the export leaves the
+    mark behind the data and the next pass rebuilds — never the reverse.
+    """
+    path = db_path or _default_db_path()
+    target = export_path(project_path)
+    revision = history_revision(project_name, path)
+    if revision is not None:
+        with _connect(path) as conn:
+            mark = _export_mark(conn, project_name, target)
+        signature = _file_signature(target)
+        if mark is not None and signature is not None and mark == (revision, signature):
+            return False
+    changed = write_export(project_path, export_project(project_name, path))
+    if revision is not None:
+        _record_export_mark(path, project_name, target, revision)
+    return changed
 
 
 def apply_export(

@@ -1770,7 +1770,8 @@
     "test": "Testar",
     "testHint": "Verifica agora e mostra o que aconteceria, sem alterar nada",
     "testing": "Verificando…",
-    "testResult": "Valor: {{value}} · condição atendida: {{met}} · dispararia: {{fire}}",
+    "testValue": "Valor: {{value}}",
+    "testVerdict": "condição atendida: {{met}} · dispararia: {{fire}}",
     "cancel": "Cancelar",
     "delete": "Remover",
     "confirmCancel": "Confirmar cancelamento",
@@ -1871,6 +1872,8 @@
     "eventNewChat": "chat novo",
     "openChat": "Abrir chat",
     "firesOnce": "dispara uma vez",
+    "showMore": "mostrar mais",
+    "showLess": "mostrar menos",
     "clearEvents": "Limpar",
     "clearEventsHint": "Remove os eventos recentes desta lista (os chats que eles abriram são mantidos)"
   },
