@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import OpenRouterOAuthButton from './OpenRouterOAuthButton';
 
 /**
  * Provider connection fields (label/provider/API key/API base URL), shared by
@@ -22,6 +23,7 @@ export default function ProviderConnectionForm({
   editingConnection,
   existingConnections = [],
   onSubmit,
+  onOAuthConnected,
   actions,
   formStyle,
   asForm = true,
@@ -52,6 +54,19 @@ export default function ProviderConnectionForm({
     setApiBase('');
     setError('');
   };
+
+  const handleOAuthSuccess = (result) => {
+    const conn = result?.connection;
+    if (conn) {
+      setLabel(conn.label || 'OpenRouter');
+      setProvider(conn.provider || 'openrouter');
+      setApiKey(conn.api_key || '');
+      setApiBase(conn.api_base || 'https://openrouter.ai/api/v1');
+    }
+    onOAuthConnected?.(result);
+  };
+
+  const showOpenRouterOAuth = !provider.trim() || provider.trim().toLowerCase() === 'openrouter';
 
   const handleSubmit = (e) => {
     e?.preventDefault?.();
@@ -91,6 +106,32 @@ export default function ProviderConnectionForm({
       {error && (
         <div style={{ color: 'var(--vscode-errorForeground)', fontSize: '12px', padding: '8px', background: 'rgba(244,135,113,0.1)', borderRadius: '4px' }}>
           {error}
+        </div>
+      )}
+
+      {showOpenRouterOAuth && (
+        <div
+          style={{
+            padding: '10px 12px',
+            border: '1px solid var(--vscode-widget-border)',
+            borderRadius: '6px',
+            background: 'var(--vscode-editor-inactiveSelectionBackground)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}
+        >
+          <div style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground)' }}>
+            {t(
+              'openRouterOAuth.formHint',
+              'Using OpenRouter? Sign in with your browser to create a key and load the default free model (openrouter/free) automatically.'
+            )}
+          </div>
+          <OpenRouterOAuthButton
+            label={label.trim()}
+            connectionId={editingConnection?.id || ''}
+            onSuccess={handleOAuthSuccess}
+          />
         </div>
       )}
 

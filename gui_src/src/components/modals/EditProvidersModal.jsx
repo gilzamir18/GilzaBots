@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Search, Plus, Trash2, Edit2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useCustomDialog } from './CustomDialogProvider';
+import OpenRouterOAuthButton from './OpenRouterOAuthButton';
 
 export default function EditProvidersModal({
   connections,
@@ -47,8 +48,8 @@ export default function EditProvidersModal({
 
         <div className="vscode-modal-content" style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, minHeight: 0 }}>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ position: 'relative', flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: '180px' }}>
               <Search size={14} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--vscode-descriptionForeground)' }} />
               <input
                 type="text"
@@ -63,6 +64,8 @@ export default function EditProvidersModal({
               <Plus size={14} /> {t('editProvidersModal.addConnection')}
             </button>
           </div>
+
+          <OpenRouterOAuthButton />
 
           <div style={{ overflowY: 'auto', flex: 1, border: '1px solid var(--vscode-widget-border)', borderRadius: '4px' }}>
             {filteredConnections.length === 0 ? (

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Search, Plus, Trash2, Edit2, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useCustomDialog } from './CustomDialogProvider';
+import OpenRouterOAuthButton from './OpenRouterOAuthButton';
 
 export default function EditModelsModal({
   globalModels,
@@ -61,8 +62,8 @@ export default function EditModelsModal({
         
         <div className="vscode-modal-content" style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, minHeight: 0 }}>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ position: 'relative', flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: '180px' }}>
               <Search size={14} style={{ position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--vscode-descriptionForeground)' }} />
               <input
                 type="text"
@@ -90,6 +91,8 @@ export default function EditModelsModal({
               <Plus size={14} /> {t('editModelsModal.addProviderModel')}
             </button>
           </div>
+
+          <OpenRouterOAuthButton />
 
           {localOllamaResult && (
             <div role="status" style={{ padding: '8px', border: '1px solid var(--vscode-widget-border)', background: 'var(--vscode-input-background)', color: 'var(--vscode-descriptionForeground)', fontSize: '12px' }}>

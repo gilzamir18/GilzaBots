@@ -4793,10 +4793,26 @@ class AsyncHTTPServer:
                 self.send_response(writer, 500, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
 
         elif path == '/api/settings/providers' and method == 'POST':
-            from opalatex.models_store import add_or_update_connection
+            from opalatex.models_store import (
+                add_or_update_connection,
+                ensure_default_openrouter_free_model,
+                get_model,
+            )
+            from opalatex.context_discovery import ensure_provider_context_window
             try:
                 add_or_update_connection(data)
-                self.send_response(writer, 200, b'{"success":true}', "application/json")
+                added_model = None
+                if str(data.get("provider") or "").strip().lower() == "openrouter":
+                    added_model = ensure_default_openrouter_free_model(str(data.get("id") or ""))
+                    if added_model and added_model.get("id"):
+                        await asyncio.to_thread(ensure_provider_context_window, added_model["id"])
+                        added_model = get_model(added_model["id"]) or added_model
+                self.send_response(
+                    writer,
+                    200,
+                    json.dumps({"success": True, "added_model": added_model}).encode('utf-8'),
+                    "application/json",
+                )
             except Exception as e:
                 self.send_response(writer, 500, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
 
@@ -4809,6 +4825,58 @@ class AsyncHTTPServer:
                     return
                 success = delete_connection(connection_id)
                 self.send_response(writer, 200, json.dumps({"success": success}).encode('utf-8'), "application/json")
+            except Exception as e:
+                self.send_response(writer, 500, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
+
+        elif path == '/api/settings/providers/openrouter/oauth' and method == 'POST':
+            from opalatex.cloud.base import CloudError
+            from opalatex.openrouter_oauth import begin_openrouter_authorization
+            try:
+                challenge = begin_openrouter_authorization(
+                    label=str(data.get("label") or ""),
+                    connection_id=str(data.get("connection_id") or data.get("id") or ""),
+                )
+                self.send_response(writer, 200, json.dumps({
+                    "authorization_url": challenge.authorization_url,
+                    "session": challenge.session,
+                    "instructions": challenge.instructions,
+                }).encode('utf-8'), "application/json")
+            except CloudError as e:
+                self.send_response(writer, 400, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
+            except Exception as e:
+                self.send_response(writer, 500, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
+
+        elif path == '/api/settings/providers/openrouter/oauth/complete' and method == 'POST':
+            from opalatex.cloud.base import CloudError
+            from opalatex.openrouter_oauth import complete_openrouter_authorization
+            session = data.get("session") or {}
+            if not session:
+                self.send_response(writer, 400, b'{"error":"session is required"}', "application/json")
+                return
+            try:
+                result = await asyncio.get_running_loop().run_in_executor(
+                    None,
+                    lambda: complete_openrouter_authorization(
+                        session,
+                        connection_id=str(data.get("connection_id") or data.get("id") or ""),
+                        label=str(data.get("label") or ""),
+                        response=data.get("response") or None,
+                    ),
+                )
+                self.send_response(writer, 200, json.dumps({
+                    "success": True,
+                    **result,
+                }).encode('utf-8'), "application/json")
+            except CloudError as e:
+                self.send_response(writer, 400, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
+            except Exception as e:
+                self.send_response(writer, 500, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
+
+        elif path == '/api/settings/providers/openrouter/oauth/cancel' and method == 'POST':
+            from opalatex.openrouter_oauth import cancel_openrouter_authorization
+            try:
+                cancel_openrouter_authorization(data.get("session") or {})
+                self.send_response(writer, 200, b'{"success":true}', "application/json")
             except Exception as e:
                 self.send_response(writer, 500, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
 

@@ -180,13 +180,15 @@ def _mask(secret: str) -> str:
 
 @_registry.register(
     "/providers", "/provider",
-    usage="[list | add key=value... | set <id> key=value... | remove <id>]",
+    usage="[list | add key=value... | login [openrouter] [id=<id>] [label=<label>] | set <id> key=value... | remove <id>]",
     description="List, register, edit, or remove a provider connection (credentials)",
-    details='A connection holds the credentials that every model under it uses,\nso rotating a key once updates all of them.\n\nExamples:\n  /providers                               list connections and how many models each carries\n  /providers add label="Ollama Gil" provider=ollama api_base=http://192.168.0.10:11434/v1\n  /providers add label="OpenAI" provider=openai api_key=sk-...\n  /providers add id=openai label="OpenAI" provider=openai api_key=       clear the key\n  /providers set openai api_key=sk-new    change one field, keep the rest\n  /providers remove ollama-gil\n\nStep by step instead: /add-provider. One field: /set-provider-field.\n\nFields: label, provider, api_base (=base, =url), api_key (=key), id.\n\nThe id is derived from the label unless you pass id=. Adding with an existing\nid edits that connection, and leaving api_key out keeps the stored one.\nA connection still used by a model is not removed.',
+    details='A connection holds the credentials that every model under it uses,\nso rotating a key once updates all of them.\n\nExamples:\n  /providers                               list connections and how many models each carries\n  /providers add label="Ollama Gil" provider=ollama api_base=http://192.168.0.10:11434/v1\n  /providers add label="OpenAI" provider=openai api_key=sk-...\n  /providers login openrouter              sign in via OpenRouter OAuth PKCE and add openrouter/free\n  /providers add id=openai label="OpenAI" provider=openai api_key=       clear the key\n  /providers set openai api_key=sk-new    change one field, keep the rest\n  /providers remove ollama-gil\n\nStep by step instead: /add-provider. One field: /set-provider-field.\n\nFields: label, provider, api_base (=base, =url), api_key (=key), id.\n\nThe id is derived from the label unless you pass id=. Adding with an existing\nid edits that connection, and leaving api_key out keeps the stored one.\nA connection still used by a model is not removed.',
 )
 async def cmd_providers(state: REPLState, args: list[str]) -> str | None:
+    import asyncio
     from .models_store import (
-        add_or_update_connection, delete_connection, get_connection,
+        add_or_update_connection, delete_connection,
+        ensure_default_openrouter_free_model, get_connection,
         load_connections, load_models, suggest_connection_id,
     )
 
@@ -245,6 +247,85 @@ async def cmd_providers(state: REPLState, args: list[str]) -> str | None:
             "cli_provider_updated" if existing else "cli_provider_added",
             id=connection_id,
         ))
+        if provider.lower() == "openrouter":
+            added_model = ensure_default_openrouter_free_model(connection_id)
+            if added_model and added_model.get("id"):
+                await _discover_saved_model_window(added_model["id"])
+                T.info(_(
+                    "cli_provider_default_model_added",
+                    model_id=added_model["id"],
+                    id=connection_id,
+                ))
+        return "continue"
+
+    if action in ("login", "oauth"):
+        from .cloud.base import CloudError
+        from .openrouter_oauth import (
+            begin_openrouter_authorization,
+            cancel_openrouter_authorization,
+            complete_openrouter_authorization,
+        )
+
+        pair_tokens = list(rest)
+        if pair_tokens and "=" not in pair_tokens[0]:
+            target_provider = pair_tokens.pop(0).strip().lower()
+            if target_provider != "openrouter":
+                T.error(_("cli_usage_providers_login"))
+                return "continue"
+        try:
+            values, _unused = parse_pairs(pair_tokens, _CONNECTION_FIELDS, _CONNECTION_ALIASES)
+        except ArgumentError as exc:
+            T.error(str(exc))
+            return "continue"
+
+        provider_arg = str(values.get("provider") or "openrouter").strip().lower()
+        if provider_arg != "openrouter":
+            T.error(_("cli_usage_providers_login"))
+            return "continue"
+
+        conn_id = str(values.get("id") or "").strip()
+        label = str(values.get("label") or "").strip()
+        try:
+            challenge = begin_openrouter_authorization(
+                label=label,
+                connection_id=conn_id,
+            )
+        except Exception as exc:
+            T.error(str(exc))
+            return "continue"
+
+        T.info(_("cli_openrouter_oauth_waiting"))
+        T.console.print(
+            f"[dim]{_escape(_('cli_openrouter_oauth_url', url=challenge.authorization_url))}[/dim]"
+        )
+        try:
+            result = await asyncio.to_thread(
+                complete_openrouter_authorization,
+                challenge.session,
+                connection_id=conn_id,
+                label=label,
+            )
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            cancel_openrouter_authorization(challenge.session)
+            T.warning(_("cli_action_cancelled"))
+            return "continue"
+        except CloudError as exc:
+            T.error(str(exc))
+            return "continue"
+        except Exception as exc:
+            T.error(str(exc))
+            return "continue"
+
+        saved_conn = result.get("connection") or {}
+        saved_id = str(saved_conn.get("id") or conn_id or "openrouter")
+        T.success(_("cli_provider_added", id=saved_id))
+        default_model = result.get("default_model")
+        if result.get("added_default_model") and isinstance(default_model, dict) and default_model.get("id"):
+            T.info(_(
+                "cli_provider_default_model_added",
+                model_id=default_model["id"],
+                id=saved_id,
+            ))
         return "continue"
 
     if action == "set":
@@ -611,7 +692,11 @@ def _connection_choice_label(connection: dict) -> str:
             "In one line instead: /providers add label=... provider=...",
 )
 async def cmd_add_provider(state: REPLState, args: list[str]) -> str:
-    from .models_store import add_or_update_connection, suggest_connection_id
+    from .models_store import (
+        add_or_update_connection,
+        ensure_default_openrouter_free_model,
+        suggest_connection_id,
+    )
 
     T.info(_("cli_wizard_provider_intro"))
     try:
@@ -645,6 +730,15 @@ async def cmd_add_provider(state: REPLState, args: list[str]) -> str:
         T.error(str(exc))
         return "continue"
     T.success(_("cli_provider_added", id=payload["id"]))
+    if provider == "openrouter":
+        added_model = ensure_default_openrouter_free_model(payload["id"])
+        if added_model and added_model.get("id"):
+            await _discover_saved_model_window(added_model["id"])
+            T.info(_(
+                "cli_provider_default_model_added",
+                model_id=added_model["id"],
+                id=payload["id"],
+            ))
     T.console.print(f"[dim]{_escape(_('cli_wizard_provider_next', id=payload['id']))}[/dim]")
     return "continue"
 

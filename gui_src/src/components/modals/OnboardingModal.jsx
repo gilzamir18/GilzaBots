@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Loader2, Monitor, Terminal, CheckCircle, X, Settings2, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import ModelForm from './ModelForm';
+import OpenRouterOAuthButton from './OpenRouterOAuthButton';
 import ModelSelect from '../ModelSelect';
 import { useModelCatalog } from '../../contexts/ModelCatalogProvider.jsx';
 
@@ -102,6 +103,16 @@ export default function OnboardingModal({ onClose, onComplete }) {
     // but it stays changeable in the selector below.
     setPilotModel(modelData.id);
     setSavedModelId(modelData.id);
+  };
+
+  const handleOAuthConnected = (result) => {
+    setRegisterError('');
+    const defaultModelId = result?.default_model?.id || '';
+    if (defaultModelId) {
+      setPilotModel(defaultModelId);
+      setSavedModelId(defaultModelId);
+    }
+    setStep(5);
   };
 
   const handleDiscoverLocalOllama = async () => {
@@ -213,6 +224,13 @@ export default function OnboardingModal({ onClose, onComplete }) {
                 <Settings2 size={18} />
                 {t('onboarding.configThirdPartyKey', 'Configure Third-Party API Key')}
               </button>
+
+              <OpenRouterOAuthButton
+                buttonClassName="vscode-button-secondary"
+                buttonStyle={{ padding: '14px', fontSize: '15px', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%' }}
+                buttonLabel={t('openRouterOAuth.onboardingBtn', 'Sign in with OpenRouter (Free Model Included)')}
+                onSuccess={handleOAuthConnected}
+              />
             </div>
           </div>
         )}
@@ -305,6 +323,7 @@ export default function OnboardingModal({ onClose, onComplete }) {
                 existingModels={catalogModels}
                 connections={catalogConnections}
                 onSaveConnection={saveConnection}
+                onOAuthConnected={handleOAuthConnected}
                 onSubmit={handleRegisterModel}
                 actions={(
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', padding: '0 16px 8px 16px' }}>

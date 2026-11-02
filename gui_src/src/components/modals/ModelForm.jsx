@@ -30,6 +30,7 @@ export default function ModelForm({
   connections = [],
   onSubmit,
   onSaveConnection,
+  onOAuthConnected,
   actions,
   formStyle,
 }) {
@@ -156,6 +157,18 @@ export default function ModelForm({
     }
     setConnectionId(connectionData.id);
     setShowNewConnection(false);
+    if (result.added_model) {
+      onOAuthConnected?.({ connection: connectionData, default_model: result.added_model, added_default_model: true });
+    }
+  };
+
+  const handleInlineOAuthConnected = (result) => {
+    setError('');
+    if (result?.connection?.id) {
+      setConnectionId(result.connection.id);
+      setShowNewConnection(false);
+    }
+    onOAuthConnected?.(result);
   };
 
   const selectedConnection = connections.find(c => c.id === connectionId);
@@ -350,6 +363,7 @@ export default function ModelForm({
                 asForm={false}
                 existingConnections={connections}
                 onSubmit={handleNewConnectionSubmit}
+                onOAuthConnected={handleInlineOAuthConnected}
                 onCancel={connections.length > 0 ? () => setShowNewConnection(false) : undefined}
                 submitLabel={t('modelForm.saveConnectionBtn')}
               />

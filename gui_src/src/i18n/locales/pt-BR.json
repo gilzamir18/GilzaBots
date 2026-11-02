@@ -1873,5 +1873,14 @@
     "firesOnce": "dispara uma vez",
     "clearEvents": "Limpar",
     "clearEventsHint": "Remove os eventos recentes desta lista (os chats que eles abriram são mantidos)"
+  },
+  "openRouterOAuth": {
+    "connectBtn": "Entrar com OpenRouter",
+    "onboardingBtn": "Entrar com OpenRouter (Modelo Gratuito Incluso)",
+    "connecting": "Aguardando OpenRouter…",
+    "waitingBrowser": "Aguardando você concluir no navegador…",
+    "formHint": "Usa OpenRouter? Entre pelo navegador para gerar uma chave e carregar o modelo gratuito padrão (openrouter/free) automaticamente.",
+    "connectedWithFreeModel": "Conectado a {{label}} e modelo gratuito {{modelId}} carregado.",
+    "failed": "Falha ao entrar com o OpenRouter."
   }
 }

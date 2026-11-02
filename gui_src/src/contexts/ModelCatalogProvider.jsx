@@ -108,13 +108,75 @@ export function ModelCatalogProvider({ children }) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return { ok: false, error: data.error || 'connection_save_failed' };
-      await refreshConnections();
-      return { ok: true };
+      await Promise.all([refresh(), refreshConnections()]);
+      return { ok: true, added_model: data.added_model || null };
     } catch (e) {
       console.error(e);
       return { ok: false, error: 'connection_save_failed' };
     }
-  }, [refreshConnections]);
+  }, [refresh, refreshConnections]);
+
+  const startOpenRouterOAuth = useCallback(async ({ label = '', connectionId = '' } = {}) => {
+    try {
+      const res = await fetch(`${PROVIDERS_ENDPOINT}/openrouter/oauth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label, connection_id: connectionId })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        return { ok: false, error: data.error || 'openrouter_oauth_failed' };
+      }
+      return {
+        ok: true,
+        authorization_url: data.authorization_url || '',
+        session: data.session || null,
+        instructions: data.instructions || '',
+      };
+    } catch (e) {
+      console.error(e);
+      return { ok: false, error: 'openrouter_oauth_failed' };
+    }
+  }, []);
+
+  const completeOpenRouterOAuth = useCallback(async ({ session, label = '', connectionId = '' } = {}) => {
+    try {
+      const res = await fetch(`${PROVIDERS_ENDPOINT}/openrouter/oauth/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session, label, connection_id: connectionId })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        return { ok: false, error: data.error || 'openrouter_oauth_failed' };
+      }
+      await Promise.all([refresh(), refreshConnections()]);
+      return {
+        ok: true,
+        connection: data.connection || null,
+        default_model: data.default_model || null,
+        added_default_model: Boolean(data.added_default_model),
+      };
+    } catch (e) {
+      console.error(e);
+      return { ok: false, error: 'openrouter_oauth_failed' };
+    }
+  }, [refresh, refreshConnections]);
+
+  const cancelOpenRouterOAuth = useCallback(async (session) => {
+    if (!session) return { ok: true };
+    try {
+      await fetch(`${PROVIDERS_ENDPOINT}/openrouter/oauth/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session })
+      });
+      return { ok: true };
+    } catch (e) {
+      console.error(e);
+      return { ok: false };
+    }
+  }, []);
 
   const deleteConnection = useCallback(async (connectionId) => {
     try {
@@ -137,9 +199,11 @@ export function ModelCatalogProvider({ children }) {
     () => ({
       models, refresh, saveModel, deleteModel, loadLocalOllamaModels,
       connections, refreshConnections, saveConnection, deleteConnection,
+      startOpenRouterOAuth, completeOpenRouterOAuth, cancelOpenRouterOAuth,
     }),
     [models, refresh, saveModel, deleteModel, loadLocalOllamaModels,
-      connections, refreshConnections, saveConnection, deleteConnection]
+      connections, refreshConnections, saveConnection, deleteConnection,
+      startOpenRouterOAuth, completeOpenRouterOAuth, cancelOpenRouterOAuth]
   );
 
   return (

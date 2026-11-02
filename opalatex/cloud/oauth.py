@@ -28,13 +28,14 @@ import json
 import os
 import secrets
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from typing import Optional
+from typing import Any, Optional
 
 from . import transport
 from .base import CloudAuthError, CloudTransientError
@@ -86,6 +87,10 @@ class _RedirectHandler(BaseHTTPRequestHandler):
     def do_GET(self):  # noqa: N802 - name fixed by BaseHTTPRequestHandler
         parsed = urllib.parse.urlparse(self.path)
         params = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+        if "state" not in params and parsed.path.startswith("/callback/"):
+            path_state = urllib.parse.unquote(parsed.path[len("/callback/"):].strip("/"))
+            if path_state:
+                params["state"] = path_state
         if "code" not in params and "error" not in params:
             # Browsers request /favicon.ico and similar on the same origin;
             # answering 404 keeps those out of the result.
@@ -127,6 +132,7 @@ class LoopbackReceiver:
     """
 
     def __init__(self):
+        self.created_at = time.monotonic()
         handler = type("_Handler", (_RedirectHandler,), {"receiver": self})
         self._server = HTTPServer(("127.0.0.1", 0), handler)
         self._server.timeout = 1.0
@@ -175,6 +181,37 @@ _PENDING: dict[str, LoopbackReceiver] = {}
 _PENDING_LOCK = threading.Lock()
 
 
+def _reap_expired_receivers(max_age: float = DEFAULT_AUTH_TIMEOUT) -> None:
+    """Close and evict loopback listeners that outlived the authorization window."""
+    now = time.monotonic()
+    expired: list[LoopbackReceiver] = []
+    with _PENDING_LOCK:
+        stale_states = [
+            st
+            for st, rec in _PENDING.items()
+            if (now - getattr(rec, "created_at", now)) > max_age
+        ]
+        for st in stale_states:
+            rec = _PENDING.pop(st, None)
+            if rec is not None:
+                expired.append(rec)
+    for rec in expired:
+        rec.close()
+
+
+def register_pending_receiver(state: str, receiver: LoopbackReceiver) -> None:
+    """Register a live loopback listener under its CSRF `state` after reaping stale ones."""
+    _reap_expired_receivers()
+    with _PENDING_LOCK:
+        _PENDING[state] = receiver
+
+
+def pop_pending_receiver(state: str) -> Optional[LoopbackReceiver]:
+    """Atomically claim and remove a pending loopback listener by `state`."""
+    with _PENDING_LOCK:
+        return _PENDING.pop(state, None)
+
+
 def start_authorization(
     *,
     authorization_endpoint: str,
@@ -187,6 +224,7 @@ def start_authorization(
     Returns ``(authorization_url, session)``. The session is opaque to callers
     and must be handed back to :func:`finish_authorization`.
     """
+    _reap_expired_receivers()
     receiver = LoopbackReceiver()
     state = secrets.token_urlsafe(24)
     pkce = generate_pkce()
@@ -338,6 +376,30 @@ def post_form(url: str, payload: dict[str, str], timeout: float = 30.0) -> dict:
         raise CloudTransientError(f"Could not reach the authorization server: {exc.reason}") from exc
 
 
+def post_json(url: str, payload: dict[str, Any], timeout: float = 30.0) -> dict:
+    """POST an ``application/json`` body and parse JSON back."""
+    body = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with transport.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8") or "{}")
+    except urllib.error.HTTPError as exc:
+        detail = _read_error(exc)
+        if exc.code in (400, 401, 403):
+            raise CloudAuthError(f"Token request rejected: {detail}") from exc
+        raise CloudTransientError(f"Token request failed ({exc.code}): {detail}") from exc
+    except urllib.error.URLError as exc:
+        raise CloudTransientError(f"Could not reach the authorization server: {exc.reason}") from exc
+
+
 def _read_error(exc: urllib.error.HTTPError) -> str:
     try:
         raw = exc.read().decode("utf-8", "replace")
@@ -347,5 +409,12 @@ def _read_error(exc: urllib.error.HTTPError) -> str:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
         return raw[:400]
-    description = parsed.get("error_description") or parsed.get("error") or raw[:400]
-    return str(description)
+    if isinstance(parsed, dict):
+        err = parsed.get("error")
+        if isinstance(err, dict):
+            msg = err.get("message") or err.get("description")
+            if msg:
+                return str(msg)
+        description = parsed.get("error_description") or err or parsed.get("message") or raw[:400]
+        return str(description)
+    return raw[:400]

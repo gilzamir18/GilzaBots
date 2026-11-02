@@ -23,6 +23,7 @@ export default function AddConnectionModal({
           editingConnection={editingConnection}
           existingConnections={existingConnections}
           onSubmit={onSave}
+          onOAuthConnected={() => onClose?.()}
           actions={(
             <div className="vscode-modal-footer">
               <button type="button" className="vscode-button-secondary" onClick={onClose}>

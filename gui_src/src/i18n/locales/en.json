@@ -1873,5 +1873,14 @@
     "firesOnce": "fires once",
     "clearEvents": "Clear",
     "clearEventsHint": "Remove the recent events from this list (the chats they opened are kept)"
+  },
+  "openRouterOAuth": {
+    "connectBtn": "Sign in with OpenRouter",
+    "onboardingBtn": "Sign in with OpenRouter (Free Model Included)",
+    "connecting": "Waiting for OpenRouter…",
+    "waitingBrowser": "Waiting for you to finish in the browser…",
+    "formHint": "Using OpenRouter? Sign in with your browser to create a key and load the default free model (openrouter/free) automatically.",
+    "connectedWithFreeModel": "Connected to {{label}} and loaded free model {{modelId}}.",
+    "failed": "OpenRouter sign-in failed."
   }
 }

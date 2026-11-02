@@ -18,6 +18,11 @@ _LOCAL_OLLAMA_API_BASE = "http://localhost:11434/v1"
 _LOCAL_OLLAMA_TAGS_URL = "http://127.0.0.1:11434/api/tags"
 _LOCAL_OLLAMA_CONNECTION_ID = "ollama-local"
 
+OPENROUTER_DEFAULT_CONNECTION_ID = "openrouter"
+OPENROUTER_DEFAULT_CONNECTION_LABEL = "OpenRouter"
+OPENROUTER_API_BASE = "https://openrouter.ai/api/v1"
+OPENROUTER_FREE_MODEL_NAME = "openrouter/free"
+
 # Transport adapters a model entry may name; kept in sync with the routes
 # registered by `agenticblocks.blocks.image.adapters`.
 IMAGE_ROUTES = ("images_api", "chat_multimodal")
@@ -742,6 +747,42 @@ def delete_connection(connection_id: str) -> bool:
         save_connections(connections)
         return True
     return False
+
+
+def ensure_default_openrouter_free_model(connection_id: str) -> Dict[str, Any] | None:
+    """Ensure the canonical free OpenRouter model exists for *connection_id*.
+
+    OpenRouter exposes ``openrouter/free`` as a zero-cost router across its
+    currently available free models (including tool-calling models when tool
+    schemas are supplied). When an OpenRouter connection is registered, we
+    seed that entry once unless ``openrouter/free`` is already configured
+    under the same connection.
+    """
+    clean_connection_id = str(connection_id or "").strip()
+    if not clean_connection_id:
+        return None
+    connection = get_connection(clean_connection_id)
+    if not connection:
+        return None
+    if str(connection.get("provider") or "").strip().lower() != "openrouter":
+        return None
+
+    for existing in load_models():
+        if (
+            existing.get("connection_id") == clean_connection_id
+            and str(existing.get("name") or "").strip() == OPENROUTER_FREE_MODEL_NAME
+        ):
+            return None
+
+    model_id = suggest_model_id("openrouter", OPENROUTER_FREE_MODEL_NAME, clean_connection_id)
+    add_or_update_model({
+        "id": model_id,
+        "connection_id": clean_connection_id,
+        "provider": "openrouter",
+        "name": OPENROUTER_FREE_MODEL_NAME,
+        "supports_thinking": True,
+    })
+    return get_model(model_id)
 
 
 def load_local_ollama_models() -> List[Dict[str, Any]]:
