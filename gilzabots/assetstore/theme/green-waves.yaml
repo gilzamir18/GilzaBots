@@ -1,9 +1,0 @@
-name: Green waves
-description: Soft green ribbons along the edges, leaving the middle of the slide clear.
-image: green-waves.jpg
-theme:
-  background: "#f3f9ef"
-  color: "#1d3319"
-  accent: "#4a8f3c"
-  backgroundFit: cover
-  backgroundOpacity: 1

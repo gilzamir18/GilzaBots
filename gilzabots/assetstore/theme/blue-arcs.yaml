@@ -1,9 +1,0 @@
-name: Blue arcs
-description: A pale blue gradient crossed by thin arcs, light enough for dark text at full opacity.
-image: blue-arcs.jpg
-theme:
-  background: "#eef6fa"
-  color: "#123448"
-  accent: "#2f6fb3"
-  backgroundFit: cover
-  backgroundOpacity: 1
