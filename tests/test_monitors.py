@@ -463,6 +463,28 @@ class TestAgentTools:
         assert monitor["sessions_db"].endswith("sessions.db")
         assert _isolated_monitors and _isolated_monitors[-1][-2:] == ["monitors", "daemon"]
 
+    @pytest.mark.parametrize("action", ["resume_chat", "notify_and_resume"])
+    def test_a_missing_resume_prompt_is_diagnosed_by_the_tool_argument_name(self, session, action):
+        result = asyncio.run(_tools()["register_monitor"](
+            name="daily", interval_seconds=86400, once=False, wake_in="same_chat", action=action,
+            description="Fires every day at 10:00.",
+        ))
+        assert result.startswith("register_monitor failed: 'resume_prompt' is required")
+        assert "'prompt'" not in result
+        assert st.MonitorStore().list_monitors() == []
+
+    def test_a_too_long_resume_prompt_is_diagnosed_by_the_tool_argument_name(self, session):
+        result = asyncio.run(_tools()["register_monitor"](
+            name="daily", interval_seconds=86400, resume_prompt="x" * 5000,
+        ))
+        assert result.startswith("register_monitor failed: 'resume_prompt' is too long")
+
+    def test_a_notify_monitor_needs_no_resume_prompt(self, session):
+        result = asyncio.run(_tools()["register_monitor"](
+            name="tick", interval_seconds=120, action="notify", message="tick",
+        ))
+        assert result.startswith("Registered monitor mon_")
+
     def test_a_check_that_fails_first_is_not_registered(self, session):
         result = asyncio.run(_tools()["register_monitor"](
             name="w", interval_seconds=60, check_type="file", path="missing.txt", watch="content",

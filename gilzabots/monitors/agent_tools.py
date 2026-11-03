@@ -25,7 +25,15 @@ import asyncio
 import datetime
 
 from . import store as st
-from .spec import RESUMING_ACTIONS, WAKE_CHAT_NEW, WAKE_CHAT_ORIGIN, MonitorSpecError, display_value, normalize_spec
+from .spec import (
+    MAX_TEXT_CHARS,
+    RESUMING_ACTIONS,
+    WAKE_CHAT_NEW,
+    WAKE_CHAT_ORIGIN,
+    MonitorSpecError,
+    display_value,
+    normalize_spec,
+)
 
 #: The tool's names for where a wake-up runs, and the specification's.
 WAKE_IN_CHOICES = {"same_chat": WAKE_CHAT_ORIGIN, "new_chat": WAKE_CHAT_NEW}
@@ -101,6 +109,22 @@ def build_spec(
         check["question"] = question
     if wake_in not in WAKE_IN_CHOICES:
         raise MonitorSpecError(f"'wake_in' must be 'same_chat' or 'new_chat', got '{wake_in}'.")
+    # The specification stores the instruction as action.prompt; diagnose it
+    # here under the tool's own argument name, which is the only name the
+    # caller knows ("'prompt' is required" sent agents looking for a field
+    # that does not exist in the tool's schema).
+    if action in RESUMING_ACTIONS:
+        prompt_text = (resume_prompt or "").strip()
+        if not prompt_text:
+            raise MonitorSpecError(
+                f"'resume_prompt' is required when action='{action}': it is the instruction the woken "
+                "chat receives. Pass it as an argument of this call, or use action='notify' with 'message' "
+                "for a notification only."
+            )
+        if len(prompt_text) > MAX_TEXT_CHARS:
+            raise MonitorSpecError(
+                f"'resume_prompt' is too long ({len(prompt_text)} characters, limit {MAX_TEXT_CHARS})."
+            )
     raw = {
         "name": name,
         "description": description,
