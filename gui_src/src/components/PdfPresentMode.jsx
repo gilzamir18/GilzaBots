@@ -6,7 +6,7 @@
 // *is* stepping through the talk; nothing Beamer-specific is needed here.
 //
 // Fullscreen, navigation keys, click-to-advance and the zoom-corrected viewport
-// come from `usePresentation`, shared with the deck editor's presentation mode.
+// come from `usePresentation`.
 //
 // Three decisions:
 //   • It loads its own <Document> from the same URL the viewer renders, rather

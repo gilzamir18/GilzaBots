@@ -145,18 +145,17 @@ class ProjectReader:
         if ext in _IMAGE_EXTS:
             raise ValueError(f"'{name}' is an image; this lookup can only read text.")
 
-        from gilzabots.tools import _BINARY_EXTS, _read_logical_text_file
+        from gilzabots.tools import _BINARY_EXTS, _read_text_file
 
         if ext in _BINARY_EXTS:
             raise ValueError(f"'{name}' is a binary file ({ext}) and has no readable text.")
-        if ext != ".jpt":
-            with open(real, "rb") as f:
-                head = f.read(8192)
-            # UTF-16 text is full of NUL bytes; its BOM rules the sniff out.
-            if not head.startswith((b"\xff\xfe", b"\xfe\xff")) and b"\x00" in head:
-                raise ValueError(f"'{name}' is a binary file and has no readable text.")
+        with open(real, "rb") as f:
+            head = f.read(8192)
+        # UTF-16 text is full of NUL bytes; its BOM rules the sniff out.
+        if not head.startswith((b"\xff\xfe", b"\xfe\xff")) and b"\x00" in head:
+            raise ValueError(f"'{name}' is a binary file and has no readable text.")
         try:
-            return _read_logical_text_file(real)
+            return _read_text_file(real)
         except Exception as exc:
             raise ValueError(f"Could not read '{name}': {exc}")
 

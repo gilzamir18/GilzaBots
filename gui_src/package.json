@@ -11,7 +11,6 @@
     "server": "node server.js",
     "start": "node start.js",
     "test:browser": "python3 test/browser/run.py",
-    "test:slides": "node --test src/slides/__tests__/*.test.js",
     "test:wysiwyg": "node --test src/wysiwyg/__tests__/*.test.js src/utils/__tests__/*.test.js"
   },
   "dependencies": {
@@ -25,7 +24,6 @@
     "katex": "^0.18.1",
     "lucide-react": "^0.378.0",
     "mermaid": "^11.16.0",
-    "pptxgenjs": "^4.0.1",
     "prosemirror-commands": "^1.5.2",
     "prosemirror-dropcursor": "^1.8.2",
     "prosemirror-history": "^1.5.0",

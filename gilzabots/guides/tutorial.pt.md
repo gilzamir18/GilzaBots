@@ -21,8 +21,7 @@ O GilzaBots tem três partes trabalhando juntas:
    especializadas e passa trabalhos auxiliares (leituras longas, condensar logs,
    pesquisa na web) para agentes helpers.
 2. **O espaço de trabalho** — editor de código-fonte com explorador de arquivos,
-   terminal e Git, além de pré-visualização de Markdown, HTML e PDF, modo rich text e
-   editor de apresentações.
+   terminal e Git, além de pré-visualização de Markdown, HTML e PDF e modo rich text.
 3. **Ferramentas de documentos** — projetos LaTeX têm pré-visualização do PDF lado a
    lado, SyncTeX para pular entre o PDF e a linha `.tex` que o gerou, modo WYSIWYG
    baseado em modelo e compilação local com o Tectonic, sem exigir uma instalação de
@@ -505,9 +504,6 @@ avançadas:
   com capacidade de visão.
 - **Geração de Imagens por IA (`generate_image`)** — gera figuras, ilustrações e
   diagramas a partir de descrições textuais diretamente na pasta do projeto (ex.: `figures/`).
-- **Apresentações e Slides (`create_presentation`, `edit_presentation`, `check_presentation`)** —
-  cria e edita apresentações no formato nativo de slides do GilzaBots (`.jpt`), com editor
-  visual e modo de apresentação interativo.
 - **Ações Rápidas na Seleção de Texto** — selecione qualquer trecho no PDF ou no preview
   para traduzir, ouvir a pronúncia em voz alta ou consultar a IA com um card explicativo.
 - **Ditado por Voz** — dite instruções diretamente na caixa do chat usando reconhecimento
@@ -857,7 +853,7 @@ desktop. A janela precisa de `pip install "gilzabots[gui]"`. A compilação LaTe
 `tectonic` encontrado no seu `PATH`.
 
 **O que ela não faz** — tudo o que é editor e não agente: pré-visualização do PDF, SyncTeX,
-os modos rich text e WYSIWYG, anotações em PDF, modo apresentação, ditado e leitura em voz
+os modos rich text e WYSIWYG, anotações em PDF, modo apresentação do PDF, ditado e leitura em voz
 alta. Isso vive na janela.
 
 ## cli-models :: Como cadastro um modelo e um provedor pelo terminal?

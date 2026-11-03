@@ -397,15 +397,6 @@ def _read_text_file(path: str) -> str:
     return text.replace("\r\n", "\n").replace("\r", "\n")
 
 
-def _read_logical_text_file(path: str) -> str:
-    """Read a text file, or the JSON document inside a packaged JPT."""
-    if Path(path).suffix.lower() == ".jpt":
-        from .jpt import read_jpt
-
-        return read_jpt(path).text
-    return _read_text_file(path)
-
-
 def _decode_escape_sequences(s: str) -> str:
     """Turn literal \\n \\t \\r \\\\ sequences into the characters they name.
 
@@ -642,8 +633,7 @@ def _binary_read_error(resolved: str) -> str | None:
         "Read the contents of a file in the project workspace. Relative paths are resolved "
         "from the project directory. PDF, DOCX, PPTX and XLSX files are supported: their text "
         "is extracted automatically, so read them with this tool instead of asking the user to "
-        "convert them by hand. For a packaged .jpt, this returns its logical deck.json rather "
-        "than ZIP bytes or internal media."
+        "convert them by hand."
     ),
 )
 def read_file(path: str) -> str:
@@ -731,12 +721,6 @@ def read_file(path: str) -> str:
     # check) treats it exactly like any other document, instead of refusing a
     # file whose content GilzaBots can actually produce.
     extracted = None
-    logical_text = None
-    if Path(resolved).suffix.lower() == ".jpt":
-        try:
-            logical_text = _read_logical_text_file(resolved)
-        except Exception as error:
-            raise ValueError(f"Error reading JPT package '{_preview(resolved)}': {error}")
     if os.path.splitext(resolved)[1].lower() in _DOC_EXTS:
         from .attachments import extract_document_text_from_path
 
@@ -761,10 +745,9 @@ def read_file(path: str) -> str:
             )
 
     if extracted is None:
-        if logical_text is None:
-            binary_error = _binary_read_error(resolved)
-            if binary_error:
-                raise ValueError(binary_error)
+        binary_error = _binary_read_error(resolved)
+        if binary_error:
+            raise ValueError(binary_error)
     else:
         budget_chars = free_context_chars()
         if budget_chars is not None and budget_chars > 0 and len(extracted) > budget_chars:
@@ -791,8 +774,7 @@ def read_file(path: str) -> str:
     # file rather than having its request quietly turned into a partial one.
     budget_chars = free_context_chars()
     try:
-        size = (len(logical_text.encode("utf-8")) if logical_text is not None
-                else os.path.getsize(resolved))
+        size = os.path.getsize(resolved)
     except OSError:
         size = 0
     if budget_chars is not None and size > budget_chars:
@@ -852,7 +834,7 @@ def read_file(path: str) -> str:
         )
 
     try:
-        text = logical_text if logical_text is not None else _read_text_file(resolved)
+        text = _read_text_file(resolved)
     except Exception as e:
         raise ValueError(f"Error reading {_preview(resolved)}: {e}")
     _note_file_seen(resolved)
@@ -1114,7 +1096,7 @@ async def generate_image(
         f"inside a figure environment."
     )
 
-@gilzabots_tool(name="write_file", is_safe=False, description="Write or overwrite a file inside the project directory. Relative paths are resolved from the project directory. Creates parent directories if needed. For a .jpt, pass the complete logical deck JSON; this tool writes the validated package and internalizes all local assets. ALWAYS use this tool to save file content — never use run_command with echo/printf/cat to write files, as shell quoting will break with multi-line or HTML/JSON content.")
+@gilzabots_tool(name="write_file", is_safe=False, description="Write or overwrite a file inside the project directory. Relative paths are resolved from the project directory. Creates parent directories if needed. ALWAYS use this tool to save file content — never use run_command with echo/printf/cat to write files, as shell quoting will break with multi-line or HTML/JSON content.")
 def write_file(path: str, content: str) -> str:
     try:
         resolved = _resolve_path(path)
@@ -1132,27 +1114,15 @@ def write_file(path: str, content: str) -> str:
         raise ValueError(f"Error: invalid path argument ({e.strerror}).")
 
     try:
-        if Path(resolved).suffix.lower() == ".jpt":
-            from .jpt import write_packaged_jpt
-
-            result = write_packaged_jpt(
-                resolved, content, project_root=get_project_path()
-            )
-        else:
-            before = _text_before_write(resolved)
-            with open(resolved, "w", encoding="utf-8", newline="") as f:
-                f.write(content)
+        before = _text_before_write(resolved)
+        with open(resolved, "w", encoding="utf-8", newline="") as f:
+            f.write(content)
         try:
             from .code_index import CODE_INDEX
             CODE_INDEX.rebuild_file(resolved)
         except Exception:
             pass
 
-        if Path(resolved).suffix.lower() == ".jpt":
-            return (
-                f"Successfully wrote packaged JPT to {_preview(resolved)} "
-                f"with {result.assets} internal asset(s)."
-            )
         _note_file_seen(resolved)
         return f"Successfully wrote to {_preview(resolved)}." + _syntax_note(resolved, before)
     except Exception as e:
@@ -1291,346 +1261,6 @@ def create_pptx_file(path: str, slides_json: str, title: str = "") -> str:
         return f"Successfully created PPTX file at {_preview(resolved)}."
     except Exception as e:
         raise ValueError(f"Error creating PPTX file {_preview(resolved)}: {e}")
-
-
-# ─── Presentations (.jpt) ─────────────────────────────────────────────────────
-# The native counterpart of create_pptx_file: a .pptx an agent writes is a file
-# it cannot reopen, while a .jpt is the format the IDE's own slide editor edits.
-# Both take a semantic outline rather than coordinates, for the same reason —
-# an author that has to invent geometry produces text past the edge of its box
-# and a title that moves between slides. Everything geometric is computed by
-# gilzabots/jpt/layout.py, and the result is checked by gilzabots/jpt/lint.py
-# before it reaches disk. See docs/specs/jpt_format.md §17.
-
-_JPT_OUTLINE_HELP = (
-    "outline_json is {\"title\": str, \"slides\": [...]} — or just the array of "
-    "slides. Each slide is {\"layout\": ..., ...} where layout is one of: "
-    "'title' (title, subtitle), 'section' (title, subtitle), 'bullets' (title, "
-    "bullets: an array whose items are strings, or {\"text\": str, \"level\": 0-4} "
-    "for a sub-point — NEVER type a marker character into a bullet, the box "
-    "draws its own; optional 'bulletStyle': disc|dash|number), "
-    "'text' (title, text), 'equation' (title, equation: "
-    "LaTeX WITHOUT $ delimiters, caption), 'image' (title, image: project-relative "
-    "path, caption), 'two_columns' (title, left, right — each an object holding "
-    "ONE of bullets/text/equation/image), 'image_text' (title, image, bullets, "
-    "side: left|right), 'quote' (quote, attribution), 'blank' (title). Any slide "
-    "also takes 'notes' (speaker notes) and 'elements' (raw .jpt elements, an "
-    "escape hatch for what the layouts cannot express). A slide also takes "
-    "'background' (#rrggbb), 'backgroundImage' (a project-relative path or data "
-    "URI, null for none), 'backgroundFit' (cover|contain|fill) and "
-    "'backgroundOpacity' (0-1 — dim a photo to about 0.4 so text stays "
-    "readable over it). Top level also takes 'theme' {background, "
-    "backgroundImage, backgroundFit, backgroundOpacity, color, accent, "
-    "fontFamily} for a deck-wide background, and 'slide_numbers': true. "
-    "Pictures and video files referenced by project path are PACKAGED inside the "
-    ".jpt, so the deck is one self-contained file the user can move or send; "
-    "the source files on disk are left where they are. Web-player URLs such as "
-    "YouTube remain links to their network services. The file on disk is a ZIP "
-    "package containing deck.json and jpt:assets/... members; read_file exposes "
-    "the logical JSON, and line-position tools must not be used on it. "
-    "NEVER write x/y/w/h or fontSize: the layout computes them."
-)
-
-
-def _load_tool_json(text: str, field: str):
-    """Parse a JSON tool argument without mangling what is inside it.
-
-    `_decode_escape_sequences` exists for models that emit a literal `\\n`
-    where a newline belongs, and it fires on any string containing `\\n`,
-    `\\t` or `\\r`. A JSON document carrying LaTeX contains those by the
-    dozen — `\\top`, `\\rm`, `\\nabla` — and running the repair over valid
-    JSON turns `\\top` into a tab followed by "op". So the repair runs only
-    after a real parse failure, which is the only time it was ever meant to.
-    """
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as first:
-        try:
-            return json.loads(_decode_escape_sequences(text))
-        except json.JSONDecodeError:
-            raise ValueError(f"{field} is not valid JSON: {first}") from first
-
-
-def _jpt_write(resolved: str, deck: dict, *, verb: str) -> str:
-    """Lint and atomically write a self-contained JPT package."""
-    from .jpt import format_report, has_errors, lint, write_packaged_jpt
-
-    findings = lint(deck, project_root=get_project_path())
-    if has_errors(findings):
-        # Fail fast and say exactly what is wrong: a deck written with text
-        # spilling off the slide is worse than no deck, because nobody finds
-        # out until it is on a projector.
-        raise ValueError(
-            f"The presentation was NOT written — fix these and call again:\n"
-            f"{format_report(findings)}"
-        )
-
-    Path(resolved).parent.mkdir(parents=True, exist_ok=True)
-    result = write_packaged_jpt(
-        resolved, deck, project_root=get_project_path()
-    )
-
-    slides = len(deck["slides"])
-    summary = f"{verb} {_preview(resolved)} — {slides} slide{'s' if slides != 1 else ''}."
-    summary += (
-        f" Packaged {result.assets} internal asset"
-        f"{'s' if result.assets != 1 else ''} ({result.asset_bytes:,} bytes)."
-    )
-    if result.external_urls:
-        summary += (
-            " Web-player/network URLs remain external services: "
-            + ", ".join(result.external_urls)
-            + "."
-        )
-    if findings:
-        summary += f"\n{format_report(findings)}"
-    return summary
-
-
-@gilzabots_tool(
-    name="create_presentation",
-    is_safe=False,
-    description=(
-        "Create an GilzaBots presentation (.jpt) that opens in the IDE's slide "
-        "editor, from an outline. The layout — position, size and font size of "
-        "every element — is computed for you from a grid, so slides are "
-        "consistent and text always fits. " + _JPT_OUTLINE_HELP + " The deck is "
-        "checked before it is saved: errors (text that cannot fit at a readable "
-        "size, an element off the slide, a missing image, malformed LaTeX) abort "
-        "the write and are reported so you can shorten the text or fix the path. "
-        "Prefer this over create_pptx_file when the user will keep working on "
-        "the deck; .pptx export is available from the editor."
-    ),
-)
-def create_presentation(path: str, outline_json: str, title: str = "") -> str:
-    from .jpt import JptError, compile_outline
-
-    resolved = _resolve_path(path)
-    _require_extension(resolved, {".jpt"})
-    AGENT_PROGRESS.update("create_presentation", f"path={_preview(resolved)}")
-
-    outline = _load_tool_json(outline_json, "outline_json")
-    # The array form is what create_pptx_file takes, so an agent that knows one
-    # tool can use the other without relearning the shape.
-    if isinstance(outline, list):
-        outline = {"slides": outline}
-    if not isinstance(outline, dict):
-        raise ValueError("outline_json must be an object or an array of slides")
-    if title:
-        outline["title"] = title
-    outline.setdefault("title", Path(resolved).stem)
-
-    try:
-        deck = compile_outline(outline)
-    except JptError as error:
-        raise ValueError(f"The outline cannot be laid out: {error}")
-    return _jpt_write(resolved, deck, verb="Created")
-
-
-@gilzabots_tool(
-    name="edit_presentation",
-    is_safe=False,
-    description=(
-        "Apply a list of edits to an existing .jpt presentation. operations_json "
-        "is an array of objects: "
-        "{\"op\":\"add_slide\",\"at\":<index>,\"slide\":{...outline slide...}}, "
-        "{\"op\":\"delete_slide\",\"slide\":\"<id>\"}, "
-        "{\"op\":\"move_slide\",\"from\":<i>,\"to\":<j>}, "
-        "{\"op\":\"set_notes\",\"slide\":\"<id>\",\"notes\":\"...\"}, "
-        "{\"op\":\"set_background\",\"slide\":\"<id>\",\"background\":\"#rrggbb\","
-        "\"backgroundImage\":\"figures/photo.jpg\",\"backgroundFit\":\"cover\","
-        "\"backgroundOpacity\":0.4} (use \"all\":true instead of \"slide\" to set the "
-        "whole deck's background; backgroundImage null removes it), "
-        "{\"op\":\"update_element\",\"element\":\"<id>\",\"patch\":{...}}, "
-        "{\"op\":\"delete_element\",\"element\":\"<id>\"}, "
-        "{\"op\":\"reorder_element\",\"element\":\"<id>\",\"direction\":\"front|forward|backward|back\"}, "
-        "{\"op\":\"embed_images\"} is accepted as an idempotent compatibility "
-        "operation; every save already packages all local pictures and videos. "
-        "A slide added this way is laid out by the same engine create_presentation "
-        "uses. Read the file first (read_file) to learn the ids. The edited deck "
-        "is checked before it is saved, exactly as on creation. Every local asset "
-        "added by an edit is packaged into the .jpt on save."
-    ),
-)
-def edit_presentation(path: str, operations_json: str) -> str:
-    from . import jpt as jptlib
-    from .jpt import JptError
-
-    resolved = _resolve_path(path)
-    _require_extension(resolved, {".jpt"})
-    AGENT_PROGRESS.update("edit_presentation", f"path={_preview(resolved)}")
-    if not os.path.exists(resolved):
-        raise ValueError(f"No presentation at {_preview(resolved)} — create it first.")
-
-    operations = _load_tool_json(operations_json, "operations_json")
-    if isinstance(operations, dict):
-        operations = [operations]
-    if not isinstance(operations, list) or not operations:
-        raise ValueError("operations_json must be a non-empty array of operations")
-
-    try:
-        deck = jptlib.parse(jptlib.read_jpt(resolved).text)
-    except (JptError, jptlib.JptPackageError) as error:
-        raise ValueError(f"{_preview(resolved)} is not a usable presentation: {error}")
-    grid = jptlib.Grid(deck["width"], deck["height"])
-    for index, operation in enumerate(operations, start=1):
-        if not isinstance(operation, dict):
-            raise ValueError(f"operation {index} is not an object")
-        op = operation.get("op")
-        try:
-            if op == "add_slide":
-                slide = jptlib.build_slide(grid, deck["theme"], operation.get("slide") or {})
-                jptlib.add_slide(deck, slide, operation.get("at"))
-            elif op == "delete_slide":
-                jptlib.delete_slide(deck, str(operation["slide"]))
-            elif op == "move_slide":
-                jptlib.move_slide(deck, int(operation["from"]), int(operation["to"]))
-            elif op == "set_notes":
-                jptlib.find_slide(deck, str(operation["slide"]))["notes"] = str(operation.get("notes") or "")
-            elif op == "set_background":
-                # Colour, picture, fit and opacity in one operation, and `all`
-                # writes them onto the theme so every slide follows — the same
-                # two choices the editor's own control offers.
-                target = (deck["theme"] if operation.get("all")
-                          else jptlib.find_slide(deck, str(operation["slide"])))
-                for key, field in (("background", "background"),
-                                   ("backgroundImage", "backgroundImage"),
-                                   ("backgroundFit", "backgroundFit"),
-                                   ("backgroundOpacity", "backgroundOpacity")):
-                    if key in operation:
-                        target[field] = operation[key]
-            elif op == "add_element":
-                raw = dict(operation["element"])
-                jptlib.add_element(deck, str(operation["slide"]),
-                                   jptlib.create_element(raw.pop("type"), **raw))
-            elif op == "update_element":
-                jptlib.update_element(deck, str(operation["element"]), operation.get("patch") or {})
-            elif op == "delete_element":
-                jptlib.delete_element(deck, str(operation["element"]))
-            elif op == "embed_images":
-                # Compatibility with older callers. Packaging is unconditional.
-                pass
-            elif op == "reorder_element":
-                jptlib.reorder_element(deck, str(operation["element"]),
-                                       str(operation.get("direction") or "front"))
-            else:
-                raise ValueError(f"unknown op {op!r}")
-        except (JptError, KeyError, TypeError, ValueError) as error:
-            # Nothing has been written yet, so the file on disk is untouched:
-            # the agent gets a diagnostic and the user keeps their deck.
-            raise ValueError(f"operation {index} ({op}) failed: {error}")
-
-    return _jpt_write(resolved, deck, verb="Updated")
-
-
-@gilzabots_tool(
-    name="set_presentation_theme",
-    is_safe=False,
-    description=(
-        "Give a .jpt presentation a theme — colours, type, an optional background "
-        "picture, and the header/footer bands a Beamer-style theme draws. Pass "
-        "`theme` with the name of a theme from the Asset Store (call it with an "
-        "unknown name to see the catalogue), and/or `fields_json` with explicit "
-        "values to set or override: {\"background\",\"color\",\"accent\","
-        "\"fontFamily\",\"backgroundImage\",\"backgroundFit\",\"backgroundOpacity\","
-        "\"headerHeight\",\"headerColor\",\"titleColor\",\"footerHeight\","
-        "\"footerColor\",\"footerTextColor\",\"footerText\"}. A header band is "
-        "drawn only behind a slide that has a title, and each slide's title is "
-        "marked so it takes the theme's title colour. The deck is checked before "
-        "it is saved, exactly as on creation."
-    ),
-)
-def set_presentation_theme(path: str, theme: str = "", fields_json: str = "") -> str:
-    from . import jpt as jptlib
-    from .jpt import JptError
-    from .assetstore import list_assets, theme_image_path
-
-    resolved = _resolve_path(path)
-    _require_extension(resolved, {".jpt"})
-    AGENT_PROGRESS.update("set_presentation_theme", f"path={_preview(resolved)} theme={theme}")
-    if not os.path.exists(resolved):
-        raise ValueError(f"No presentation at {_preview(resolved)} — create it first.")
-    if not theme and not fields_json:
-        raise ValueError("pass a store theme name, explicit fields_json, or both")
-
-    # A named theme *replaces* the deck's look: every field it does not set goes
-    # back to the format's default. Merging instead would leave the previous
-    # theme's header band standing behind the new theme's colours, which is a
-    # deck that looks like neither. Explicit `fields_json` merges, because that
-    # is a tweak rather than a choice of theme.
-    values: dict = {}
-    applied_name = ""
-    if theme:
-        catalog = list_assets("theme")
-        wanted = theme.strip().lower()
-        match = next(
-            (a for a in catalog
-             if a["id"].lower() == wanted or str(a.get("name", "")).lower() == wanted),
-            None,
-        )
-        if match is None:
-            # The catalogue is the discovery path: an unknown name answers with
-            # what does exist rather than sending the agent hunting for a second
-            # tool that lists them.
-            names = ", ".join(f"{a['id']} ({a['name']})" for a in catalog) or "none installed"
-            raise ValueError(f"no theme called {theme!r}. Available: {names}")
-        values.update(jptlib.DEFAULT_THEME)
-        values.update(match.get("theme") or {})
-        applied_name = match.get("name") or match["id"]
-        image = theme_image_path(match)
-        # Embedded, like every other picture an agent puts in a deck: a path
-        # into the GilzaBots installation would break the moment the deck moved.
-        values["backgroundImage"] = jptlib.to_data_uri(str(image)) if image else ""
-
-    if fields_json:
-        extra = _load_tool_json(fields_json, "fields_json")
-        if not isinstance(extra, dict):
-            raise ValueError("fields_json must be a JSON object of theme fields")
-        unknown = sorted(set(extra) - set(jptlib.THEME_FIELDS))
-        if unknown:
-            raise ValueError(
-                f"not theme fields: {', '.join(unknown)}. "
-                f"Known: {', '.join(sorted(jptlib.THEME_FIELDS))}"
-            )
-        values.update(extra)
-
-    try:
-        deck = jptlib.parse(jptlib.read_jpt(resolved).text)
-        jptlib.apply_theme(deck, values)
-    except (JptError, jptlib.JptPackageError) as error:
-        raise ValueError(f"the theme could not be applied: {error}")
-    verb = f"Applied {applied_name} to" if applied_name else "Themed"
-    return _jpt_write(resolved, deck, verb=verb)
-
-
-@gilzabots_tool(
-    name="check_presentation",
-    is_safe=True,
-    description=(
-        "Review a .jpt presentation for the defects an audience would notice: "
-        "text that does not fit its box, elements off the slide or on top of one "
-        "another, type too small to project, low contrast, missing images, "
-        "malformed LaTeX, a title that moves between slides. Read-only. Use it "
-        "after editing a deck by hand, or to check one the user wrote."
-    ),
-)
-def check_presentation(path: str) -> str:
-    from . import jpt as jptlib
-    from .jpt import JptError
-
-    resolved = _resolve_path(path)
-    _require_extension(resolved, {".jpt"})
-    if not os.path.exists(resolved):
-        raise ValueError(f"No presentation at {_preview(resolved)}.")
-    try:
-        deck = jptlib.parse(jptlib.read_jpt(resolved).text)
-    except (JptError, jptlib.JptPackageError) as error:
-        return f"{_preview(resolved)} is not a usable presentation: {error}"
-
-    findings = jptlib.lint(deck, project_root=get_project_path())
-    slides = len(deck["slides"])
-    header = f"{_preview(resolved)}: {slides} slide{'s' if slides != 1 else ''}."
-    return f"{header}\n{jptlib.format_report(findings)}"
 
 
 # ─── LaTeX compilation ───────────────────────────────────────────────────────
@@ -2153,7 +1783,7 @@ def search_code(
         for candidate in candidates:
             searched += 1
             try:
-                text = _read_logical_text_file(str(candidate))
+                text = _read_text_file(str(candidate))
             except Exception:
                 continue
             if "\x00" in text[:4096]:
@@ -2328,9 +1958,7 @@ def get_project_overview(max_depth:int = 5) -> str:
         "Insert content into an EXISTING file starting at a specific line number (1-indexed). "
         "The new content will be inserted just before the specified line. "
         "The file must already exist: use write_file to create a new file, and "
-        "replace_content_range when you need to replace or remove existing lines. This tool "
-        "cannot edit packaged .jpt files; use edit_presentation or a full read_file/write_file "
-        "round-trip for them."
+        "replace_content_range when you need to replace or remove existing lines."
     )
 )
 def write_content_pos(path: str, content: str, pos: int) -> str:
@@ -2353,13 +1981,6 @@ def write_content_pos(path: str, content: str, pos: int) -> str:
             )
     except OSError as e:
         raise ValueError(f"Error: invalid path argument ({e.strerror}).")
-
-    if Path(resolved).suffix.lower() == ".jpt":
-        raise ValueError(
-            "Packaged .jpt files cannot be edited by line position. Use "
-            "edit_presentation, or read_file followed by write_file for a full "
-            "validated deck rewrite."
-        )
 
     _refuse_if_changed_since_seen(resolved)
     try:
@@ -2394,9 +2015,7 @@ def write_content_pos(path: str, content: str, pos: int) -> str:
     description=(
         "Replace an inclusive 1-indexed line range in an existing file. "
         "Use this for surgical edits to large files instead of rewriting the entire file. "
-        "Pass an empty content string to delete the selected lines. This tool cannot edit "
-        "packaged .jpt files; use edit_presentation or a full read_file/write_file round-trip "
-        "for them."
+        "Pass an empty content string to delete the selected lines."
     )
 )
 def replace_content_range(path: str, start_pos: int, end_pos: int, content: str) -> str:
@@ -2422,13 +2041,6 @@ def replace_content_range(path: str, start_pos: int, end_pos: int, content: str)
             )
     except OSError as e:
         raise ValueError(f"Error: invalid path argument ({e.strerror}).")
-
-    if Path(resolved).suffix.lower() == ".jpt":
-        raise ValueError(
-            "Packaged .jpt files cannot be edited by line range. Use "
-            "edit_presentation, or read_file followed by write_file for a full "
-            "validated deck rewrite."
-        )
 
     if start_pos < 1 or end_pos < 1:
         raise ValueError("start_pos and end_pos must be 1-indexed positive integers.")
@@ -2755,8 +2367,7 @@ def _whitespace_insensitive_lines(text: str, old: str) -> list[int]:
         "enough surrounding lines to make it unique, or set replace_all to true to change every "
         "occurrence. No line numbers are involved, so earlier edits cannot shift where this one "
         "lands. Pass an empty new_string to delete the passage. Returns the edited region with "
-        "line numbers. This tool does not create files (write_file does) and cannot edit "
-        "packaged .jpt files."
+        "line numbers. This tool does not create files (write_file does)."
     )
 )
 def edit_file(path: str, old_string: str, new_string: str, replace_all: bool = False) -> str:
@@ -2785,11 +2396,6 @@ def edit_file(path: str, old_string: str, new_string: str, replace_all: bool = F
     except OSError as e:
         raise ValueError(f"Error: invalid path argument ({e.strerror}).")
 
-    if Path(resolved).suffix.lower() == ".jpt":
-        raise ValueError(
-            "Packaged .jpt files cannot be edited as text. Use edit_presentation, or "
-            "read_file followed by write_file for a full validated deck rewrite."
-        )
     if not old_string:
         raise ValueError(
             "Error: old_string is empty. Pass the exact text to replace; to add text, include "
@@ -2902,7 +2508,7 @@ def read_content_pos(path: str, start_pos: int, end_pos: int) -> str:
         raise ValueError("end_pos must be greater than or equal to start_pos.")
 
     try:
-        lines = _read_logical_text_file(resolved).splitlines(keepends=True)
+        lines = _read_text_file(resolved).splitlines(keepends=True)
         _note_file_seen(resolved)
         total_lines = len(lines)
 
@@ -3009,7 +2615,7 @@ def _diff_side(label: str, path: str, start: int, end: int) -> tuple[str, list[s
             "diff_files compares text files and PDF/DOCX/PPTX/XLSX documents."
         )
     else:
-        text = _read_logical_text_file(resolved)
+        text = _read_text_file(resolved)
 
     lines = text.splitlines()
     total = len(lines)
@@ -3331,7 +2937,7 @@ def get_code_navigation_tools():
 
 
 def get_diagnostic_tools():
-    return [inspect_project, inspect_git, read_document, check_presentation]
+    return [inspect_project, inspect_git, read_document]
 
 
 def get_workspace_action_tools():
@@ -3352,9 +2958,6 @@ def get_workspace_action_tools():
         replace_content_range,
         create_docx_file,
         create_pptx_file,
-        create_presentation,
-        edit_presentation,
-        set_presentation_theme,
         export_tex_to_docx,
         generate_image,
         compile_latex,

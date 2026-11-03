@@ -1,4 +1,4 @@
-import { createFileSaveQueue, contentAfterSave } from './utils/fileSave.js';
+import { createFileSaveQueue } from './utils/fileSave.js';
 import React, { useState, useEffect, useMemo, useRef, useCallback, useTransition } from 'react';
 import '@xterm/xterm/css/xterm.css';
 import { useTranslation } from 'react-i18next';
@@ -27,7 +27,7 @@ import {
   fitLogMessage as fitMergedLogMessage,
   joinMergedLogMessage,
 } from './utils/logMerge';
-import { childNamesAt, resolveInlineCreatePath, suggestUniqueName } from './utils/inlineCreate';
+import { resolveInlineCreatePath } from './utils/inlineCreate';
 import {
   markerPathKey,
   removeAgentChangedFiles,
@@ -332,7 +332,7 @@ export default function App() {
   const [editorTextStats, setEditorTextStats] = useState(null);
   const [selectedNodes, setSelectedNodes] = useState(new Set());
   const [renamingNodePath, setRenamingNodePath] = useState(null);
-  // Provisional tree row for creating a file, presentation or directory in place.
+  // Provisional tree row for creating a file or directory in place.
   const [pendingCreate, setPendingCreate] = useState(null);
   const inlineCreateIdRef = useRef(0);
   useEffect(() => { setPendingCreate(null); }, [activeProject?.project_path]);
@@ -348,39 +348,6 @@ export default function App() {
   const [openFiles, setOpenFiles] = useState([]);
   const [fileContents, setFileContents] = useState({});
 
-  // Applying a store theme to the presentation open in the editor.
-  //
-  // It edits the *buffer*, not the file: the change lands in the deck the user
-  // is looking at and is theirs to save or discard, exactly like a colour they
-  // had picked from the properties panel. A theme's picture, when it has one,
-  // is embedded as a data URI for the reason every other picture in a deck is —
-  // a `.jpt` pointing at a file inside the GilzaBots installation would break the
-  // moment the deck left this machine.
-  const applyDeckTheme = useCallback(async (asset) => {
-    const { DEFAULT_THEME, parseDeck, serializeDeck, applyTheme } = await import('./slides/model.js');
-    const { blobToDataUrl } = await import('./slides/clipboard.js');
-
-    // A theme *replaces* the deck's look rather than merging into it: a theme
-    // that sets no header must not leave the previous theme's band standing.
-    const values = { ...DEFAULT_THEME, ...(asset.theme || {}) };
-    if (asset.hasImage) {
-      const response = await fetch(`/api/assets/icon?id=${encodeURIComponent(asset.id)}`);
-      if (!response.ok) throw new Error(`Could not read the theme picture (HTTP ${response.status})`);
-      const src = await blobToDataUrl(await response.blob());
-      if (!src) throw new Error('Could not read the theme picture');
-      values.backgroundImage = src;
-    } else {
-      // A theme with no picture clears the one the deck had: applying a theme
-      // means the deck looks like that theme, not like a blend of two.
-      values.backgroundImage = '';
-    }
-
-    const text = serializeDeck(applyTheme(parseDeck(fileContent || '{}'), values));
-    setFileContent(text);
-    setFileContents(prev => ({ ...prev, [selectedFile]: text }));
-    return t('assetStore.themeApplied', '{{name}} applied to {{file}}. Save to keep it.',
-      { name: asset.name, file: selectedFile });
-  }, [fileContent, selectedFile, t]);
   // Baseline of the diff view (the file at git HEAD), not of the unsaved
   // marker: that one compares with the disk (see utils/fileMarkers.js).
   const [originalFileContents, setOriginalFileContents] = useState({});
@@ -2395,28 +2362,18 @@ export default function App() {
           body: JSON.stringify({ projectPath: activeProject.project_path, filePath: selectedFile, content: currentContent }),
         });
         if (res.ok) {
-          const response = await res.json().catch(() => ({}));
-          // A JPT save replaces data/project references with canonical jpt:
-          // members. Keep the live buffer aligned with what the package contains
-          // so media resolves through the package endpoint immediately.
-          const savedContent = typeof response.content === 'string'
-            ? response.content
-            : currentContent;
           if (!sameProject()) return true;
           addLog('info', t('app.fileSaved', { path: filePath }));
-          diskCache[filePath] = savedContent;
+          diskCache[filePath] = currentContent;
+          // A save acknowledges a snapshot: typing that arrived while it was in
+          // flight stays the live buffer.
           const live = documentContextRef.current;
           const activeDocument = sameFilePath(live.selectedFile, filePath);
           const liveContent = activeDocument ? live.getContent() : undefined;
-          if (activeDocument && liveContent === currentContent) {
-            fileContentRef.current = savedContent;
-            setFileContent(savedContent);
-          }
           setFileContents(prev => {
             // Closing/renaming a tab must not resurrect it when a save returns.
             if (!Object.hasOwn(prev, filePath)) return prev;
-            const current = activeDocument ? liveContent : prev[filePath];
-            return { ...prev, [filePath]: contentAfterSave(current, currentContent, savedContent) };
+            return { ...prev, [filePath]: activeDocument ? liveContent : prev[filePath] };
           });
 
           fetch(`/api/git/file-at-head?${gitQuerySuffix()}&filePath=${encodeURIComponent(selectedFile)}&t=${Date.now()}`)
@@ -2664,25 +2621,18 @@ export default function App() {
     setFileContent('');
   };
 
-  // New file, new presentation and new directory are created in place: a
-  // provisional row appears in the target directory of the workspace tree and
-  // the user types the name there (`InlineCreateNode`). A presentation is the
-  // file flow with a different seed — the `.jpt` suffix is added when missing
-  // and the file starts with a real deck, so it opens on a title slide.
+  // New files and new directories are created in place: a provisional row
+  // appears in the target directory of the workspace tree and the user types
+  // the name there (`InlineCreateNode`).
   const beginInlineCreate = (kind, parentPath) => {
     if (!activeProject) return;
     setContextMenu(null);
     setRenamingNodePath(null);
     inlineCreateIdRef.current += 1;
-    const targetDir = parentPath || '';
-    const initialName = kind === 'presentation'
-      ? suggestUniqueName(t('explorerSidebar.newPresentationDefaultStem', 'presentation'), '.jpt', childNamesAt(files, targetDir))
-      : '';
-    setPendingCreate({ id: inlineCreateIdRef.current, kind, parentPath: targetDir, initialName });
+    setPendingCreate({ id: inlineCreateIdRef.current, kind, parentPath: parentPath || '' });
   };
 
   const handleCreateNewFile = (parentPath) => beginInlineCreate('file', parentPath);
-  const handleCreateNewPresentation = (parentPath) => beginInlineCreate('presentation', parentPath);
   const handleCreateNewDir = (parentPath) => beginInlineCreate('dir', parentPath);
 
   const cancelInlineCreate = () => setPendingCreate(null);
@@ -2693,7 +2643,7 @@ export default function App() {
   const submitInlineCreate = async (name) => {
     const request = pendingCreate;
     if (!request || !activeProject) return null;
-    const resolved = resolveInlineCreatePath({ kind: request.kind, parentPath: request.parentPath, name });
+    const resolved = resolveInlineCreatePath({ parentPath: request.parentPath, name });
     if (resolved.cancelled) {
       setPendingCreate(null);
       return null;
@@ -2713,15 +2663,10 @@ export default function App() {
           body: JSON.stringify({ projectPath: activeProject.project_path, dirPath: targetPath, exclusive: true }),
         });
       } else {
-        let content = '';
-        if (request.kind === 'presentation') {
-          const { createDeck, serializeDeck } = await import('./slides/model.js');
-          content = serializeDeck(createDeck(targetPath.split('/').pop().replace(/\.jpt$/i, '')));
-        }
         res = await fetch('/api/file/write', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectPath: activeProject.project_path, filePath: targetPath, content, exclusive: true }),
+          body: JSON.stringify({ projectPath: activeProject.project_path, filePath: targetPath, content: '', exclusive: true }),
         });
       }
 
@@ -5546,8 +5491,6 @@ export default function App() {
           onClose={() => setIsAssetStoreOpen(false)}
           projectPath={activeProject?.project_path}
           onWorkspaceChanged={refreshWorkspaceFiles}
-          deckFile={selectedFile && selectedFile.toLowerCase().endsWith('.jpt') ? selectedFile : null}
-          onApplyTheme={applyDeckTheme}
         />
       )}
 
@@ -5604,7 +5547,6 @@ export default function App() {
         contextMenu={contextMenu}
         rightClickedNode={rightClickedNode}
         handleCreateNewFile={handleCreateNewFile}
-        handleCreateNewPresentation={handleCreateNewPresentation}
         handleCreateNewDir={handleCreateNewDir}
         handleImportFile={handleImportFile}
         handleRenameNode={handleRenameNode}

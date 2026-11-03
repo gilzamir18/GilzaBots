@@ -173,7 +173,7 @@ at, so a typo cannot become an invisible setting — a parameter you do want for
 the provider is written `extra.keep_alive=30m`.
 
 The editor features — PDF preview, SyncTeX, rich-text and WYSIWYG modes, PDF
-annotations, presentation mode, dictation and read-aloud — are part of the window and
+annotations, PDF presentation mode, dictation and read-aloud — are part of the window and
 have no terminal equivalent.
 
 ## Development setup

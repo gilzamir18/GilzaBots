@@ -29,7 +29,7 @@ export const normalizeInputRequest = (data = {}) => {
 
 /**
  * Choose the dialog that renders a `confirmRequest`. Local prompts (new file,
- * new directory, new presentation) travel through `confirmRequest` with
+ * new directory) travel through `confirmRequest` with
  * `type: 'ask'` and a callback; they need a text input, so they must never fall
  * through to the Yes/No confirmation, whose button value would reach the
  * callback as the answer.

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { setImmediate } from 'node:timers/promises';
-import { createFileSaveQueue, contentAfterSave } from '../fileSave.js';
+import { createFileSaveQueue } from '../fileSave.js';
 
 // Exercise the actual App handler with deferred HTTP responses and a small
 // state adapter. This catches accidental removal of its document identity and
@@ -19,7 +19,7 @@ function editor() {
     documentContextRef.current = { projectPath: state.project, selectedFile: state.file, getContent: () => state.content };
   };
   const dependencies = {
-    contentAfterSave, isBinaryEditorFile: () => false, fileContentRef, diskFileContentsRef, documentContextRef,
+    isBinaryEditorFile: () => false, fileContentRef, diskFileContentsRef, documentContextRef,
     fileSaveQueueRef: { current: createFileSaveQueue() }, pendingSaveCountRef: { current: 0 },
     setFileContent: value => { state.content = value; },
     setFileContents: update => { state.buffers = update(state.buffers); },
@@ -31,7 +31,7 @@ function editor() {
       if (url !== '/api/file/write') return { ok: true, json: async () => ({}) };
       return new Promise(resolve => requests.push({
         submitted: JSON.parse(options.body),
-        finish(content) { resolve({ ok: true, json: async () => content === undefined ? {} : { content } }); },
+        finish() { resolve({ ok: true, json: async () => ({}) }); },
         fail() { resolve({ ok: false }); },
       }));
     },
@@ -101,14 +101,6 @@ test('overlapping saves write in order and keep saving until all finish', async 
   assert.equal(e.state.saving, false);
 });
 
-test('canonical JPT response updates an unchanged buffer', async () => {
-  const e = editor();
-  const saving = e.save(); await setImmediate();
-  e.requests[0].finish('canonical jpt:asset'); await saving;
-  assert.equal(e.state.content, 'canonical jpt:asset');
-  assert.equal(e.state.buffers['a.txt'], 'canonical jpt:asset');
-});
-
 test('a failed save does not stop subsequent saves or mark its contents saved', async () => {
   const e = editor();
   const saving = e.save(); await setImmediate();
@@ -116,8 +108,4 @@ test('a failed save does not stop subsequent saves or mark its contents saved', 
   assert.deepEqual(e.diskFileContentsRef.current, {});
   const next = e.save(); await setImmediate();
   e.requests[1].finish(); assert.equal(await next, true);
-});
-
-test('canonicalization never overwrites a newer buffer', () => {
-  assert.equal(contentAfterSave('newer', 'old', 'canonical'), 'newer');
 });

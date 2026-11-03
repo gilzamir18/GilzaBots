@@ -8,9 +8,9 @@ import {
   presentationKeyAction,
 } from '../utils/presentationNavigation.js';
 
-// The lifecycle every full-screen presentation overlay shares — the deck
-// editor's and the PDF viewer's: focus, fullscreen, the viewport the content is
-// fitted into, and keyboard and click navigation.
+// The lifecycle of a full-screen presentation overlay (the PDF viewer's):
+// focus, fullscreen, the viewport the content is fitted into, and keyboard and
+// click navigation.
 //
 // It asks for real browser fullscreen but does not depend on getting it: in the
 // packaged app the request can be refused, and a presentation that only works

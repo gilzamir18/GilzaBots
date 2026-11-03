@@ -701,11 +701,6 @@ def test_edit_file_does_not_create_files_or_edit_binaries_or_packages(tmp_path):
         _edit(tmp_path, "image.png", "data", "x")
     assert "binary" in str(error.value)
 
-    (tmp_path / "deck.jpt").write_bytes(b"PK")
-    with pytest.raises(ValueError) as error:
-        _edit(tmp_path, "deck.jpt", "PK", "x")
-    assert "edit_presentation" in str(error.value)
-
 
 def test_edit_file_is_a_gated_workspace_write_tool():
     from gilzabots.tools import edit_file, get_workspace_action_tools

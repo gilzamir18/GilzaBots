@@ -55,40 +55,6 @@ from email.policy import default as email_default_policy
 from gilzabots.subprocess_utils import utf8_text_kwargs
 
 
-_PDF_EXPORT_FRAME_PREFIX = "gilzabots-pdf-v1:"
-_PDF_EXPORT_RESULT_EVENT = "gilzabots:pdf-export-result"
-
-
-def _parse_pdf_export_frame_name(frame_name: str):
-    """Return ``(request_id, suggested_name)`` for a deck print frame.
-
-    The frame name is the only caller-controlled field Qt exposes with a
-    subframe print request. Keep the protocol versioned and validate its id so
-    an unrelated iframe can never be mistaken for an GilzaBots export.
-    """
-    value = str(frame_name or "")
-    if not value.startswith(_PDF_EXPORT_FRAME_PREFIX):
-        return None
-    request_id, separator, encoded_name = value[len(_PDF_EXPORT_FRAME_PREFIX):].partition(":")
-    if not separator or not request_id or len(request_id) > 128:
-        return None
-    if not all(character.isalnum() or character in "-_" for character in request_id):
-        return None
-    return request_id, urllib.parse.unquote(encoded_name) or "presentation.pdf"
-
-
-def _pdf_export_result_script(request_id: str, status: str, message: str = "") -> str:
-    """Build the safely encoded browser notification for a Qt PDF result."""
-    detail = {"requestId": request_id, "status": status}
-    if message:
-        detail["message"] = message
-    return (
-        "window.dispatchEvent(new CustomEvent("
-        f"{json.dumps(_PDF_EXPORT_RESULT_EVENT)}, "
-        f"{{detail: {json.dumps(detail, ensure_ascii=False)}}}));"
-    )
-
-
 class GitContextError(ValueError):
     pass
 
@@ -1233,33 +1199,6 @@ class AsyncHTTPServer:
         writer.write(body)
         writer.close()
 
-    async def send_streaming_response(
-        self, writer, status_code, chunks, content_length,
-        content_type="application/octet-stream", extra_headers=None,
-    ):
-        """Send a known-length body without assembling it in memory."""
-        status_msg = {
-            200: "OK", 206: "Partial Content", 400: "Bad Request",
-            401: "Unauthorized", 403: "Forbidden", 404: "Not Found", 416: "Range Not Satisfiable",
-            500: "Internal Server Error", 503: "Service Unavailable",
-        }.get(status_code, "Error")
-        response_headers = [
-            f"HTTP/1.1 {status_code} {status_msg}",
-            f"Content-Type: {content_type}",
-            f"Content-Length: {content_length}",
-        ]
-        for name, value in (extra_headers or {}).items():
-            if "\r" in name or "\n" in name or "\r" in value or "\n" in value:
-                continue
-            response_headers.append(f"{name}: {value}")
-        response_headers.append("Connection: close")
-        writer.write(("\r\n".join(response_headers) + "\r\n\r\n").encode("utf-8"))
-        await writer.drain()
-        for chunk in chunks:
-            writer.write(chunk)
-            await writer.drain()
-        writer.close()
-
     def send_cors(self, writer):
         headers = (
             "HTTP/1.1 200 OK\r\n"
@@ -1941,95 +1880,13 @@ class AsyncHTTPServer:
                 self.send_response(writer, 404, b'{"error":"File not found"}', "application/json")
                 return
             try:
-                if file_path.lower().endswith('.jpt'):
-                    from gilzabots.jpt import read_jpt
-
-                    document = read_jpt(full_path)
-                    payload = {"content": document.text, "jptPackaged": document.packaged}
-                else:
-                    with open(full_path, 'r', encoding='utf-8', newline='') as f:
-                        content = f.read()
-                    payload = {"content": content}
+                with open(full_path, 'r', encoding='utf-8', newline='') as f:
+                    content = f.read()
+                payload = {"content": content}
                 self.send_response(writer, 200, json.dumps(payload).encode('utf-8'), "application/json")
             except Exception as e:
                 self.send_response(writer, 500, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
 
-        # 2.1 Read an asset stored inside a packaged JPT. Browsers use byte
-        # ranges when seeking video, so serve a single inclusive range without
-        # inflating or materializing the rest of the package.
-        elif path == '/api/jpt/asset' and method == 'GET':
-            project_path = query.get('projectPath', [None])[0]
-            file_path = query.get('filePath', [None])[0]
-            asset_ref = query.get('src', [None])[0]
-            if not project_path or not file_path or not asset_ref:
-                self.send_response(writer, 400, b'{"error":"projectPath, filePath and src are required"}', "application/json")
-                return
-            project_abs = os.path.abspath(project_path)
-            full_path = os.path.abspath(os.path.join(project_abs, file_path))
-            if not _is_path_within(full_path, project_abs):
-                self.send_response(writer, 403, b'{"error":"Forbidden: Path traversal detected"}', "application/json")
-                return
-            if not file_path.lower().endswith('.jpt') or not os.path.isfile(full_path):
-                self.send_response(writer, 404, b'{"error":"JPT file not found"}', "application/json")
-                return
-
-            try:
-                import re
-                from gilzabots.jpt import (
-                    JptPackageError, get_asset_info, iter_asset,
-                )
-
-                asset_info = get_asset_info(full_path, asset_ref)
-                total = asset_info.size
-                range_value = headers.get('range', '')
-                start = 0
-                end = total - 1
-                partial = bool(range_value)
-                if range_value:
-                    match = re.fullmatch(r'bytes=(\d*)-(\d*)', range_value.strip())
-                    if not match or (not match.group(1) and not match.group(2)):
-                        raise JptPackageError("malformed asset byte range")
-                    if match.group(1):
-                        start = int(match.group(1))
-                        end = int(match.group(2)) if match.group(2) else total - 1
-                    else:
-                        suffix = int(match.group(2))
-                        if suffix <= 0:
-                            raise JptPackageError("malformed asset byte range")
-                        start = max(0, total - suffix)
-                        end = total - 1
-                    if start >= total or end < start:
-                        raise JptPackageError(
-                            f"asset byte range {start}-{end} is outside a {total}-byte asset"
-                        )
-                    end = min(end, total - 1)
-
-                content_length = 0 if total == 0 else end - start + 1
-                response_headers = {
-                    "Accept-Ranges": "bytes",
-                    "Cache-Control": "private, max-age=31536000, immutable",
-                }
-                if partial and total:
-                    response_headers["Content-Range"] = f"bytes {start}-{end}/{total}"
-                chunks = iter_asset(full_path, asset_ref, start=start, end=end)
-                await self.send_streaming_response(
-                    writer, 206 if partial else 200, chunks, content_length,
-                    asset_info.mime,
-                    response_headers,
-                )
-            except JptPackageError as e:
-                status = 416 if "byte range" in str(e) else 400
-                extra = {"Accept-Ranges": "bytes"}
-                if status == 416 and 'total' in locals():
-                    extra["Content-Range"] = f"bytes */{total}"
-                self.send_response_with_headers(
-                    writer, status, json.dumps({"error": str(e)}).encode('utf-8'),
-                    "application/json", extra,
-                )
-            except Exception as e:
-                self.send_response(writer, 500, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
-
-        # 2.2 Read Raw File (for inline images/assets)
         elif path == '/api/file/raw':
             project_path = query.get('projectPath', [None])[0]
             file_path = query.get('filePath', [None])[0]
@@ -2090,25 +1947,14 @@ class AsyncHTTPServer:
                     git_ctx = _resolve_git_context(project_path, use_shadow, git_root_path)
                     norm_file_path = _project_path_to_repo_path(file_path, git_ctx)
                     command = git_ctx["git_cmd"] + ["show", f"HEAD:{norm_file_path}"]
-                    if file_path.lower().endswith('.jpt'):
-                        result = subprocess.run(
-                            command, capture_output=True, cwd=git_ctx["cwd"]
-                        )
-                    else:
-                        result = subprocess.run(
-                            command, capture_output=True, cwd=git_ctx["cwd"],
-                            **utf8_text_kwargs()
-                        )
+                    result = subprocess.run(
+                        command, capture_output=True, cwd=git_ctx["cwd"],
+                        **utf8_text_kwargs()
+                    )
                     source = git_ctx["source"]
                     
                     if result.returncode == 0:
-                        if file_path.lower().endswith('.jpt'):
-                            from gilzabots.jpt import read_jpt_bytes
-
-                            content = read_jpt_bytes(result.stdout).text
-                        else:
-                            content = result.stdout
-                        respond(200, json.dumps({"content": content, "source": source}).encode('utf-8'), "application/json")
+                        respond(200, json.dumps({"content": result.stdout, "source": source}).encode('utf-8'), "application/json")
                         return
                     else:
                         respond(200, b'{"error":"Not found in git"}', "application/json")
@@ -2152,22 +1998,8 @@ class AsyncHTTPServer:
                 dir_path = os.path.dirname(full_path)
                 os.makedirs(dir_path, exist_ok=True)
                 response_payload = {"success": True}
-                if file_path.lower().endswith('.jpt'):
-                    from gilzabots.jpt import write_packaged_jpt
-
-                    result = write_packaged_jpt(
-                        full_path, content, project_root=project_path
-                    )
-                    response_payload.update({
-                        "content": result.text,
-                        "jptPackaged": True,
-                        "assets": result.assets,
-                        "assetBytes": result.asset_bytes,
-                        "externalUrls": list(result.external_urls),
-                    })
-                else:
-                    with open(full_path, 'w', encoding='utf-8', newline='') as f:
-                        f.write(content)
+                with open(full_path, 'w', encoding='utf-8', newline='') as f:
+                    f.write(content)
                 
                 # If writing an SVG file, automatically generate a PDF copy alongside it using PyMuPDF
                 if file_path.endswith('.svg'):
@@ -4271,69 +4103,6 @@ class AsyncHTTPServer:
                     git_ctx = _resolve_git_context(project_path, is_shadow, git_root_path)
                     git_cmd = git_ctx["git_cmd"]
                     diff = ""
-                    if file_path_param and file_path_param.lower().endswith('.jpt'):
-                        # Git sees the container as binary. Present the canonical
-                        # deck.json diff instead; asset hashes in that JSON still
-                        # make binary additions/replacements visible.
-                        import difflib
-                        from gilzabots.jpt import read_jpt, read_jpt_bytes
-
-                        repo_file_path = _project_path_to_repo_path(file_path_param, git_ctx)
-
-                        def revision_text(revision):
-                            shown = subprocess.run(
-                                git_cmd + ["show", f"{revision}:{repo_file_path}"],
-                                cwd=git_ctx["cwd"], capture_output=True,
-                            )
-                            if shown.returncode != 0:
-                                return ""
-                            return read_jpt_bytes(shown.stdout).text
-
-                        if commit_hash:
-                            verify = subprocess.run(
-                                git_cmd + ["rev-parse", "--verify", f"{commit_hash}^{{commit}}"],
-                                cwd=git_ctx["cwd"], capture_output=True,
-                                **utf8_text_kwargs(),
-                            )
-                            if verify.returncode != 0:
-                                respond(400, b'{"error":"Invalid commit"}', "application/json")
-                                return
-                            end_commit_hash = query.get('endCommit', [None])[0]
-                            if end_commit_hash:
-                                verify_end = subprocess.run(
-                                    git_cmd + ["rev-parse", "--verify", f"{end_commit_hash}^{{commit}}"],
-                                    cwd=git_ctx["cwd"], capture_output=True,
-                                    **utf8_text_kwargs(),
-                                )
-                                if verify_end.returncode != 0:
-                                    respond(400, b'{"error":"Invalid endCommit"}', "application/json")
-                                    return
-                                before = revision_text(commit_hash)
-                                after = revision_text(end_commit_hash)
-                            else:
-                                parent = subprocess.run(
-                                    git_cmd + ["rev-parse", "--verify", f"{commit_hash}^"],
-                                    cwd=git_ctx["cwd"], capture_output=True,
-                                    **utf8_text_kwargs(),
-                                )
-                                before = revision_text(f"{commit_hash}^") if parent.returncode == 0 else ""
-                                after = revision_text(commit_hash)
-                        else:
-                            before = revision_text("HEAD")
-                            full_path = os.path.join(project_path, file_path_param)
-                            after = read_jpt(full_path).text if os.path.isfile(full_path) else ""
-
-                        diff = "".join(difflib.unified_diff(
-                            before.splitlines(keepends=True),
-                            after.splitlines(keepends=True),
-                            fromfile=f"a/{file_path_param}::deck.json",
-                            tofile=f"b/{file_path_param}::deck.json",
-                        ))
-                        respond(
-                            200, json.dumps({"diff": diff}).encode('utf-8'),
-                            "application/json",
-                        )
-                        return
                     if commit_hash:
                         verify = subprocess.run(
                             git_cmd + ["rev-parse", "--verify", f"{commit_hash}^{{commit}}"],
@@ -4903,12 +4672,6 @@ class AsyncHTTPServer:
                         "version": a.get("version", ""),
                         "hasIcon": resolve_asset_icon_path(a) is not None,
                     }
-                    if a.get("type") == "theme":
-                        # The deck-theme fields this asset sets, so the store can
-                        # preview a theme that carries no picture and the editor
-                        # can apply it without a second request.
-                        entry["theme"] = a.get("theme", {})
-                        entry["hasImage"] = resolve_asset_icon_path(a) is not None
                     if a.get("type") == "template" and project_path:
                         # Templates unpack at the project root, so the store has
                         # to say up front which files an install would overwrite.
@@ -6930,121 +6693,31 @@ def start_gui_server(host="127.0.0.1", port=3000):
                 def _patched_init(self, window):
                     _orig_init(self, window)
                     page = self.webview.page()
-                    frame_print_supported = (
-                        hasattr(page, 'printRequestedByFrame')
-                        and hasattr(page, 'pdfPrintingFinished')
-                    )
 
                     def _disable_context_menu(_ok=None):
                         self.webview.setContextMenuPolicy(_Qt.ContextMenuPolicy.NoContextMenu)
-                        # The front-end treats an explicit false as a hard
-                        # compatibility error. An absent marker means a normal
-                        # web browser, whose own print dialog remains valid.
-                        page.runJavaScript(
-                            "window.__gilzabotsPdfPrintHost = "
-                            f"Object.freeze({{supported: {str(frame_print_supported).lower()}}});"
-                        )
                     page.loadFinished.connect(_disable_context_menu)
-                    
-                    # Handle window.print() triggered from JavaScript.
-                    #
-                    # Two signals, not one. QtWebEngine routes window.print()
-                    # from the top document to printRequested and window.print()
-                    # from a *subframe* to printRequestedByFrame (Qt 6.8+), and
-                    # connecting only the first is why the presentation editor's
-                    # "Export > PDF" did nothing: it prints a hidden iframe
-                    # holding the deck, so its request never reached this code.
-                    #
-                    # The frame is also what must be printed, not the page. The
-                    # page is the whole IDE, and printing it would produce a
-                    # picture of the editor around the slides. QWebEngineFrame
-                    # .printToPdf honours the document's own @page size, which
-                    # is how the deck's aspect ratio survives into the PDF
-                    # instead of being letterboxed onto A4.
+
+                    # Handle window.print() triggered from JavaScript: the
+                    # embedded webview has no print dialog of its own, so the
+                    # page is saved as a PDF the user picks a path for.
                     try:
                         from PyQt6.QtWidgets import QFileDialog
 
-                        pending_exports = {}
-
-                        def _path_key(file_path):
-                            return os.path.normcase(os.path.abspath(str(file_path)))
-
-                        def _notify_export(request_id, status, message=""):
-                            if request_id:
-                                page.runJavaScript(
-                                    _pdf_export_result_script(request_id, status, message)
-                                )
-
-                        def _remove_pending(file_path, request_id):
-                            key = _path_key(file_path)
-                            queue = pending_exports.get(key, [])
-                            if request_id in queue:
-                                queue.remove(request_id)
-                            if not queue:
-                                pending_exports.pop(key, None)
-
-                        def _save_as_pdf(print_to_pdf, suggested_name="", request_id=None):
-                            file_path = ""
+                        def _handle_print():
                             try:
                                 file_path, _ = QFileDialog.getSaveFileName(
-                                    self.webview, "Save PDF", suggested_name, "PDF Files (*.pdf)"
+                                    self.webview, "Save PDF", "", "PDF Files (*.pdf)"
                                 )
                                 if not file_path:
-                                    _notify_export(request_id, "cancelled")
                                     return
                                 if not file_path.lower().endswith('.pdf'):
                                     file_path += '.pdf'
-                                if request_id:
-                                    pending_exports.setdefault(_path_key(file_path), []).append(request_id)
-                                print_to_pdf(file_path)
-                            except Exception as exc:
-                                if file_path and request_id:
-                                    _remove_pending(file_path, request_id)
-                                _notify_export(
-                                    request_id,
-                                    "failed",
-                                    f"{type(exc).__name__}: {exc}",
-                                )
-                                raise
-
-                        def _handle_pdf_finished(file_path, success):
-                            key = _path_key(file_path)
-                            queue = pending_exports.get(key, [])
-                            if not queue:
-                                return
-                            request_id = queue.pop(0)
-                            if not queue:
-                                pending_exports.pop(key, None)
-                            if success:
-                                _notify_export(request_id, "success")
-                            else:
-                                _notify_export(request_id, "failed", "Qt could not write the PDF file.")
-
-                        def _handle_print():
-                            try:
-                                _save_as_pdf(self.webview.page().printToPdf)
+                                self.webview.page().printToPdf(file_path)
                             except Exception as e:
                                 print(f"[GilzaBots] print to PDF failed: {type(e).__name__}: {e}")
 
-                        def _handle_print_frame(frame):
-                            # The versioned frame name carries the suggested
-                            # name plus the id used for the completion reply.
-                            try:
-                                frame_name = frame.htmlName() or ""
-                                request = _parse_pdf_export_frame_name(frame_name)
-                                if request:
-                                    request_id, suggested_name = request
-                                    _save_as_pdf(frame.printToPdf, suggested_name, request_id)
-                                else:
-                                    _save_as_pdf(frame.printToPdf, frame_name)
-                            except Exception as e:
-                                print(f"[GilzaBots] print frame to PDF failed: {type(e).__name__}: {e}")
-
                         page.printRequested.connect(_handle_print)
-                        if hasattr(page, 'pdfPrintingFinished'):
-                            page.pdfPrintingFinished.connect(_handle_pdf_finished)
-                        if frame_print_supported:
-                            page.printRequestedByFrame.connect(_handle_print_frame)
                     except Exception as pe:
                         print(f"[GilzaBots] could not install the print handler: "
                               f"{type(pe).__name__}: {pe}")

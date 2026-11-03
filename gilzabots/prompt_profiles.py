@@ -94,8 +94,7 @@ def _full_worker_intro() -> str:
 # they are listed. Every other tool the worker actually receives is listed after
 # these with its own description, so the block can never claim a smaller toolset
 # than the one the model was given: it used to say "Your specific tools are:"
-# over 14 names while the worker held 24, including the presentation tools the
-# tex-to-jpt skill tells it to call.
+# over 14 names while the worker held 24.
 _FULL_WORKER_TOOL_GUIDANCE = {
     "get_project_overview": "Returns the project's folder and file structure. Use it only when the target file is unknown.",
     "search_code": "Searches project files using Python and returns matching paths with line numbers. Use it to locate sections, labels, definitions, or markers before line-based reads/edits.",

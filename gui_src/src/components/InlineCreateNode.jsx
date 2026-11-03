@@ -1,23 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronRight, File, Folder, Presentation } from 'lucide-react';
+import { ChevronRight, File, Folder } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { inlineCreateKeyAction } from '../utils/inlineCreate';
 
-// Provisional tree row used to create a file, directory or presentation in
-// place. Enter, Tab or Shift+Tab creates (see `inlineCreateKeyAction`). Escape
-// or a pointer press outside the row cancels.
+// Provisional tree row used to create a file or directory in place. Enter, Tab
+// or Shift+Tab creates (see `inlineCreateKeyAction`). Escape or a pointer press
+// outside the row cancels.
 // Losing focus by itself does nothing: the IDE moves focus programmatically
 // (the editor focuses a file it has just opened), and treating that as a
-// commit would create an entry — with a pre-filled name, one the user never
-// confirmed. The row simply stays open until the user answers it.
+// commit would create an entry the user never confirmed. The row simply stays
+// open until the user answers it.
 // `onSubmit` resolves to an error message to show under the row, or to a falsy
 // value once the entry was created (the parent then removes the row).
-//
-// `initialName` pre-fills the field (a presentation starts as `name.jpt`); the
-// part before the extension is selected so typing replaces just the stem.
-export default function InlineCreateNode({ kind, initialName = '', onSubmit, onCancel }) {
+export default function InlineCreateNode({ kind, onSubmit, onCancel }) {
   const { t } = useTranslation();
-  const [name, setName] = useState(initialName);
+  const [name, setName] = useState('');
   const [error, setError] = useState('');
   const rowRef = useRef(null);
   const inputRef = useRef(null);
@@ -36,11 +33,6 @@ export default function InlineCreateNode({ kind, initialName = '', onSubmit, onC
     const input = inputRef.current;
     if (!input) return;
     input.focus();
-    const dotIndex = initialName.lastIndexOf('.');
-    if (dotIndex > 0) input.setSelectionRange(0, dotIndex);
-    else input.select();
-    // Selection is set once, when the row appears.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // A press anywhere outside the row is the user leaving it: cancel.
@@ -91,15 +83,12 @@ export default function InlineCreateNode({ kind, initialName = '', onSubmit, onC
   const label = {
     file: t('explorerSidebar.newFileName', 'New file name'),
     dir: t('explorerSidebar.newDirName', 'New directory name'),
-    presentation: t('explorerSidebar.newPresentationName', 'New presentation name'),
   }[kind];
 
   const iconStyle = { flexShrink: 0 };
   const icon = kind === 'dir'
     ? <><ChevronRight size={14} style={iconStyle} /><Folder size={14} style={{ ...iconStyle, color: 'var(--vscode-fg-folder)' }} /></>
-    : kind === 'presentation'
-      ? <Presentation size={14} style={{ ...iconStyle, color: 'var(--vscode-accent)' }} />
-      : <File size={14} style={{ ...iconStyle, color: 'var(--vscode-text-muted)' }} />;
+    : <File size={14} style={{ ...iconStyle, color: 'var(--vscode-text-muted)' }} />;
 
   return (
     <div

@@ -1,10 +1,6 @@
-// Navigation conventions shared by every full-screen presentation surface: the
-// deck editor's presentation mode and the PDF viewer's.
-//
-// They live in one place because a presenter's habits — and the clicker in
-// their hand, which sends PageDown/PageUp — have to work the same whichever of
-// the two is on screen. Two copies of the key table would drift the first time
-// one of them gained a key.
+// Navigation conventions of the full-screen presentation surface (the PDF
+// viewer's presentation mode): a presenter's habits, and the clicker in their
+// hand, which sends PageDown/PageUp.
 //
 // Pure functions only, so the conventions are unit-tested without a DOM; the
 // React lifecycle around them is `hooks/usePresentation.js`.

@@ -9,10 +9,6 @@ const EXT_MAP = {
   html: 'html',
   css: 'css',
   json: 'json',
-  // A presentation is JSON. It normally opens in the deck editor rather than in
-  // Monaco, but every surface that does show it as text — a diff, a checkpoint
-  // preview — should highlight it as what it is.
-  jpt: 'json',
   md: 'markdown',
   yml: 'yaml',
   yaml: 'yaml',

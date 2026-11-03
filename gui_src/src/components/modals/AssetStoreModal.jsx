@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { X, Store, Package, FileText, Download, Check, Plus, RefreshCw, RotateCcw, AlertTriangle, Wallpaper } from 'lucide-react';
+import { X, Store, Package, FileText, Download, Check, Plus, RefreshCw, RotateCcw, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 // Asset icon with a graceful fallback to a generic icon per asset kind.
@@ -22,67 +22,6 @@ function AssetIcon({ src, alt, fallback: Fallback = Package }) {
   );
 }
 
-// A theme's preview, drawn from the theme's own values rather than from a
-// picture shipped beside it. A screenshot would be a second thing to keep in
-// step with the first, and it could not exist at all for a theme that is only
-// colours and bands — which is most of them.
-function ThemePreview({ theme, image }) {
-  const values = theme || {};
-  const accent = values.accent || '#2f6fb3';
-  const header = Number(values.headerHeight) || 0;
-  const footer = Number(values.footerHeight) || 0;
-  // Deck units scaled into the card: the preview is 1280x720 at 1/5.
-  const scale = 0.2;
-  return (
-    <div
-      className="theme-card-preview"
-      style={{
-        background: values.background || '#ffffff',
-        color: values.color || '#1a1a1a',
-        fontFamily: values.fontFamily || undefined,
-      }}
-    >
-      {image && (
-        <img
-          src={image}
-          alt=""
-          aria-hidden="true"
-          style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: values.backgroundFit || 'cover',
-            opacity: values.backgroundOpacity ?? 1,
-          }}
-        />
-      )}
-      {header > 0 && (
-        <div style={{
-          position: 'absolute', left: 0, top: 0, right: 0,
-          height: `${header * scale}px`, background: values.headerColor || accent,
-        }} />
-      )}
-      <div style={{
-        position: 'absolute', left: '16px', top: header > 0 ? `${header * scale / 2 - 7}px` : '18px',
-        fontSize: '13px', fontWeight: 700,
-        color: header > 0 ? (values.titleColor || '#ffffff') : (values.color || '#1a1a1a'),
-      }}>
-        Slide title
-      </div>
-      <div style={{
-        position: 'absolute', left: '16px', top: header > 0 ? `${header * scale + 14}px` : '46px',
-        right: '16px', fontSize: '10px', lineHeight: 1.6, opacity: 0.85,
-      }}>
-        • A bullet<br />• Another bullet
-      </div>
-      {footer > 0 && (
-        <div style={{
-          position: 'absolute', left: 0, right: 0, bottom: 0,
-          height: `${Math.max(6, footer * scale)}px`, background: values.footerColor || accent,
-        }} />
-      )}
-    </div>
-  );
-}
-
 // Tab button shared by the asset-type tabs and the skills sub-tabs.
 function TabButton({ active, onClick, children }) {
   return (
@@ -97,18 +36,12 @@ function TabButton({ active, onClick, children }) {
 // the current project; templates are LaTeX packages unpacked at the project root.
 export default function AssetStoreModal({
   onClose, projectPath, onWorkspaceChanged,
-  // The presentation open in the editor, if one is, and how to give it a
-  // background. The store does not know what a deck is: it hands back the
-  // asset that was chosen and the editor's owner does the rest.
-  deckFile = null, onApplyTheme = null,
 }) {
   const { t } = useTranslation();
   const [assetType, setAssetType] = useState('skill');
   const [skillsTab, setSkillsTab] = useState('catalog');
   const [assets, setAssets] = useState([]);
   const [templates, setTemplates] = useState([]);
-  const [themes, setThemes] = useState([]);
-  const [applyingId, setApplyingId] = useState(null);
   const [skills, setSkills] = useState([]);
   const [installingId, setInstallingId] = useState(null);
   const [togglingName, setTogglingName] = useState(null);
@@ -136,13 +69,6 @@ export default function AssetStoreModal({
       .catch(() => setTemplates([]));
   }, [projectPath]);
 
-  const fetchThemes = useCallback(() => {
-    return fetch('/api/assets?type=theme')
-      .then(r => r.ok ? r.json() : { assets: [] })
-      .then(data => setThemes(Array.isArray(data.assets) ? data.assets : []))
-      .catch(() => setThemes([]));
-  }, []);
-
   const fetchSkills = useCallback(() => {
     if (!projectPath) { setSkills([]); return Promise.resolve(); }
     return fetch(`/api/skills?projectPath=${encodeURIComponent(projectPath)}`)
@@ -153,7 +79,6 @@ export default function AssetStoreModal({
 
   useEffect(() => { fetchAssets(); }, [fetchAssets]);
   useEffect(() => { fetchTemplates(); }, [fetchTemplates]);
-  useEffect(() => { fetchThemes(); }, [fetchThemes]);
   useEffect(() => { fetchSkills(); }, [fetchSkills]);
 
   // A message about templates makes no sense while looking at skills.
@@ -194,20 +119,6 @@ export default function AssetStoreModal({
   // Templates unpack at the project root, so an install can replace files the
   // user already has. The first attempt never overwrites: a 409 comes back with
   // the conflicting paths and the user confirms before the second attempt.
-  const handleApplyTheme = async (theme) => {
-    if (!onApplyTheme) return;
-    setApplyingId(theme.id);
-    setRefreshError(null);
-    try {
-      const message = await onApplyTheme(theme);
-      setInstallMessage(message);
-    } catch (error) {
-      setRefreshError(error?.message || String(error));
-    } finally {
-      setApplyingId(null);
-    }
-  };
-
   const handleInstallTemplate = async (template, overwrite = false) => {
     if (!projectPath || installingId) return;
     setInstallingId(template.id);
@@ -305,9 +216,6 @@ export default function AssetStoreModal({
           <TabButton active={assetType === 'template'} onClick={() => setAssetType('template')}>
             {t('assetStore.tabTemplates', 'LaTeX templates')}
           </TabButton>
-          <TabButton active={assetType === 'theme'} onClick={() => setAssetType('theme')}>
-            {t('assetStore.tabThemes', 'Presentation themes')}
-          </TabButton>
         </div>
 
         {/* Skills sub-tabs: the catalog and what the project actually runs */}
@@ -324,17 +232,13 @@ export default function AssetStoreModal({
 
         {/* Content */}
         <div className="vscode-modal-content flex-1 overflow-y-auto">
-          {assetType === 'theme' ? (!deckFile && (
-            <div style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground)', marginBottom: '12px' }}>
-              {t('assetStore.noDeckHint', 'Open a .jpt presentation in the editor to apply a theme to it.')}
-            </div>
-          )) : (!projectPath && (
+          {!projectPath && (
             <div style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground)', marginBottom: '12px' }}>
               {assetType === 'template'
                 ? t('assetStore.noProjectHintTemplates', 'Open a project to install templates.')
                 : t('assetStore.noProjectHint', 'Open a project to install or activate skills.')}
             </div>
-          ))}
+          )}
 
           {refreshError && (
             <div style={{ fontSize: '12px', color: 'var(--vscode-error-fg, #f14c4c)', marginBottom: '12px' }}>
@@ -346,45 +250,6 @@ export default function AssetStoreModal({
             <div style={{ fontSize: '12px', color: 'var(--vscode-fg-teal)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Check size={13} /> {installMessage}
             </div>
-          )}
-
-          {assetType === 'theme' && (
-            themes.length === 0 ? (
-              <div style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground)' }}>
-                {t('assetStore.emptyThemes', 'No themes available in the catalog.')}
-              </div>
-            ) : (
-              <div className="backgrounds-grid">
-                {themes.map(theme => (
-                  <div key={theme.id} className="background-card">
-                    {/* A theme chosen from a name instead of a preview is a
-                        theme chosen blind. */}
-                    <ThemePreview
-                      theme={theme.theme}
-                      image={theme.hasImage
-                        ? `/api/assets/icon?id=${encodeURIComponent(theme.id)}`
-                        : null}
-                    />
-                    <div className="background-card-body">
-                      <div className="skill-card-title">{theme.name}</div>
-                      <div className="skill-card-desc">{theme.desc}</div>
-                    </div>
-                    <button
-                      className="vscode-button skill-card-action"
-                      disabled={!deckFile || applyingId === theme.id}
-                      title={deckFile
-                        ? t('assetStore.applyThemeHint', 'Use this theme in {{file}}.', { file: deckFile })
-                        : t('assetStore.applyThemeNoDeck', 'Open a .jpt presentation to apply a theme.')}
-                      onClick={() => handleApplyTheme(theme)}
-                    >
-                      {applyingId === theme.id
-                        ? t('assetStore.applying', 'Applying…')
-                        : <><Wallpaper size={13} /> {t('assetStore.applyTheme', 'Apply')}</>}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )
           )}
 
           {assetType === 'template' && (

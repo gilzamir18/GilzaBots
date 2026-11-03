@@ -84,7 +84,7 @@ def test_the_bundled_auxiliary_skills_are_helpers_and_the_rest_are_not():
     roles = {s["name"]: skill_role(s) for s in discover_skills("")}
     for name in ("staged-reader", "elementary-ops", "log-table-condenser", "web-search"):
         assert roles[name] == HELPER_ROLE, name
-    for name in ("command-line", "humanize", "latex-assistant", "tex-to-jpt"):
+    for name in ("command-line", "humanize", "latex-assistant"):
         assert roles[name] == INSTRUCTIONS_ROLE, name
 
 
@@ -220,7 +220,7 @@ def test_a_helper_holds_data_tools_only(project, monkeypatch):
 
     assert {"read_file", "search_code", "web_search", "write_file", "run_python_script"} <= seen["tools"]
     assert not {
-        "generate_image", "compile_latex", "create_presentation", "create_docx_file",
+        "generate_image", "compile_latex", "create_docx_file",
         "run_background_command", "run_interactive_command", "run_skill", "load_skill",
     } & seen["tools"]
     assert "analyze_image" not in seen["tools"], "its model has no vision"

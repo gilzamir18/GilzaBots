@@ -29,10 +29,6 @@ WRITE_TOOLS = {
     "replace_content_range",
     "create_docx_file",
     "create_pptx_file",
-    # Authoring and editing a .jpt presentation writes a project file.
-    "create_presentation",
-    "edit_presentation",
-    "set_presentation_theme",
     # Generating an image produces a project file like any other write.
     "generate_image",
 }
@@ -298,18 +294,20 @@ def test_each_policy_renders_its_own_block_and_only_it(tmp_path, monkeypatch, po
         ("light", "delegate"),
     ],
 )
-def test_every_orchestrator_prompt_understands_packaged_jpt(
+def test_no_orchestrator_prompt_mentions_the_removed_jpt_format(
     tmp_path, monkeypatch, profile, policy
 ):
+    """The native .jpt presentation format and its tools were removed; a prompt
+    that still named them would send the model after tools it does not hold."""
     project = _catalog(
         tmp_path, monkeypatch, f"ollama/{profile}-{policy}",
         prompt_profile=profile, orchestrator_policy=policy,
     )
     prompt = build_chat_orchestrator(project, None).system_prompt
 
-    assert "deck.json" in prompt
-    assert "jpt:assets/" in prompt
-    assert "line-position" in prompt
+    for remnant in ("jpt", "deck.json", "create_presentation", "edit_presentation",
+                    "set_presentation_theme", "check_presentation"):
+        assert remnant not in prompt.lower(), remnant
 
 
 def test_fallback_body_makes_the_main_agent_do_the_task(monkeypatch):

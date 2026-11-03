@@ -3681,9 +3681,7 @@ input:focus, select:focus, textarea:focus {
   padding-bottom: 32px;
 }
 
-/* ── PDF presentation mode (PdfPresentMode.jsx) ─────────────────────────────
-   The same overlay geometry as the deck editor's `.deck-present`, which lives
-   in the lazily loaded slides.css and so cannot be relied on here. */
+/* ── PDF presentation mode (PdfPresentMode.jsx) ───────────────────────────── */
 .pdf-present {
   position: fixed;
   left: 0;
@@ -4424,46 +4422,4 @@ select {
 
 .chat-msg-delivered {
   animation: chatMessageDelivered 420ms ease-out;
-}
-
-/* ── Asset store: slide backgrounds ─────────────────────────────────────────
-   A wider card than the skill grid's, because what the user is choosing here
-   is the picture itself: a background picked from a name rather than from a
-   preview is a background picked blind. */
-.backgrounds-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 14px;
-}
-.background-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px;
-  border: 1px solid var(--vscode-border);
-  border-radius: 6px;
-  background: var(--vscode-bg);
-}
-.background-card-preview {
-  display: block;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
-  border-radius: 4px;
-  border: 1px solid var(--vscode-border);
-  background: #ffffff;
-}
-.background-card-body { flex: 1 1 auto; min-height: 0; }
-
-/* A theme's preview is drawn, not photographed: most themes are colours and
-   bands with no picture to show. 16:9, so what the card shows is the shape of
-   a slide. */
-.theme-card-preview {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 16 / 9;
-  overflow: hidden;
-  border-radius: 4px;
-  border: 1px solid var(--vscode-border);
-  font-family: var(--vscode-font-family, system-ui, sans-serif);
 }

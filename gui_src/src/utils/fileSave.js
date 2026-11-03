@@ -16,9 +16,3 @@ export function createFileSaveQueue() {
     },
   };
 }
-
-// A save acknowledges a snapshot. New typing remains the live buffer, even
-// when the server canonicalizes the saved document (packaged JPT media).
-export function contentAfterSave(current, submitted, saved) {
-  return current === submitted ? saved : current;
-}

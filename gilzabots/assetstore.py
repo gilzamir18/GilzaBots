@@ -30,19 +30,7 @@ _PACKAGE_DIR = Path(__file__).parent
 _STORE_ROOT = _PACKAGE_DIR / "assetstore"
 _REPO_ROOT = _PACKAGE_DIR.parent
 
-VALID_TYPES = {"skill", "template", "theme"}
-
-# A theme is a `.yaml` describing a deck's whole look — colours, type, the bands
-# a Beamer-style theme draws, and *optionally* a background picture beside it.
-# The picture is not the theme: a theme with no image is a perfectly good theme,
-# which is why this replaced the earlier background-only assets.
-THEME_IMAGE_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp", ".avif")
-
-# The deck-theme fields a store theme may set, and how each is coerced. The
-# *names* come from the format itself (`gilzabots.jpt.model.THEME_FIELDS`), so a
-# field added there is offered here without this list being remembered — and a
-# sidecar still cannot introduce one the editor does not understand.
-_NUMERIC_THEME_FIELDS = {"backgroundOpacity", "headerHeight", "footerHeight"}
+VALID_TYPES = {"skill", "template"}
 
 # Metadata sidecar suffixes accepted for each asset type. Skills keep the
 # historical `.metadata` name; templates use a `.yaml` with the same stem as the
@@ -73,8 +61,6 @@ def _store_dirs(asset_type: str) -> list[Path]:
     """
     if asset_type == "template":
         return [_STORE_ROOT / "templates", _REPO_ROOT / "templates"]
-    if asset_type == "theme":
-        return [_STORE_ROOT / "theme", _STORE_ROOT / "themes"]
     return [_STORE_ROOT / (asset_type + "s")]
 
 
@@ -115,84 +101,8 @@ def _normalize_template_meta(raw: dict, asset_id: str) -> dict:
     return meta
 
 
-def _iter_themes() -> list[dict]:
-    """Every theme in the store, in name order.
-
-    A theme is its `.yaml`. The optional `image:` names a picture beside it,
-    which the store previews and the editor embeds when the theme is applied —
-    but a theme without one is complete: colours, type and the header and footer
-    bands are the greater part of what makes a deck look like itself.
-    """
-    results: list[dict] = []
-    seen_ids: set[str] = set()
-    for directory in _store_dirs("theme"):
-        if not directory.exists():
-            continue
-        for sidecar in sorted(directory.iterdir()):
-            if sidecar.suffix.lower() not in (".yaml", ".yml") or sidecar.name.startswith("."):
-                continue
-            asset_id = sidecar.stem
-            if asset_id in seen_ids:
-                continue
-            try:
-                raw = _parse_metadata(sidecar)
-            except Exception:
-                continue
-
-            meta: dict = {
-                "id": asset_id,
-                "type": "theme",
-                "name": str(_pick(raw, ("name",)) or asset_id),
-                "desc": str(_pick(raw, ("description", "desc")) or "").strip(),
-                "version": str(_pick(raw, ("version",)) or ""),
-                "theme": _theme_fields(raw.get("theme") if isinstance(raw.get("theme"), dict) else {}),
-                "_meta": sidecar,
-            }
-            image_name = _pick(raw, ("image",))
-            if image_name:
-                image = (sidecar.parent / str(image_name)).resolve()
-                if (image.is_file()
-                        and image.is_relative_to(sidecar.parent.resolve())
-                        and image.suffix.lower() in THEME_IMAGE_SUFFIXES):
-                    meta["_image"] = image
-            seen_ids.add(asset_id)
-            results.append(meta)
-    return results
-
-
-def _theme_fields(body: dict) -> dict:
-    """The deck-theme fields a sidecar sets, coerced and filtered.
-
-    Filtered rather than passed through: a theme is written straight into a
-    user's document, so the store may only set fields the format defines.
-    """
-    from gilzabots.jpt.model import THEME_FIELDS
-
-    out: dict = {}
-    lowered = {str(k).strip().lower(): v for k, v in (body or {}).items()}
-    for field in THEME_FIELDS:
-        value = lowered.get(field.lower())
-        if value is None:
-            continue
-        if field in _NUMERIC_THEME_FIELDS:
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
-                continue
-            out[field] = float(value)
-        else:
-            out[field] = str(value)
-    return out
-
-
-def theme_image_path(meta: dict) -> Optional[Path]:
-    """The picture a theme carries, or None when it has none."""
-    image = meta.get("_image")
-    return image if isinstance(image, Path) and image.is_file() else None
-
-
 def _iter_assets(asset_type: str) -> list[dict]:
     """Return metadata dictionaries for all assets of the given type."""
-    if asset_type == "theme":
-        return _iter_themes()
     results: list[dict] = []
     seen_ids: set[str] = set()
     for d in _store_dirs(asset_type):
@@ -260,11 +170,6 @@ def resolve_asset_icon_path(meta: dict) -> Optional[Path]:
     `icon` value that escapes the store directory all resolve to None so
     callers can fall back to a default icon.
     """
-    # A theme's picture is its own preview, and serving it here is what lets the
-    # grid show it without a second endpoint delivering the same bytes. A theme
-    # with no picture has no icon, and the store draws its colours instead.
-    if meta.get("type") == "theme":
-        return theme_image_path(meta)
     icon_name = meta.get("icon")
     meta_path: Optional[Path] = meta.get("_meta")
     if not icon_name or not meta_path:
@@ -429,13 +334,6 @@ def install_asset(
     FileExistsError unless *overwrite* is set.
     """
     asset_type = meta.get("type", "")
-    if asset_type == "theme":
-        # A theme is not installed into a project: it is applied to an open
-        # presentation. Saying so is better than a KeyError on the `_zip` a
-        # theme does not have.
-        raise ValueError(
-            "a theme is applied to an open presentation, not installed into a project"
-        )
 
     zip_path: Path = meta["_zip"]
     if not zip_path.exists():

@@ -37,10 +37,6 @@ import RichTextEditor from './RichTextEditor';
 // when a file is actually switched into it.
 const LatexWysiwygEditor = lazy(() => import('../wysiwyg/LatexWysiwygEditor.jsx'));
 
-// The deck editor carries its own canvas, presentation mode and (lazily, from
-// inside) the PPTX writer, so it is only loaded when a `.jpt` is opened.
-const SlideEditor = lazy(() => import('../slides/SlideEditor.jsx'));
-
 // Center panel: file tabs + Monaco editor (or empty state when no file is open).
 export default function EditorPanel({
   selectedFile,
@@ -248,10 +244,6 @@ export default function EditorPanel({
   const rememberPdfViewState = (state) => { pdfViewStatesRef.current[pdfViewKey] = state; };
   const isHtmlFile = selectedFile && /\.(html|htm)$/i.test(selectedFile);
   const isMarkdownFile = !!selectedFile && selectedFile.toLowerCase().endsWith('.md');
-  // Presentations have a JSON model but are edited on a canvas and stored as a
-  // package with their media. `.jpt` routes that document to this surface; a
-  // plain `.json` stays a text file in Monaco.
-  const isDeckFile = !!selectedFile && selectedFile.toLowerCase().endsWith('.jpt');
   // Files that have a rendered preview at all — the only ones the preview
   // buttons are offered for, in either full or side-by-side layout.
   const isPreviewableFile = isMarkdownFile || !!isHtmlFile;
@@ -2001,25 +1993,7 @@ export default function EditorPanel({
 
       {/* Monaco editor and PDF Preview Split */}
       <div style={{ flex: 1, minHeight: 0, height: 'calc(100% - 35px)' }}>
-        {isDeckFile ? (
-          <Suspense
-            fallback={(
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', height: '100%', color: 'var(--vscode-descriptionForeground)' }}>
-                <RefreshCw size={16} className="animate-spin" />
-                <span>{t('deck.loading')}</span>
-              </div>
-            )}
-          >
-            <SlideEditor
-              key={selectedFile}
-              source={fileContent}
-              activeProjectPath={activeProject?.project_path}
-              deckFilePath={selectedFile}
-              uiScale={uiScale}
-              onChange={setFileContent}
-            />
-          </Suspense>
-        ) : isPdfFile ? (
+        {isPdfFile ? (
           <div style={{ height: '100%', background: 'var(--vscode-editor-bg)' }}>
             <PdfPreview
               key={pdfViewKey}

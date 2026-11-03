@@ -17,7 +17,7 @@ file contract with the desktop is [chats_export.md](chats_export.md).
 | How its conversations reach the desktop | A per-device journal (`.gilzabots/session/devices/<id>.json`), never `chats.json`. |
 | Agent | A small JavaScript loop in the app, not the desktop's MemGPT orchestrator. |
 | Tools | `list_files`, `read_file`, `search_files`, `edit_file`, `create_file`. Writes need approval, as on the desktop. |
-| What it cannot do | Compile LaTeX, run commands, edit `.jpt` decks, checkpoints, git. The system prompt says so. |
+| What it cannot do | Compile LaTeX, run commands, checkpoints, git. The system prompt says so. |
 | Model credentials | Typed on the phone, stored encrypted with an Android Keystore key. Never uploaded, never read from the project (`.env` is not mirrored). |
 | Which model a chat uses | Chosen per chat from the model chip at the top of the chat: any model of any connection, or the desktop project's model when a connection can serve it. A new chat starts with the project's last pick; a chat keeps its own. Connections hold a list of models, typed or loaded from the provider (`/models`, Anthropic `/v1/models`). |
 | Navigation | Settings, a chat and the file viewer open over the screen they came from, which stays mounted. A project's session lives for the life of the app, and a project re-entered (or reopened after a restart) is shown from the device's cache at once while it syncs. |

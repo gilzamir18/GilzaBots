@@ -21,7 +21,7 @@ GilzaBots has three parts working together:
    specialised tasks, and hands auxiliary jobs (long reads, log condensing, web
    research) to helper agents.
 2. **The workspace** — a source editor with a file explorer, terminal and Git, plus
-   previews for Markdown, HTML and PDF, a rich-text mode, and a presentation editor.
+   previews for Markdown, HTML and PDF, and a rich-text mode.
 3. **Document tools** — LaTeX projects get a PDF preview side by side, SyncTeX to jump
    between the PDF and the `.tex` line that produced it, a model-based WYSIWYG mode,
    and local compilation with Tectonic, which needs no system-wide LaTeX installation.
@@ -484,9 +484,6 @@ Beyond basic LaTeX file editing, GilzaBots includes powerful built-in tools and 
   vision-capable models.
 - **AI Image Generation (`generate_image`)** — generate figures, diagrams, and illustrations
   directly into your project folder from text descriptions.
-- **Presentation Decks (`create_presentation`, `edit_presentation`, `check_presentation`)** —
-  create and edit native GilzaBots presentation slides (`.jpt`) with a visual slide editor
-  and presentation mode.
 - **Selection Snippet Actions** — highlight any passage in the PDF or preview to
   translate it, pronounce it aloud, or look it up with an instant AI explanation card.
 - **Voice Dictation** — dictate prompts directly into the chat composer using local Whisper
@@ -829,7 +826,7 @@ desktop stack. The window needs `pip install "gilzabots[gui]"`. LaTeX compilatio
 `tectonic` found on your `PATH`.
 
 **What it cannot do** — anything that is the editor rather than the agent: the PDF
-preview, SyncTeX, the rich-text and WYSIWYG modes, PDF annotations, presentation mode,
+preview, SyncTeX, the rich-text and WYSIWYG modes, PDF annotations, PDF presentation mode,
 dictation and read-aloud. Those live in the window.
 
 ## cli-models :: How do I register a model and a provider from the terminal?

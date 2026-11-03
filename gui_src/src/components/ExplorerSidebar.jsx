@@ -303,7 +303,6 @@ export default function ExplorerSidebar({
               <InlineCreateNode
                 key={pendingCreate.id}
                 kind={pendingCreate.kind}
-                initialName={pendingCreate.initialName}
                 onSubmit={onInlineCreateSubmit}
                 onCancel={onInlineCreateCancel}
               />
