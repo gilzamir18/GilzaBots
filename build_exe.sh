@@ -99,6 +99,13 @@ fi
 
 echo -e "\n[4/4] Empacotando com PyInstaller..."
 # A sintaxe de --add-data no Linux/macOS usa dois pontos (:)
+# Qt is collected by PyInstaller's own PyQt6 hooks, which take only the modules
+# the application imports (plus QtWebEngineProcess, its resources and every
+# locale). --collect-all "PyQt6" would copy the whole wheel instead. The QML
+# bindings are excluded because the window is widgets-based: QtWebEngineCore
+# links libQt6Qml/libQt6Quick (still bundled through that dependency), but the
+# QtQml hook would add every QML plugin and, through them, Quick3D,
+# QuickControls2, Multimedia and more. See PROJECT_DESIGN.md §2.16.1.
 pyinstaller --name "GilzaBots" \
             $GOOGLE_CLIENT_DATA \
             --windowed \
@@ -129,8 +136,9 @@ pyinstaller --name "GilzaBots" \
             --collect-all "webview" \
             --collect-all "pythonnet" \
             --collect-all "clr_loader" \
-            --collect-all "PyQt6" \
-            --collect-all "PyQt6-WebEngine" \
+            --exclude-module "PyQt6.QtQml" \
+            --exclude-module "PyQt6.QtQuick" \
+            --exclude-module "PyQt6.QtQuickWidgets" \
             --collect-all "docx" \
             --collect-all "pptx" \
             --collect-all "xlsxwriter" \
