@@ -15,7 +15,7 @@ Two things this module is careful about:
 
 * **It never blocks the caller's event loop.** ONNX inference is synchronous and
   CPU-bound, so the adapter hands the whole load-phonemize-infer sequence to a
-  worker thread. A host that runs one event loop for everything (as OpalaTex
+  worker thread. A host that runs one event loop for everything (as GilzaBots
   does) would otherwise stall on every request.
 * **It caches sessions by path and mtime.** Re-reading 63 MB per utterance would
   dominate the cost of speaking a sentence.

@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from opalatex import tools
-from opalatex.diagnostics import inspect_git, inspect_python
+from gilzabots import tools
+from gilzabots.diagnostics import inspect_git, inspect_python
 
 
 @pytest.fixture(autouse=True)
@@ -32,7 +32,7 @@ def test_document_paging_has_no_gaps_and_creates_no_files(tmp_path, monkeypatch)
     target = tmp_path / 'fake.pdf'
     target.write_bytes(b'%PDF')
     content = 'alpha\nbeta\ngamma' * 50
-    monkeypatch.setattr('opalatex.attachments.extract_document_text_from_path', lambda path: content)
+    monkeypatch.setattr('gilzabots.attachments.extract_document_text_from_path', lambda path: content)
     offset, parts = 0, []
     while offset is not None:
         page = json.loads(asyncio.run(tools.read_document._func(str(target), offset=offset, limit=37)))

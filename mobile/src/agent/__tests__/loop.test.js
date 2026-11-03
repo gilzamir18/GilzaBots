@@ -10,7 +10,7 @@ function memoryWorkspace(files) {
   const store = new Map(Object.entries(files).map(([path, content]) => [path, { content, md5: `md5-${content.length}` }]));
   return {
     writes: [],
-    async listPaths() { return [...store.keys()].filter((p) => !p.startsWith('.opalatex/')).sort(); },
+    async listPaths() { return [...store.keys()].filter((p) => !p.startsWith('.gilzabots/')).sort(); },
     async listTextPaths() { return this.listPaths(); },
     async readText(path) {
       const entry = store.get(path);
@@ -76,9 +76,9 @@ test('a declined edit writes nothing and tells the model', async () => {
   assert.match(complete.requests[1].at(-1).content, /declined/);
 });
 
-test('OpalaTex internals are never writable', async () => {
+test('GilzaBots internals are never writable', async () => {
   const [, , , edit] = createTools(memoryWorkspace({}));
-  await assert.rejects(edit.prepare({ path: '.opalatex/session/chats.json', old_string: 'a', new_string: 'b' }), ToolInputError);
+  await assert.rejects(edit.prepare({ path: '.gilzabots/session/chats.json', old_string: 'a', new_string: 'b' }), ToolInputError);
   assert.throws(() => normalizeProjectPath('../etc/passwd'), ToolInputError);
 });
 
@@ -137,7 +137,7 @@ test('context borrows the summary and the newest turns under a budget', () => {
   assert.equal(recursiveSummaryOf({ agent_state: JSON.stringify({ recursive_summary: 'No history has been evicted yet.' }) }), '');
   const history = buildHistory([
     { role: 'user', content: 'a'.repeat(30) },
-    { role: 'assistant', content: '```opalatex-progress\nx\n```\nb' },
+    { role: 'assistant', content: '```gilzabots-progress\nx\n```\nb' },
     { role: 'user', content: 'c' },
   ], 5);
   assert.deepEqual(history, [{ role: 'assistant', content: 'b' }, { role: 'user', content: 'c' }]);

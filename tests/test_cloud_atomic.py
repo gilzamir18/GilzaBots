@@ -4,9 +4,9 @@ import os
 
 import pytest
 
-from opalatex.cloud import atomic, chats
-from opalatex.cloud.scanner import ExclusionPolicy
-from opalatex.cloud.state import CloudSettings
+from gilzabots.cloud import atomic, chats
+from gilzabots.cloud.scanner import ExclusionPolicy
+from gilzabots.cloud.state import CloudSettings
 
 
 class _SharingViolation(PermissionError):
@@ -83,13 +83,13 @@ def test_the_chat_export_is_written_through_a_transient_lock(tmp_path, monkeypat
 
     assert chats.write_export(str(project), {"messages": []}) is True
 
-    session = project / ".opalatex" / "session"
+    session = project / ".gilzabots" / "session"
     assert (session / "chats.json").exists()
     assert [p.name for p in session.iterdir() if p.suffix == ".tmp"] == []
 
 
 @pytest.mark.parametrize("rel_path", [
-    ".opalatex/session/.chats-7826rshk.tmp",
+    ".gilzabots/session/.chats-7826rshk.tmp",
     ".sync-abc123.tmp",
     "chapters/.sync-abc123.tmp",
 ])
@@ -99,4 +99,4 @@ def test_sync_temp_files_are_never_mirrored(rel_path):
 
 def test_the_chat_export_itself_is_still_mirrored():
     settings = CloudSettings(enabled=True, include_chats=True)
-    assert ExclusionPolicy(settings).reason_to_skip(".opalatex/session/chats.json") is None
+    assert ExclusionPolicy(settings).reason_to_skip(".gilzabots/session/chats.json") is None

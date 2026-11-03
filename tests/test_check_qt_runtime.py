@@ -1,4 +1,4 @@
-"""Tests for the build gate that refuses to package a Qt known to break OpalaTex.
+"""Tests for the build gate that refuses to package a Qt known to break GilzaBots.
 
 install.ps1 and install.sh download what the release build produced, so the Qt a
 user runs is chosen by the build. These tests hold the gate to the two failures

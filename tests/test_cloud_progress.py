@@ -11,13 +11,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.cloud import chats, service
-from opalatex.cloud.engine import ProgressEvent, SyncEngine
-from opalatex.cloud.base import CloudError
-from opalatex.cloud.providers.local_folder import LocalFolderProvider
-from opalatex.cloud.state import CloudSettings, CloudState, load_state, save_settings
-from opalatex.ide_server import AsyncHTTPServer
-from opalatex.project import ProjectStore
+from gilzabots.cloud import chats, service
+from gilzabots.cloud.engine import ProgressEvent, SyncEngine
+from gilzabots.cloud.base import CloudError
+from gilzabots.cloud.providers.local_folder import LocalFolderProvider
+from gilzabots.cloud.state import CloudSettings, CloudState, load_state, save_settings
+from gilzabots.ide_server import AsyncHTTPServer
+from gilzabots.project import ProjectStore
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────

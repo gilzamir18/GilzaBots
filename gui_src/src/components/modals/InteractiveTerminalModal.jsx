@@ -86,7 +86,7 @@ export default function InteractiveTerminalModal({ request, onConfirm, activePro
       cursorBlink: true,
       fontSize: terminalRenderFontSize(fontSizeRef.current, uiScaleRef.current),
       fontFamily: 'Consolas, "Courier New", monospace',
-      theme: { background: '#1e1e2e', foreground: '#cccccc', selectionBackground: '#264f78', selectionInactiveBackground: '#3a3d41' },
+      theme: { background: '#11141b', foreground: '#dcdfe8', selectionBackground: '#3a3480', selectionInactiveBackground: '#262a3b' },
     });
 
     // Ctrl +/- adjusts the terminal font here too, writing back to the same
@@ -223,11 +223,11 @@ export default function InteractiveTerminalModal({ request, onConfirm, activePro
             onClick={() => handleFinish('yes')}
             style={{
               padding: '8px 24px', borderRadius: '8px', border: 'none',
-              background: 'linear-gradient(135deg, #007acc, #0062a3)',
+              background: 'linear-gradient(135deg, var(--vscode-button-hover), var(--vscode-button-bg))',
               color: '#fff', cursor: 'pointer',
               fontSize: '13px', fontWeight: 700,
               display: 'flex', alignItems: 'center', gap: '8px',
-              boxShadow: '0 4px 16px rgba(0,122,204,0.35)',
+              boxShadow: '0 4px 16px rgba(102, 86, 224, 0.35)',
             }}
           >
             <Check size={16} /> {t('interactiveTerminalModal.finish', 'Finish')}

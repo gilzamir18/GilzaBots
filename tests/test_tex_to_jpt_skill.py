@@ -17,8 +17,8 @@ import sys
 
 import pytest
 
-from opalatex.jpt import compile_outline, format_report, lint
-from opalatex.skills import parse_skill_md
+from gilzabots.jpt import compile_outline, format_report, lint
+from gilzabots.skills import parse_skill_md
 
 SKILL_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "skills", "tex-to-jpt"

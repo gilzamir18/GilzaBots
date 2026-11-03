@@ -11,10 +11,10 @@
 
 import { WebPlugin } from '@capacitor/core';
 
-const TOKEN_KEY = 'opalatex.dev.accessToken';
-const SECRET_PREFIX = 'opalatex.dev.secret.';
+const TOKEN_KEY = 'gilzabots.dev.accessToken';
+const SECRET_PREFIX = 'gilzabots.dev.secret.';
 
-export class OpalaNativeWeb extends WebPlugin {
+export class GilzaNativeWeb extends WebPlugin {
   async authorize() {
     const token = safe(() => sessionStorage.getItem(TOKEN_KEY));
     if (!token) throw this.unavailable('Google authorization needs the Android app; paste a development token instead.');

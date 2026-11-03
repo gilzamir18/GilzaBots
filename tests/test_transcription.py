@@ -20,8 +20,8 @@ from agenticblocks.blocks.transcription import (
     TranscriptionOutput,
     register_transcription_adapter,
 )
-from opalatex import transcription, transcription_config as tc
-from opalatex.ide_server import AsyncHTTPServer
+from gilzabots import transcription, transcription_config as tc
+from gilzabots.ide_server import AsyncHTTPServer
 
 
 def _wav(frames: int = 16, sample_rate: int = 16000) -> bytes:
@@ -160,7 +160,7 @@ def test_a_model_directory_that_is_absent_is_not_configured(tmp_path):
     assert exc.value.kind == "not_configured"
 
 
-# ─── OpalaTex: the service wrapper ───────────────────────────────────────────
+# ─── GilzaBots: the service wrapper ───────────────────────────────────────────
 
 def test_only_a_real_wav_reaches_the_decoder():
     # Handing arbitrary bytes to the engine turns a clear "that is not audio"
@@ -185,13 +185,13 @@ async def test_execute_transcription_refuses_empty_long_and_non_wav():
     assert "not a WAV" in str(exc.value)
 
 
-# ─── OpalaTex: the model store ───────────────────────────────────────────────
+# ─── GilzaBots: the model store ───────────────────────────────────────────────
 
 @pytest.fixture
 def store(tmp_path, monkeypatch):
     monkeypatch.setattr(tc, "_CONFIG_PATH", tmp_path / "transcription.json")
     monkeypatch.setattr(tc, "models_dir", lambda: tmp_path / "whisper")
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", tmp_path / "ui.json")
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", tmp_path / "ui.json")
     return tmp_path / "whisper"
 
 
@@ -294,7 +294,7 @@ def test_the_block_is_wired_to_the_installed_model(store):
     assert block.model_kwargs["compute_type"] == "int8"
 
 
-# ─── OpalaTex: the endpoints ─────────────────────────────────────────────────
+# ─── GilzaBots: the endpoints ─────────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_the_recording_is_the_request_body(store, monkeypatch):
@@ -307,7 +307,7 @@ async def test_the_recording_is_the_request_body(store, monkeypatch):
         captured.update(audio=audio, language=language)
         return TranscriptionOutput(text="olá mundo", language="pt", duration=1.5)
 
-    monkeypatch.setattr("opalatex.transcription.execute_transcription", fake_execute)
+    monkeypatch.setattr("gilzabots.transcription.execute_transcription", fake_execute)
 
     wav = _wav()
     server, responses = _server_with_capture()
@@ -331,7 +331,7 @@ async def test_an_unconfigured_install_answers_with_the_instruction(store, monke
     async def must_not_run(*args, **kwargs):  # pragma: no cover
         raise AssertionError("no transcription may be attempted when unconfigured")
 
-    monkeypatch.setattr("opalatex.transcription.execute_transcription", must_not_run)
+    monkeypatch.setattr("gilzabots.transcription.execute_transcription", must_not_run)
 
     server, responses = _server_with_capture()
     await server.route_api("POST", "/api/transcribe", {}, {}, _wav(), AsyncMock())
@@ -366,7 +366,7 @@ async def test_engine_failures_keep_their_classification(store, monkeypatch, kin
     async def fake_execute(audio, **kwargs):
         raise TranscriptionError("boom", kind=kind)
 
-    monkeypatch.setattr("opalatex.transcription.execute_transcription", fake_execute)
+    monkeypatch.setattr("gilzabots.transcription.execute_transcription", fake_execute)
 
     server, responses = _server_with_capture()
     await server.route_api("POST", "/api/transcribe", {}, {}, _wav(), AsyncMock())

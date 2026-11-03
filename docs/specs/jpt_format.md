@@ -25,7 +25,7 @@ Read in this order:
 
 The normative sources are
 [`gui_src/src/slides/model.js`](../../gui_src/src/slides/model.js) for the deck
-model and [`opalatex/jpt/package.py`](../../opalatex/jpt/package.py) for its
+model and [`gilzabots/jpt/package.py`](../../gilzabots/jpt/package.py) for its
 on-disk container. Where this document and those files disagree, the code is
 right and this document is a bug. Every behaviour stated below is covered by
 the suites in §14.
@@ -42,7 +42,7 @@ emits one. The editor is both.
 | --- | --- |
 | Extension | `.jpt` — one suffix, not `.deck.json`. It is what routes the file to the deck editor, and what makes a presentation name, sort, filter and round-trip through a file dialog like every other document. |
 | Encoding | Binary ZIP/ZIP64 container. `deck.json` is UTF-8 without BOM. |
-| Media type | `application/vnd.opalatex.presentation+zip`, repeated verbatim in the uncompressed `mimetype` member. |
+| Media type | `application/vnd.gilzabots.presentation+zip`, repeated verbatim in the uncompressed `mimetype` member. |
 | Syntax | The package layout in §2.1, containing one deck object in `deck.json`. A `.jpt` is *not* a generic ZIP or JSON document: it opens on a canvas, never in Monaco. |
 | Syntax highlighting | Surfaces that expose the logical `deck.json` (a diff, checkpoint preview or agent read) map `jpt` to the JSON grammar. |
 | JSON trailing newline | Exactly one. `serializeDeck` appends `\n`. |
@@ -721,7 +721,7 @@ a diagram copied in one window paste into another:
 
 ```json
 {
-  "kind": "opalatex.slides.elements",
+  "kind": "gilzabots.slides.elements",
   "version": 1,
   "elements": []
 }
@@ -738,7 +738,7 @@ without the second paste colliding with the first.
 
 ## 17. The agent authoring API
 
-`opalatex/jpt/` is how an agent writes a deck, and §12's rule about extensions
+`gilzabots/jpt/` is how an agent writes a deck, and §12's rule about extensions
 applies to it too: a new element type is not finished until this API can author
 it. The layering is deliberate — an agent that picks coordinates produces a
 valid file and an unusable presentation, so it does not get to pick them.

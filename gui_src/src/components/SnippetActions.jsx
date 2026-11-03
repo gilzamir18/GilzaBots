@@ -40,7 +40,7 @@ export default function SnippetActions({
         aria-disabled={!canAsk}
         onClick={() => { if (canAsk) onAskAbout(); }}
       >
-        <MessageSquareQuote size={13} style={{ color: '#007acc' }} />
+        <MessageSquareQuote size={13} style={{ color: 'var(--vscode-accent)' }} />
         <span>
           {hasSelection
             ? t('snippetActions.askAboutSelection', 'Ask about the selected excerpt')

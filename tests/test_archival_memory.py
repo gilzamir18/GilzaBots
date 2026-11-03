@@ -6,13 +6,13 @@ import pytest
 
 chromadb = pytest.importorskip("chromadb")
 
-from opalatex import archival  # noqa: E402
+from gilzabots import archival  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
 def _isolated_archival(tmp_path, monkeypatch):
     """Point the store at a temp home and reset both module singletons."""
-    monkeypatch.setenv("OPALATEX_HOME", str(tmp_path))
+    monkeypatch.setenv("GILZABOTS_HOME", str(tmp_path))
     importlib.reload(archival)
     yield
     archival._chroma_client = None
@@ -113,14 +113,14 @@ def test_an_explicit_thread_count_is_requested(tmp_path, monkeypatch):
     Leaving it unset is what produced one "Operation not permitted" error line
     per thread inside the Snap.
     """
-    monkeypatch.setenv("OPALATEX_EMBEDDING_THREADS", "2")
+    monkeypatch.setenv("GILZABOTS_EMBEDDING_THREADS", "2")
     assert archival._onnx_intra_op_threads() == 2
 
-    monkeypatch.setenv("OPALATEX_EMBEDDING_THREADS", "not-a-number")
+    monkeypatch.setenv("GILZABOTS_EMBEDDING_THREADS", "not-a-number")
     assert archival._onnx_intra_op_threads() >= 1
 
     # 0 is the documented escape hatch back to Chroma's untuned default.
-    monkeypatch.setenv("OPALATEX_EMBEDDING_THREADS", "0")
+    monkeypatch.setenv("GILZABOTS_EMBEDDING_THREADS", "0")
     archival._embedding_function = None
     assert archival._get_embedding_function() is None
 

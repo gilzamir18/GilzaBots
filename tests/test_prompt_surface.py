@@ -17,9 +17,9 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from opalatex import agent_stdin
-from opalatex.cli_commands import _registry
-from opalatex.prompt_surface import (
+from gilzabots import agent_stdin
+from gilzabots.cli_commands import _registry
+from gilzabots.prompt_surface import (
     GUI_ONLY_TOOLS,
     body_for_surface,
     cli_only_command_names,
@@ -121,8 +121,8 @@ def test_the_terminal_agent_is_not_given_the_editor_tool(terminal):
 
 
 def test_the_orchestrator_built_for_a_terminal_has_no_editor_tool(tmp_path, terminal):
-    from opalatex.memgpt_runtime import build_chat_orchestrator
-    from opalatex.project import ProjectStore
+    from gilzabots.memgpt_runtime import build_chat_orchestrator
+    from gilzabots.project import ProjectStore
 
     store = ProjectStore(db_path=str(tmp_path / "s.db"))
     project = store.create(name="p", mode="auto", model="ollama/test",
@@ -192,8 +192,8 @@ def background():
 
 
 def test_the_orchestrator_built_for_a_background_turn_has_no_window(tmp_path, background):
-    from opalatex.memgpt_runtime import build_chat_orchestrator
-    from opalatex.project import ProjectStore
+    from gilzabots.memgpt_runtime import build_chat_orchestrator
+    from gilzabots.project import ProjectStore
 
     store = ProjectStore(db_path=str(tmp_path / "s.db"))
     project = store.create(name="p", mode="auto", model="ollama/test",

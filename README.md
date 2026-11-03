@@ -1,16 +1,16 @@
-# OpalaTex
+# GilzaBots
 
-OpalaTex is a free, open-source LaTeX editor with an integrated AI assistant. It combines a source editor, local PDF preview, project tools, Git integration, and optional local or cloud AI models.
+GilzaBots is a free, open-source AI agent that works inside your projects. It reads and edits files, runs commands, searches the web, writes code and documents, and keeps watch with background monitors — on a local model through Ollama or on a provider you configure with your own API key.
 
-LaTeX compilation is performed locally with Tectonic. All editor features work without any account; user-provided API keys for third-party AI providers are optional.
+Everything runs on your machine. There is no account and no billing; API keys for third-party AI providers are optional.
 
 ## Features
 
-- Split source editor and PDF preview with SyncTeX support
-- Local LaTeX compilation with Tectonic
-- AI assistance for writing, tables, equations, TikZ, and compilation errors
+- An agent with tools for files, code search, the shell, the web and office documents, plus skills and helper agents for specialised work
+- Monitor agents that watch for conditions in the background and notify you or wake a chat
 - Local models through Ollama and configurable external providers
-- Project, terminal, Git, and document-export tools
+- A workspace with editor, terminal, Git, and Markdown, HTML and PDF previews
+- LaTeX support: PDF preview with SyncTeX and local compilation with Tectonic
 - English and Brazilian Portuguese interface
 - A command-line interface that runs the same agent without the desktop window
 
@@ -21,81 +21,81 @@ LaTeX compilation is performed locally with Tectonic. All editor features work w
 
 ## Install a packaged release
 
-The installer downloads the current OpalaTex Community release from GitHub Releases, extracts it into the user profile, creates shortcuts, and does not require administrator privileges.
+The installer downloads the current GilzaBots Community release from GitHub Releases, extracts it into the user profile, creates shortcuts, and does not require administrator privileges.
 
 ### Linux / macOS (Terminal One-Liner via `curl`)
 
 Run terminal and execute:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/opalacoderdev/OpalaTex/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/gilzamir18/GilzaBots/main/install.sh | bash
 ```
 
 To inspect the script first:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/opalacoderdev/OpalaTex/master/install.sh -o install.sh
+curl -fsSL https://raw.githubusercontent.com/gilzamir18/GilzaBots/main/install.sh -o install.sh
 less install.sh
 bash install.sh
 ```
 
-The application is installed under `~/.local/share/OpalaTex`, with a command symlink in `~/.local/bin/opalatex` and a desktop launcher in `~/.local/share/applications/opalatex.desktop`.
+The application is installed under `~/.local/share/GilzaBots`, with a command symlink in `~/.local/bin/gilzabots` and a desktop launcher in `~/.local/share/applications/gilzabots.desktop`.
 
 ### Snap installations and the integrated terminal
 
-The snap runs under strict confinement, so its integrated terminal cannot run programs installed on the host. There, `python` is the Python 3.12 bundled with OpalaTex: `python -m venv .venv` works, but the environment it creates is meant to be used from OpalaTex's terminal, and one created in a system terminal will not work inside OpalaTex, because each side has a different `/usr/bin/python3`. If you need your own toolchain (your Python, TeX Live, `make`, and so on) from the terminal or the AI assistant, use the direct installer above.
+The snap runs under strict confinement, so its integrated terminal cannot run programs installed on the host. There, `python` is the Python 3.12 bundled with GilzaBots: `python -m venv .venv` works, but the environment it creates is meant to be used from GilzaBots's terminal, and one created in a system terminal will not work inside GilzaBots, because each side has a different `/usr/bin/python3`. If you need your own toolchain (your Python, TeX Live, `make`, and so on) from the terminal or the AI assistant, use the direct installer above.
 
 ### Windows (PowerShell One-Liner via `irm`)
 
 Open PowerShell and execute:
 
 ```powershell
-irm https://raw.githubusercontent.com/opalacoderdev/OpalaTex/master/install.ps1 | iex
+irm https://raw.githubusercontent.com/gilzamir18/GilzaBots/main/install.ps1 | iex
 ```
 
 Alternatively, download and inspect `install.ps1` before running:
 
 ```powershell
-Invoke-WebRequest https://raw.githubusercontent.com/opalacoderdev/OpalaTex/master/install.ps1 -OutFile install.ps1
+Invoke-WebRequest https://raw.githubusercontent.com/gilzamir18/GilzaBots/main/install.ps1 -OutFile install.ps1
 Get-Content .\install.ps1
 .\install.ps1
 ```
 
-The application is installed under `%LOCALAPPDATA%\OpalaTex`. The installer adds its executable directory to the user `PATH` and creates shortcuts on the Desktop and Start menu.
+The application is installed under `%LOCALAPPDATA%\GilzaBots`. The installer adds its executable directory to the user `PATH` and creates shortcuts on the Desktop and Start menu.
 
 ## Uninstall a packaged release
 
 Direct Linux and macOS installations provide this command:
 
 ```bash
-opalatex-uninstall
+gilzabots-uninstall
 ```
 
-It removes the application while preserving settings, chats, caches, credentials, and project directories. Pass `--purge` only when you also want to remove the global OpalaTex data directory. Project directories are never removed.
+It removes the application while preserving settings, chats, caches, credentials, and project directories. Pass `--purge` only when you also want to remove the global GilzaBots data directory. Project directories are never removed.
 
 Older direct installations that do not yet provide the command can run:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/opalacoderdev/OpalaTex/master/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/gilzamir18/GilzaBots/main/uninstall.sh | bash
 ```
 
-On Windows, open **Settings > Apps > Installed apps > OpalaTex**, or use **Uninstall OpalaTex** in the Start menu. The Windows uninstaller also preserves user data by default; its optional PowerShell `-Purge` switch removes global application data after confirmation.
+On Windows, open **Settings > Apps > Installed apps > GilzaBots**, or use **Uninstall GilzaBots** in the Start menu. The Windows uninstaller also preserves user data by default; its optional PowerShell `-Purge` switch removes global application data after confirmation.
 
 For an older Windows installation without that entry, run:
 
 ```powershell
-irm https://raw.githubusercontent.com/opalacoderdev/OpalaTex/master/uninstall.ps1 | iex
+irm https://raw.githubusercontent.com/gilzamir18/GilzaBots/main/uninstall.ps1 | iex
 ```
 
 Snap installations remain managed by Snap and can be removed from a system terminal with:
 
 ```bash
-sudo snap remove opalatex
+sudo snap remove gilzabots
 ```
 
 ## Feedback and bug reports
 
-Open **Settings > About > Send feedback on GitHub** inside OpalaTex. The application opens a pre-filled issue at the [OpalaTex issue tracker](https://github.com/opalacoderdev/OpalaTex/issues) with version and runtime information. Nothing is submitted automatically, so review the issue and remove private information before publishing it.
+Open **Settings > About > Send feedback on GitHub** inside GilzaBots. The application opens a pre-filled issue at the [GilzaBots issue tracker](https://github.com/gilzamir18/GilzaBots/issues) with version and runtime information. Nothing is submitted automatically, so review the issue and remove private information before publishing it.
 
 ## Command-line interface
 
@@ -103,13 +103,13 @@ The same agent, projects and skills, in a terminal instead of a window. It is th
 install, with no desktop stack:
 
 ```bash
-uv tool install opalatex     # or: pip install opalatex
+uv tool install gilzabots     # or: pip install gilzabots
 ```
 
 The desktop application needs the `gui` extra:
 
 ```bash
-pip install "opalatex[gui]"
+pip install "gilzabots[gui]"
 ```
 
 LaTeX compilation uses a `tectonic` found on your `PATH`.
@@ -118,12 +118,12 @@ LaTeX compilation uses a `tectonic` found on your `PATH`.
 
 ```bash
 cd my-thesis
-opalatex --cli                       # interactive session for the project in this folder
-opalatex --cli --here                # register this folder as a new project first
-opalatex --cli --project my-thesis   # pick a project by name
+gilzabots --cli                       # interactive session for the project in this folder
+gilzabots --cli --here                # register this folder as a new project first
+gilzabots --cli --project my-thesis   # pick a project by name
 
-opalatex -p "fix the compilation errors in chapter 3"   # one turn, then exit
-echo "summarise the changes" | opalatex -p -            # prompt from standard input
+gilzabots -p "fix the compilation errors in chapter 3"   # one turn, then exit
+echo "summarise the changes" | gilzabots -p -            # prompt from standard input
 ```
 
 The answer streams as the model writes it, tool calls appear as `⏺ tool_name(...)` with
@@ -161,8 +161,8 @@ catalog entry naming a model under it. Both are managed from any text front-end.
 Any of these also runs as a one-shot, so a machine can be set up from a script:
 
 ```bash
-opalatex -p '/providers add label="Ollama Gil" provider=ollama api_base=http://192.168.0.10:11434/v1'
-opalatex -p '/models add name=gemma4:26b connection=ollama-gil num_ctx=65000'
+gilzabots -p '/providers add label="Ollama Gil" provider=ollama api_base=http://192.168.0.10:11434/v1'
+gilzabots -p '/models add name=gemma4:26b connection=ollama-gil num_ctx=65000'
 ```
 
 `/set-main-model` only stores an id; without a catalog entry behind it there is no API
@@ -181,8 +181,8 @@ Requirements: Python 3.10 or newer, Node.js/npm, and Git.
 ### PowerShell
 
 ```powershell
-git clone https://github.com/opalacoderdev/OpalaTex.git
-cd OpalaTex
+git clone https://github.com/gilzamir18/GilzaBots.git
+cd GilzaBots
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
@@ -197,8 +197,8 @@ If script execution is disabled for the current PowerShell process, run `Set-Exe
 ### Bash (Linux/macOS)
 
 ```bash
-git clone https://github.com/opalacoderdev/OpalaTex.git
-cd OpalaTex
+git clone https://github.com/gilzamir18/GilzaBots.git
+cd GilzaBots
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
@@ -238,9 +238,9 @@ These scripts install build dependencies, build the React/Vite interface, downlo
 
 The `binpacking.ps1` and `binpacking.sh` scripts are maintainer tools. They package an existing build and upload it over SSH. They intentionally contain no server address, username, credential, or private server path. Maintainers must provide:
 
-- `OPALATEX_RELEASE_HOST`
-- `OPALATEX_RELEASE_USER`
-- `OPALATEX_RELEASE_DIR`
+- `GILZABOTS_RELEASE_HOST`
+- `GILZABOTS_RELEASE_USER`
+- `GILZABOTS_RELEASE_DIR`
 
 Authentication is handled by the local SSH client (preferably with an SSH key or agent); credentials must never be committed to the repository.
 
@@ -252,10 +252,10 @@ Authentication is handled by the local SSH client (preferably with an SSH key or
 
 ## Contributing
 
-Although OpalaTex is open-source under the MIT License, the repository does **not** accept pull requests or code contributions from third parties.
+Although GilzaBots is open-source under the MIT License, the repository does **not** accept pull requests or code contributions from third parties.
 
-If you would like to request a specific feature or report a bug, please **open an Issue** describing what you would like to see in OpalaTex. The maintainer will review and prioritize requests accordingly.
+If you would like to request a specific feature or report a bug, please **open an Issue** describing what you would like to see in GilzaBots. The maintainer will review and prioritize requests accordingly.
 
 ## License
 
-OpalaTex is available under the [MIT License](LICENSE).
+GilzaBots is available under the [MIT License](LICENSE).

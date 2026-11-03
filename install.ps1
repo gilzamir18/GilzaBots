@@ -1,18 +1,18 @@
 # =========================================================
-# OpalaTex Community Windows installer for PowerShell
-# Usage: irm https://raw.githubusercontent.com/opalacoderdev/OpalaTex/master/install.ps1 | iex
+# GilzaBots Community Windows installer for PowerShell
+# Usage: irm https://raw.githubusercontent.com/gilzamir18/GilzaBots/main/install.ps1 | iex
 # =========================================================
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "     OpalaTex Installer (Community)       " -ForegroundColor Cyan
+Write-Host "     GilzaBots Installer (Community)       " -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 
-$installDir = "$env:LOCALAPPDATA\OpalaTex"
-$tempZip    = "$env:TEMP\opalatex_release.zip"
-$repoOwner  = "opalacoderdev"
-$repoName   = "OpalaTex"
+$installDir = "$env:LOCALAPPDATA\GilzaBots"
+$tempZip    = "$env:TEMP\gilzabots_release.zip"
+$repoOwner  = "gilzamir18"
+$repoName   = "GilzaBots"
 # "HEAD" lets raw.githubusercontent.com resolve the repository's default branch,
 # so this installer does not break every time the release branch is renamed.
 # A literal branch name here is what made the fallback fetch 404.
@@ -20,18 +20,18 @@ $uninstallerRef = "HEAD"
 
 $headers = @{
     "Accept"               = "application/vnd.github+json"
-    "User-Agent"           = "OpalaTex-Installer"
+    "User-Agent"           = "GilzaBots-Installer"
     "X-GitHub-Api-Version" = "2022-11-28"
 }
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-function Get-OpalaTexDownloadUrl {
-    if ($env:OPALATEX_DOWNLOAD_URL) {
-        if ($env:OPALATEX_DOWNLOAD_URL -match "/actions/runs/.*/artifacts/") {
-            throw "OPALATEX_DOWNLOAD_URL points to a GitHub Actions artifact. Please use a GitHub Release asset URL instead."
+function Get-GilzaBotsDownloadUrl {
+    if ($env:GILZABOTS_DOWNLOAD_URL) {
+        if ($env:GILZABOTS_DOWNLOAD_URL -match "/actions/runs/.*/artifacts/") {
+            throw "GILZABOTS_DOWNLOAD_URL points to a GitHub Actions artifact. Please use a GitHub Release asset URL instead."
         }
-        return $env:OPALATEX_DOWNLOAD_URL
+        return $env:GILZABOTS_DOWNLOAD_URL
     }
 
     Write-Host "Checking the latest GitHub release ($repoOwner/$repoName)..." -ForegroundColor Yellow
@@ -40,11 +40,11 @@ function Get-OpalaTexDownloadUrl {
     # release that was actually installed instead of a hardcoded literal.
     $script:releaseTag = ($releaseApi.tag_name -replace '^v', '')
     $asset = $releaseApi.assets |
-        Where-Object { $_.name -eq "OpalaTex-windows-x64.zip" -and $_.state -eq "uploaded" } |
+        Where-Object { $_.name -eq "GilzaBots-windows-x64.zip" -and $_.state -eq "uploaded" } |
         Select-Object -First 1
 
     if (-not $asset) {
-        throw "The latest GitHub release does not contain OpalaTex-windows-x64.zip. Create a tagged release with the Windows asset before running this installer."
+        throw "The latest GitHub release does not contain GilzaBots-windows-x64.zip. Create a tagged release with the Windows asset before running this installer."
     }
 
     if ($asset.browser_download_url -match "/actions/runs/.*/artifacts/") {
@@ -57,7 +57,7 @@ function Get-OpalaTexDownloadUrl {
     return $asset.browser_download_url
 }
 
-function Test-OpalaTexRunning {
+function Test-GilzaBotsRunning {
     param([Parameter(Mandatory = $true)][string]$Directory)
 
     # Extracting over a running copy fails on its locked executables partway
@@ -98,7 +98,7 @@ function Invoke-DownloadWithRetry {
             throw "Download completed but the output file is empty."
         } catch {
             if ($attempt -eq $maxAttempts) {
-                throw "Failed to download OpalaTex after $maxAttempts attempts. Last error: $($_.Exception.Message)"
+                throw "Failed to download GilzaBots after $maxAttempts attempts. Last error: $($_.Exception.Message)"
             }
 
             Write-Host "Download failed. Retrying ($attempt/$maxAttempts)..." -ForegroundColor Yellow
@@ -107,12 +107,12 @@ function Invoke-DownloadWithRetry {
     }
 }
 
-if ((Test-Path $installDir) -and (Test-OpalaTexRunning -Directory $installDir)) {
-    throw "OpalaTex is running from $installDir. Close it and run the installer again."
+if ((Test-Path $installDir) -and (Test-GilzaBotsRunning -Directory $installDir)) {
+    throw "GilzaBots is running from $installDir. Close it and run the installer again."
 }
 
-$downloadUrl = Get-OpalaTexDownloadUrl
-Write-Host "Downloading OpalaTex from: $downloadUrl" -ForegroundColor Yellow
+$downloadUrl = Get-GilzaBotsDownloadUrl
+Write-Host "Downloading GilzaBots from: $downloadUrl" -ForegroundColor Yellow
 if ($script:downloadSizeMB) {
     Write-Host "Download size: about $($script:downloadSizeMB) MB. This can take a few minutes." -ForegroundColor Yellow
 }
@@ -129,8 +129,8 @@ Write-Host "Extracting files to $installDir (this can take a minute)..." -Foregr
     Expand-Archive -Path $tempZip -DestinationPath $installDir -Force
 }
 
-$exeDir = "$installDir\OpalaTex"
-if (-not (Test-Path "$exeDir\OpalaTex.exe")) {
+$exeDir = "$installDir\GilzaBots"
+if (-not (Test-Path "$exeDir\GilzaBots.exe")) {
     $exeDir = $installDir
 }
 
@@ -153,18 +153,18 @@ if (-not $uninstallerPath) {
             -OutFile $uninstallerPath
     } catch {
         Remove-Item -Path $uninstallerPath -Force -ErrorAction SilentlyContinue
-        Write-Warning "Could not fetch the OpalaTex uninstaller; continuing without it."
-        Write-Warning "To remove OpalaTex later, delete $installDir and its PATH entry."
+        Write-Warning "Could not fetch the GilzaBots uninstaller; continuing without it."
+        Write-Warning "To remove GilzaBots later, delete $installDir and its PATH entry."
     }
 }
 $hasUninstaller = Test-Path $uninstallerPath
 $appVersion = if ($script:releaseTag) { $script:releaseTag } else { "unknown" }
 
-# Add the OpalaTex executable directory to the user PATH.
+# Add the GilzaBots executable directory to the user PATH.
 $pathAdded = $false
 $userPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
 if ($userPath -notlike "*$exeDir*") {
-    Write-Host "Adding OpalaTex to PATH..." -ForegroundColor Yellow
+    Write-Host "Adding GilzaBots to PATH..." -ForegroundColor Yellow
     $newPath = "$userPath;$exeDir"
     [Environment]::SetEnvironmentVariable("Path", $newPath, [EnvironmentVariableTarget]::User)
     $env:Path = "$env:Path;$exeDir"
@@ -173,14 +173,14 @@ if ($userPath -notlike "*$exeDir*") {
 
 # Create Desktop and Start menu shortcuts.
 Write-Host "Creating Desktop and Start menu shortcuts..." -ForegroundColor Yellow
-$exePath  = "$exeDir\OpalaTex.exe"
+$exePath  = "$exeDir\GilzaBots.exe"
 $wshShell = New-Object -ComObject WScript.Shell
 
 $desktopPath     = $wshShell.SpecialFolders("Desktop")
-$desktopShortcut = $wshShell.CreateShortcut("$desktopPath\OpalaTex.lnk")
+$desktopShortcut = $wshShell.CreateShortcut("$desktopPath\GilzaBots.lnk")
 $desktopShortcut.TargetPath       = $exePath
 $desktopShortcut.WorkingDirectory = $exeDir
-$desktopShortcut.Description      = "OpalaTex Open-Source AI LaTeX IDE"
+$desktopShortcut.Description      = "GilzaBots Open-Source AI LaTeX IDE"
 $desktopShortcut.IconLocation     = "$exePath,0"
 $desktopShortcut.Save()
 
@@ -188,31 +188,31 @@ $startMenuDir = $wshShell.SpecialFolders("Programs")
 if (-not (Test-Path $startMenuDir)) {
     New-Item -ItemType Directory -Force -Path $startMenuDir | Out-Null
 }
-$startMenuShortcut = $wshShell.CreateShortcut("$startMenuDir\OpalaTex.lnk")
+$startMenuShortcut = $wshShell.CreateShortcut("$startMenuDir\GilzaBots.lnk")
 $startMenuShortcut.TargetPath       = $exePath
 $startMenuShortcut.WorkingDirectory = $exeDir
-$startMenuShortcut.Description      = "OpalaTex Open-Source AI LaTeX IDE"
+$startMenuShortcut.Description      = "GilzaBots Open-Source AI LaTeX IDE"
 $startMenuShortcut.IconLocation     = "$exePath,0"
 $startMenuShortcut.Save()
 
 if ($hasUninstaller) {
-    $uninstallShortcut = $wshShell.CreateShortcut("$startMenuDir\Uninstall OpalaTex.lnk")
+    $uninstallShortcut = $wshShell.CreateShortcut("$startMenuDir\Uninstall GilzaBots.lnk")
     $uninstallShortcut.TargetPath = "powershell.exe"
     $uninstallShortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$uninstallerPath`""
     $uninstallShortcut.WorkingDirectory = $exeDir
-    $uninstallShortcut.Description = "Uninstall OpalaTex"
+    $uninstallShortcut.Description = "Uninstall GilzaBots"
     $uninstallShortcut.Save()
 
-    # Register a per-user uninstall entry so OpalaTex appears in Windows Settings >
+    # Register a per-user uninstall entry so GilzaBots appears in Windows Settings >
     # Apps > Installed apps without requiring administrator privileges.
-    $uninstallRegistryPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\OpalaTex"
+    $uninstallRegistryPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\GilzaBots"
     if (-not (Test-Path $uninstallRegistryPath)) {
         New-Item -Path $uninstallRegistryPath -Force | Out-Null
     }
     $uninstallCommand = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$uninstallerPath`""
-    Set-ItemProperty -Path $uninstallRegistryPath -Name "DisplayName" -Value "OpalaTex"
+    Set-ItemProperty -Path $uninstallRegistryPath -Name "DisplayName" -Value "GilzaBots"
     Set-ItemProperty -Path $uninstallRegistryPath -Name "DisplayVersion" -Value $appVersion
-    Set-ItemProperty -Path $uninstallRegistryPath -Name "Publisher" -Value "OpalaCoder"
+    Set-ItemProperty -Path $uninstallRegistryPath -Name "Publisher" -Value "Gilzamir Gomes"
     Set-ItemProperty -Path $uninstallRegistryPath -Name "DisplayIcon" -Value $exePath
     Set-ItemProperty -Path $uninstallRegistryPath -Name "InstallLocation" -Value $installDir
     Set-ItemProperty -Path $uninstallRegistryPath -Name "UninstallString" -Value $uninstallCommand
@@ -225,8 +225,8 @@ Remove-Item -Path $tempZip -Force -ErrorAction SilentlyContinue
 
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Green
-Write-Host "  OpalaTex installed successfully!       " -ForegroundColor Green
+Write-Host "  GilzaBots installed successfully!       " -ForegroundColor Green
 Write-Host "==========================================" -ForegroundColor Green
-Write-Host "Terminal command: opalatex" -ForegroundColor Cyan
+Write-Host "Terminal command: gilzabots" -ForegroundColor Cyan
 Write-Host "Shortcuts were created on the Desktop and Start menu." -ForegroundColor Cyan
 Write-Host "To uninstall, use Windows Settings > Apps > Installed apps, or the Start menu shortcut." -ForegroundColor Cyan

@@ -10,7 +10,7 @@
 // The factor — not a preset name — is what gets persisted, so the ladder below
 // can change without migrating saved settings and so a value picked with the
 // fine-tuning control is representable in the same field. Bounds are mirrored
-// in opalatex/ui_settings.py, which clamps again on the way in and out.
+// in gilzabots/ui_settings.py, which clamps again on the way in and out.
 
 export const UI_SCALE_MIN = 0.8;
 export const UI_SCALE_MAX = 2.0;

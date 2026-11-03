@@ -1,4 +1,4 @@
-name: Build and Release OpalaTex Community
+name: Build and Release GilzaBots Community
 
 on:
   push:
@@ -51,12 +51,12 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.tag != ''
         shell: bash
         env:
-          OPALATEX_GDRIVE_CLIENT_ID: ${{ secrets.OPALATEX_GDRIVE_CLIENT_ID }}
-          OPALATEX_GDRIVE_CLIENT_SECRET: ${{ secrets.OPALATEX_GDRIVE_CLIENT_SECRET }}
+          GILZABOTS_GDRIVE_CLIENT_ID: ${{ secrets.GILZABOTS_GDRIVE_CLIENT_ID }}
+          GILZABOTS_GDRIVE_CLIENT_SECRET: ${{ secrets.GILZABOTS_GDRIVE_CLIENT_SECRET }}
         run: |
           missing=""
-          [ -z "$OPALATEX_GDRIVE_CLIENT_ID" ] && missing="OPALATEX_GDRIVE_CLIENT_ID"
-          [ -z "$OPALATEX_GDRIVE_CLIENT_SECRET" ] && missing="$missing OPALATEX_GDRIVE_CLIENT_SECRET"
+          [ -z "$GILZABOTS_GDRIVE_CLIENT_ID" ] && missing="GILZABOTS_GDRIVE_CLIENT_ID"
+          [ -z "$GILZABOTS_GDRIVE_CLIENT_SECRET" ] && missing="$missing GILZABOTS_GDRIVE_CLIENT_SECRET"
           if [ -n "$missing" ]; then
             echo "::error::Missing repository secret(s):$missing. Set them under Settings -> Secrets and variables -> Actions, then re-run this release. Publishing without them ships an app whose Cloud sync cannot connect."
             exit 1
@@ -67,8 +67,8 @@ jobs:
         # The Google OAuth client is optional for branch and fork builds only:
         # the step above makes it mandatory for anything published.
         env:
-          OPALATEX_GDRIVE_CLIENT_ID: ${{ secrets.OPALATEX_GDRIVE_CLIENT_ID }}
-          OPALATEX_GDRIVE_CLIENT_SECRET: ${{ secrets.OPALATEX_GDRIVE_CLIENT_SECRET }}
+          GILZABOTS_GDRIVE_CLIENT_ID: ${{ secrets.GILZABOTS_GDRIVE_CLIENT_ID }}
+          GILZABOTS_GDRIVE_CLIENT_SECRET: ${{ secrets.GILZABOTS_GDRIVE_CLIENT_SECRET }}
         run: .\build_exe.ps1
 
       # PyInstaller bundles a library only if the build machine has it; a missing
@@ -95,8 +95,8 @@ jobs:
       - name: Build Linux/macOS
         if: matrix.os != 'windows-latest'
         env:
-          OPALATEX_GDRIVE_CLIENT_ID: ${{ secrets.OPALATEX_GDRIVE_CLIENT_ID }}
-          OPALATEX_GDRIVE_CLIENT_SECRET: ${{ secrets.OPALATEX_GDRIVE_CLIENT_SECRET }}
+          GILZABOTS_GDRIVE_CLIENT_ID: ${{ secrets.GILZABOTS_GDRIVE_CLIENT_ID }}
+          GILZABOTS_GDRIVE_CLIENT_SECRET: ${{ secrets.GILZABOTS_GDRIVE_CLIENT_SECRET }}
         run: |
           chmod +x build_exe.sh
           ./build_exe.sh
@@ -119,39 +119,39 @@ jobs:
       - name: Package Release Assets (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          Compress-Archive -Path dist\OpalaTex\* -DestinationPath OpalaTex-windows-x64.zip -Force
+          Compress-Archive -Path dist\GilzaBots\* -DestinationPath GilzaBots-windows-x64.zip -Force
 
       - name: Package Release Assets (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          tar -czf OpalaTex-linux-x64.tar.gz -C dist/OpalaTex .
+          tar -czf GilzaBots-linux-x64.tar.gz -C dist/GilzaBots .
 
       - name: Package Release Assets (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          cd dist/OpalaTex
-          zip -r ../../OpalaTex-macos-x64.zip .
+          cd dist/GilzaBots
+          zip -r ../../GilzaBots-macos-x64.zip .
 
       - name: Upload Windows Asset
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: OpalaTex-windows-x64
-          path: OpalaTex-windows-x64.zip
+          name: GilzaBots-windows-x64
+          path: GilzaBots-windows-x64.zip
 
       - name: Upload Linux Asset
         if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: OpalaTex-linux-x64
-          path: OpalaTex-linux-x64.tar.gz
+          name: GilzaBots-linux-x64
+          path: GilzaBots-linux-x64.tar.gz
 
       - name: Upload macOS Asset
         if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: OpalaTex-macos-x64
-          path: OpalaTex-macos-x64.zip
+          name: GilzaBots-macos-x64
+          path: GilzaBots-macos-x64.zip
 
   release:
     needs: build
@@ -172,8 +172,8 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           files: |
-            release-assets/OpalaTex-windows-x64/OpalaTex-windows-x64.zip
-            release-assets/OpalaTex-linux-x64/OpalaTex-linux-x64.tar.gz
-            release-assets/OpalaTex-macos-x64/OpalaTex-macos-x64.zip
+            release-assets/GilzaBots-windows-x64/GilzaBots-windows-x64.zip
+            release-assets/GilzaBots-linux-x64/GilzaBots-linux-x64.tar.gz
+            release-assets/GilzaBots-macos-x64/GilzaBots-macos-x64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

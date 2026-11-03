@@ -2,7 +2,7 @@ import pytest
 import os
 import json
 from unittest.mock import AsyncMock
-from opalatex.ide_server import AsyncHTTPServer
+from gilzabots.ide_server import AsyncHTTPServer
 
 @pytest.mark.asyncio
 async def test_file_delete_api(tmp_path):

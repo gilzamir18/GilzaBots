@@ -19,7 +19,7 @@ PyInstaller excludes on purpose (glibc, the GL/EGL/DRM driver stack,
 and are allowed to come from the system; the gate asks PyInstaller itself which
 those are rather than keeping a copy of its list.
 
-    python scripts/check_bundle_libraries.py dist/OpalaTex
+    python scripts/check_bundle_libraries.py dist/GilzaBots
 
 Exit codes: 0 when every dependency is bundled or host-provided, 1 otherwise.
 """

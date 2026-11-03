@@ -7,14 +7,14 @@ import { createWorkspace, offlineKindOf, MAX_TEXT_BYTES } from '../workspace.js'
 
 function setup() {
   const fake = createFakeDrive();
-  const container = fake.folder('OpalaTex');
+  const container = fake.folder('GilzaBots');
   const root = fake.folder('thesis', container);
   fake.write('main.tex', '\\section{A}', root);
   fake.write('chapters/one.tex', 'one', root);
   fake.write('figures/plot.png', 'PNGDATA', root);
   fake.write('build/main.pdf', '%PDF-1.7', root);
   fake.write('data/archive.zip', 'zip', root);
-  fake.write('.opalatex/session/chats.json', '{}', root);
+  fake.write('.gilzabots/session/chats.json', '{}', root);
   const drive = createDriveClient({ getToken: goodToken(), fetchImpl: fake.fetchImpl, sleep: async () => {} });
   const kv = createMemoryKv();
   return { fake, root, drive, kv, workspace: createWorkspace({ drive, kv, root }) };
@@ -29,7 +29,7 @@ test('what counts as available offline', () => {
   assert.equal(offlineKindOf('pic.jpeg', { size: 10 }), 'blob');
   assert.equal(offlineKindOf('pic.jpeg', { size: 51 * 1024 * 1024 }), null);
   assert.equal(offlineKindOf('a.zip', { size: 10 }), null);
-  assert.equal(offlineKindOf('.opalatex/session/chats.json', { size: 10 }), null);
+  assert.equal(offlineKindOf('.gilzabots/session/chats.json', { size: 10 }), null);
 });
 
 test('prefetch saves every viewable file and reports what stays online', async () => {
@@ -95,9 +95,9 @@ test('a prefetch stops when asked', async () => {
 test('turning it off frees the space but keeps the conversations', async () => {
   const { root, workspace, kv } = setup();
   await workspace.refresh();
-  await workspace.readInternalText('.opalatex/session/chats.json');
+  await workspace.readInternalText('.gilzabots/session/chats.json');
   await workspace.prefetch();
   await workspace.purgeCache();
-  assert.deepEqual(await kv.keys(`file:${root}:`), [`file:${root}:.opalatex/session/chats.json`]);
+  assert.deepEqual(await kv.keys(`file:${root}:`), [`file:${root}:.gilzabots/session/chats.json`]);
   assert.equal((await workspace.offlineStatus()).saved, 0);
 });

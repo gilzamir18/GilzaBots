@@ -11,7 +11,7 @@ const exportDoc = {
   ],
   messages: [
     { chat_id: 'c1', timestamp: '2026-10-19T10:00:01.000000+00:00', role: 'user', content: 'q1', client_message_id: 'u1', attachments: '[]', deleted_at: '', superseded_by: '' },
-    { chat_id: 'c1', timestamp: '2026-10-19T10:00:05.000000+00:00', role: 'assistant', content: '```opalatex-progress\nstep\n```\nanswer 1', client_message_id: '', attachments: '[]', deleted_at: '', superseded_by: '' },
+    { chat_id: 'c1', timestamp: '2026-10-19T10:00:05.000000+00:00', role: 'assistant', content: '```gilzabots-progress\nstep\n```\nanswer 1', client_message_id: '', attachments: '[]', deleted_at: '', superseded_by: '' },
     { chat_id: 'c1', timestamp: '2026-10-19T10:00:06.000000+00:00', role: 'user', content: 'removed', client_message_id: 'u2', attachments: '[]', deleted_at: 'x', superseded_by: '' },
   ],
   activity: [
@@ -43,7 +43,7 @@ test('the export, this device and other devices form one union', async () => {
 });
 
 test('the desktop progress fence is not part of the answer', () => {
-  assert.equal(stripProgressFence('```opalatex-progress\na\nb\n```\n\nHello'), 'Hello');
+  assert.equal(stripProgressFence('```gilzabots-progress\na\nb\n```\n\nHello'), 'Hello');
   assert.equal(stripProgressFence('Hello'), 'Hello');
 });
 

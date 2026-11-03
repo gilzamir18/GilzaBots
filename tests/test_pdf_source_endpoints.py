@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-import opalatex.latex_compiler as latex_compiler
-from opalatex.ide_server import AsyncHTTPServer
+import gilzabots.latex_compiler as latex_compiler
+from gilzabots.ide_server import AsyncHTTPServer
 
 
 ROOT_DOCUMENT = "\\documentclass{article}\n\\begin{document}\nRebuilt\n\\end{document}\n"

@@ -12,7 +12,7 @@ import os
 
 import pytest
 
-from opalatex.memgpt_runtime import (
+from gilzabots.memgpt_runtime import (
     resolve_skill_model,
     build_chat_orchestrator,
     build_run_skill_tool,
@@ -24,8 +24,8 @@ from opalatex.memgpt_runtime import (
     _strip_serialized_tool_calls,
     _tool_calls_count,
 )
-from opalatex.project import ProjectData
-from opalatex.config import DEFAULT_MODEL, WORKER_MODEL
+from gilzabots.project import ProjectData
+from gilzabots.config import DEFAULT_MODEL, WORKER_MODEL
 
 
 def _enable_helper(project_path, name="staged-reader"):
@@ -105,7 +105,7 @@ def test_orchestrator_honours_the_project_reasoning_fallback_setting(tmp_path):
 
 def test_reasoning_fallback_setting_never_reaches_litellm(tmp_path):
     # It is an agent constructor param; providers reject unknown request fields.
-    from opalatex.config import _AGENT_PARAM_KEYS, sanitize_litellm_kwargs_for_model
+    from gilzabots.config import _AGENT_PARAM_KEYS, sanitize_litellm_kwargs_for_model
 
     assert "empty_response_reasoning_fallback" in _AGENT_PARAM_KEYS
     cleaned = sanitize_litellm_kwargs_for_model(
@@ -165,7 +165,7 @@ def test_chat_orchestrator_context_limit_uses_catalog_num_ctx_for_cloud_model(tm
         project_path=str(tmp_path), model="openai/cloud-model",
     )
     monkeypatch.setattr(
-        "opalatex.models_store.get_model",
+        "gilzabots.models_store.get_model",
         lambda model_id: {"num_ctx": 255000} if model_id == "openai/cloud-model" else None,
     )
     m = build_chat_orchestrator(project, None)
@@ -222,7 +222,7 @@ def test_current_date_instruction_keeps_web_search_scoped():
 def test_build_chat_orchestrator_uses_light_prompt_profile_for_light_model(tmp_path, monkeypatch):
     """A model catalog entry with prompt_profile="light" must render the
     condensed chat-orchestrator body/mode-instructions, not the full ones."""
-    from opalatex import models_store
+    from gilzabots import models_store
 
     monkeypatch.setattr(models_store, "_MODELS_STORE_PATH", tmp_path / "models_store.json")
     models_store.add_or_update_connection(
@@ -246,7 +246,7 @@ def test_build_chat_orchestrator_uses_light_prompt_profile_for_light_model(tmp_p
 
 def test_build_chat_orchestrator_default_model_keeps_full_prompt_profile(tmp_path, monkeypatch):
     """An unregistered/default model must keep today's unabridged prompt."""
-    from opalatex import models_store
+    from gilzabots import models_store
 
     monkeypatch.setattr(models_store, "_MODELS_STORE_PATH", tmp_path / "models_store.json")
 
@@ -455,7 +455,7 @@ def test_tool_calls_count_accepts_int_like_values():
 
 def test_run_skill_worker_disables_shared_router(tmp_path, monkeypatch):
     """Worker sub-agents must not reuse a LiteLLM Router created for the orchestrator."""
-    import opalatex.memgpt_runtime as runtime
+    import gilzabots.memgpt_runtime as runtime
     from types import SimpleNamespace
 
     captured = {}
@@ -507,8 +507,8 @@ def test_run_skill_worker_uses_light_prompt_profile_and_skill_variant(tmp_path, 
     """A worker model catalog entry with prompt_profile="light" must render the
     condensed worker preamble and pick up the delegated skill's SKILL.light.md
     body (command-line ships one) instead of the full SKILL.md."""
-    import opalatex.memgpt_runtime as runtime
-    from opalatex import models_store
+    import gilzabots.memgpt_runtime as runtime
+    from gilzabots import models_store
     from types import SimpleNamespace
 
     monkeypatch.setattr(models_store, "_MODELS_STORE_PATH", tmp_path / "models_store.json")
@@ -566,8 +566,8 @@ def test_run_skill_worker_uses_light_prompt_profile_and_skill_variant(tmp_path, 
 
 def test_build_chat_orchestrator_scopes_project_path(tmp_path):
     """Regression: building the MemGPT must set the global project context so the
-    sub-agent's file tools act inside the project, not the OpalaTex repo root."""
-    from opalatex.tools import get_project_path
+    sub-agent's file tools act inside the project, not the GilzaBots repo root."""
+    from gilzabots.tools import get_project_path
     build_chat_orchestrator(_project(tmp_path), None)
     assert os.path.abspath(get_project_path()) == os.path.abspath(str(tmp_path))
 
@@ -627,7 +627,7 @@ def test_memgpt_retries_a_llama_server_tool_call_rejection_through_the_compat_la
     from types import SimpleNamespace
     from agenticblocks.blocks.llm.agent import AgentInput
     from agenticblocks.blocks.llm.memgpt_agent import MemGPTAgentBlock
-    from opalatex.litellm_compat import wrap_agent_litellm_compat
+    from gilzabots.litellm_compat import wrap_agent_litellm_compat
 
     agent = MemGPTAgentBlock(
         name="chat_orchestrator",
@@ -662,7 +662,7 @@ def test_memgpt_retries_a_llama_server_tool_call_rejection_through_the_compat_la
 
 
 def test_memgpt_block_recognizes_the_llama_server_wording_on_its_own():
-    """The framework detector must not depend on OpalaTex's compat normalization."""
+    """The framework detector must not depend on GilzaBots's compat normalization."""
     from agenticblocks.blocks.llm.memgpt_agent import _is_ollama_tool_call_json_escape_error
 
     raw = Exception(
@@ -723,7 +723,7 @@ def test_worker_reasoning_display_follows_its_own_model_capability(
     stale project value decided whether a reasoning channel the provider was
     already filling ever reached the panel.
     """
-    import opalatex.memgpt_runtime as runtime
+    import gilzabots.memgpt_runtime as runtime
     from types import SimpleNamespace
 
     built = []
@@ -778,7 +778,7 @@ def test_worker_history_keeps_the_answer_it_is_asked_to_save(tmp_path, monkeypat
     made a few tool calls and delegated. Slicing history[-10:] before filtering let
     those tool calls and results fill the window, so the worker received empty
     "ASSISTANT:" lines and never the answer holding the list."""
-    import opalatex.memgpt_runtime as runtime
+    import gilzabots.memgpt_runtime as runtime
     from types import SimpleNamespace
 
     captured = {}
@@ -835,7 +835,7 @@ def test_worker_history_keeps_the_answer_it_is_asked_to_save(tmp_path, monkeypat
 
 
 def test_worker_history_is_bounded_to_recent_conversation():
-    from opalatex.memgpt_runtime import _recent_conversation_for_worker
+    from gilzabots.memgpt_runtime import _recent_conversation_for_worker
 
     history = [{"role": "user", "content": f"message {i}"} for i in range(15)]
     history.append({"role": "user", "content": [{"type": "text", "text": "with attachment"},

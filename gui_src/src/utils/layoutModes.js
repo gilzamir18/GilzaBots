@@ -47,7 +47,7 @@ const CHAT_SIDEBAR_LAYOUTS = new Set(['chat', 'chat-bottom']);
 export const layoutHasChatSidebar = (mode) => CHAT_SIDEBAR_LAYOUTS.has(mode);
 
 // Every layout the window has. The agent's `set_layout` tool offers these same
-// names (opalatex/tools.py IDE_LAYOUTS).
+// names (gilzabots/tools.py IDE_LAYOUTS).
 export const LAYOUT_MODES = ['ide', 'chat', 'chat-bottom', 'studio', 'document', 'review'];
 
 /**

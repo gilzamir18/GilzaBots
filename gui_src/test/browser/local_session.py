@@ -24,8 +24,8 @@ sys.path.insert(0, str(ROOT))
 
 
 async def checks(work):
-    os.environ['OPALATEX_HOME'] = str(work / 'home')
-    from opalatex.ide_server import AsyncHTTPServer
+    os.environ['GILZABOTS_HOME'] = str(work / 'home')
+    from gilzabots.ide_server import AsyncHTTPServer
 
     class Server(AsyncHTTPServer):
         async def route_api(self, method, path, query, headers, body, writer):
@@ -34,13 +34,13 @@ async def checks(work):
             else:
                 await super().route_api(method, path, query, headers, body, writer)
 
-    server = Server(port=0, static_dir=str(ROOT / 'opalatex/gui'))
+    server = Server(port=0, static_dir=str(ROOT / 'gilzabots/gui'))
     await server.start()
     backend_url = f'http://127.0.0.1:{server.port}'
     vite_port, cdp_port = free_port(), free_port()
     log = (work / 'process.log').open('w')
     vite = subprocess.Popen(['npx', 'vite', '--port', str(vite_port), '--strictPort'],
-                            cwd=ROOT / 'gui_src', env={**os.environ, 'OPALATEX_BACKEND_URL': backend_url},
+                            cwd=ROOT / 'gui_src', env={**os.environ, 'GILZABOTS_BACKEND_URL': backend_url},
                             stdout=log, stderr=log)
     chrome = subprocess.Popen([find_chrome(), '--headless', '--no-sandbox', '--disable-gpu', '--no-first-run',
                                f'--user-data-dir={work / "browser"}', f'--remote-debugging-port={cdp_port}',
@@ -65,7 +65,7 @@ async def checks(work):
                 else:
                     raise AssertionError(f'App failed to mount at {origin}: ' + str(await page.js('document.body.innerText.slice(0,800)')))
                 assert await page.js("fetch('/api/session').then(r=>r.status)") == 200
-                assert not await page.js("document.cookie.includes('opalatex_session')")
+                assert not await page.js("document.cookie.includes('gilzabots_session')")
                 assert await page.js(f"new Promise(resolve=>{{const img=new Image(); img.onload=()=>resolve(img.naturalWidth); img.onerror=()=>resolve(0); img.src={json.dumps(image_url)};}})") == 1
                 assert await page.js("new Promise(resolve=>{const events=new EventSource('/api/review-events');events.onmessage=e=>{events.close();resolve(e.data)};events.onerror=()=>{events.close();resolve('error')}})") == 'authenticated'
                 print(f'PASS: {origin} mounts, authenticates fetch, loads native image and EventSource; token is HttpOnly')
@@ -94,5 +94,5 @@ async def checks(work):
 
 
 if __name__ == '__main__':
-    with tempfile.TemporaryDirectory(prefix='opalatex-session-browser-') as temp:
+    with tempfile.TemporaryDirectory(prefix='gilzabots-session-browser-') as temp:
         asyncio.run(checks(Path(temp)))

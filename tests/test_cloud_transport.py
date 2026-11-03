@@ -13,7 +13,7 @@ import types
 
 import pytest
 
-from opalatex.cloud import transport
+from gilzabots.cloud import transport
 
 
 V6_DEAD = "2001:db8::1"
@@ -198,8 +198,8 @@ def test_losing_attempts_are_closed(fake_net):
 
 def test_cloud_backends_use_this_transport():
     """The plumbing is only a fix if the callers actually route through it."""
-    from opalatex.cloud import oauth
-    from opalatex.cloud.providers import google_drive
+    from gilzabots.cloud import oauth
+    from gilzabots.cloud.providers import google_drive
 
     assert oauth.transport is transport
     assert google_drive.transport is transport

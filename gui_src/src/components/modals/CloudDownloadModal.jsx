@@ -303,7 +303,7 @@ export default function CloudDownloadModal({ onClose, onDownloaded, parentPath, 
                 className="vscode-settings-input"
                 value={baseDir}
                 disabled={downloading}
-                placeholder={t('cloudSync.baseDirPlaceholder', '/home/you/Drive/OpalaTex')}
+                placeholder={t('cloudSync.baseDirPlaceholder', '/home/you/Drive/GilzaBots')}
                 onChange={(e) => setBaseDir(e.target.value)}
                 onBlur={applyBaseDir}
                 onKeyDown={(e) => { if (e.key === 'Enter') applyBaseDir(); }}

@@ -1,4 +1,4 @@
-// These names belong to OpalaTex/AgenticBlocks rather than the provider's
+// These names belong to GilzaBots/AgenticBlocks rather than the provider's
 // model request. The backend enforces the authoritative copy of this list;
 // keeping it here gives immediate feedback in the model editor.
 export const RESERVED_EXTRA_MODEL_PARAM_NAMES = new Set([

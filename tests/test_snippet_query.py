@@ -1,4 +1,4 @@
-"""Tests for the excerpt "Look up" query (opalatex/snippet_query.py).
+"""Tests for the excerpt "Look up" query (gilzabots/snippet_query.py).
 
 Covers the project-bound read-only reader, the guard rails and prompt of
 ``execute_snippet_query``, a full agent run with tool calls against a scripted
@@ -12,8 +12,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from opalatex.ide_server import AsyncHTTPServer
-from opalatex.snippet_query import (
+from gilzabots.ide_server import AsyncHTTPServer
+from gilzabots.snippet_query import (
     MAX_QUERY_EXCERPT_CHARS,
     MAX_QUERY_QUESTION_CHARS,
     ProjectReader,
@@ -191,7 +191,7 @@ def _stub_agent(monkeypatch, *, final_text, truncated=False, budget_exhausted=Fa
             )
 
     monkeypatch.setattr(agent_mod, "LLMAgentBlock", FakeAgent)
-    monkeypatch.setattr("opalatex.litellm_compat.wrap_agent_litellm_compat", lambda agent: agent)
+    monkeypatch.setattr("gilzabots.litellm_compat.wrap_agent_litellm_compat", lambda agent: agent)
     return captured
 
 
@@ -255,7 +255,7 @@ async def test_an_ollama_model_runs_on_the_native_chat_route(monkeypatch, projec
 
 @pytest.mark.asyncio
 async def test_the_forced_final_call_is_told_the_budget_is_spent(monkeypatch, project):
-    from opalatex.snippet_query import SNIPPET_QUERY_FINAL_ANSWER_PROMPT
+    from gilzabots.snippet_query import SNIPPET_QUERY_FINAL_ANSWER_PROMPT
 
     captured = _stub_agent(monkeypatch, final_text="Answer.")
 
@@ -371,13 +371,13 @@ async def test_endpoint_returns_the_answer_and_passes_the_source(monkeypatch, pr
     captured = {}
 
     async def fake_execute(excerpt, question, *, source, project_path, model):
-        from opalatex.snippet_query import SnippetQueryResult
+        from gilzabots.snippet_query import SnippetQueryResult
 
         captured.update(excerpt=excerpt, question=question, source=source,
                         project_path=project_path, model=model)
         return SnippetQueryResult(answer="Answer.", truncated=True, files_read=["main.tex"])
 
-    monkeypatch.setattr("opalatex.snippet_query.execute_snippet_query", fake_execute)
+    monkeypatch.setattr("gilzabots.snippet_query.execute_snippet_query", fake_execute)
     server, responses = _server_with_capture()
 
     await _post(server, {
@@ -401,7 +401,7 @@ async def test_endpoint_reports_a_failed_query_as_400(monkeypatch):
     async def fake_execute(*_args, **_kwargs):
         raise ValueError("The model returned an empty answer.")
 
-    monkeypatch.setattr("opalatex.snippet_query.execute_snippet_query", fake_execute)
+    monkeypatch.setattr("gilzabots.snippet_query.execute_snippet_query", fake_execute)
     server, responses = _server_with_capture()
 
     await _post(server, {"excerpt": "x", "question": "y"})

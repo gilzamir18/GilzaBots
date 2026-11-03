@@ -22,7 +22,7 @@ numbers in EN and PT. Hits are candidates, not orders: `crucial`, `robust`,
 `abrangente` are ordinary technical words, and the scanner cannot tell use from
 mention — a style guide or a quoted example scores high for naming tics, not for
 having them. Read the flagged lines before touching them. Text pasted in the context: write it
-to `<project>/.opalatex/_humanize_input.txt` first and scan that.
+to `<project>/.gilzabots/_humanize_input.txt` first and scan that.
 
 ## 3. Preserve (outranks every rewrite rule)
 Meaning and the strength of every claim; numbers, units, dates, names, quotes
@@ -54,7 +54,7 @@ headings; the human-written passages' existing voice.
 ## 5. Apply and verify
 `replace_content_range` for a range, `write_file` only for a whole small file;
 never rewrite a range you have not read. Copy the original to
-`<project>/.opalatex/_humanize_before_<name>`, then
+`<project>/.gilzabots/_humanize_before_<name>`, then
 `humanize_scan.py diff "<before>" "<after>"`. Words down >10% ⇒ you deleted
 content: restore it. Density up ⇒ your rewrite added tics: fix those passages.
 

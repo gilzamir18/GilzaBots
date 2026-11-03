@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.ide_server import AsyncHTTPServer
-from opalatex.synctex_parser import GeneratedSourceError, find_source_line
+from gilzabots.ide_server import AsyncHTTPServer
+from gilzabots.synctex_parser import GeneratedSourceError, find_source_line
 
 PREAMBLE = [
     "\\documentclass{beamer}",       # 1
@@ -140,7 +140,7 @@ def test_fragile_singleslide_does_not_count_as_a_vrb_frame(tmp_path):
 @pytest.fixture(autouse=True)
 def _isolated_store(tmp_path, monkeypatch):
     # The project-mode endpoint looks the project up in the store.
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", str(tmp_path / "projects.db"))
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", str(tmp_path / "projects.db"))
 
 
 def _server():

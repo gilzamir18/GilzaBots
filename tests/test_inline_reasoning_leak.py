@@ -23,8 +23,8 @@ from agenticblocks.utils.parsers import (
     split_inline_reasoning_parts,
     strip_chat_control_tokens,
 )
-from opalatex.agent_stdin import _sanitize_model_response, _visible_chat_response
-from opalatex.think_stream import InlineReasoningStreamSplitter
+from gilzabots.agent_stdin import _sanitize_model_response, _visible_chat_response
+from gilzabots.think_stream import InlineReasoningStreamSplitter
 
 
 LEAKED = (
@@ -264,13 +264,13 @@ def test_a_thinking_capable_model_is_always_asked_to_separate_the_channels():
     """Verified against ollama_chat/glm-5.3:cloud: with think=false the model still
     reasons and the reasoning lands in `content` *undelimited*, so it is published
     as the answer. Only think=true makes the provider isolate it."""
-    from opalatex.config import resolve_think_request
+    from gilzabots.config import resolve_think_request
 
     assert resolve_think_request(supports_thinking=True) is True
 
 
 def test_a_model_without_thinking_support_never_receives_the_param():
-    from opalatex.config import resolve_think_request
+    from gilzabots.config import resolve_think_request
 
     assert resolve_think_request(supports_thinking=False) is None
 
@@ -284,7 +284,7 @@ def test_the_catalog_is_the_only_input_to_the_think_decision():
     it cannot turn the isolation off, only ask for less reasoning.
     """
     import inspect
-    from opalatex.config import resolve_think_request
+    from gilzabots.config import resolve_think_request
 
     assert list(inspect.signature(resolve_think_request).parameters) == [
         "supports_thinking",
@@ -295,7 +295,7 @@ def test_the_catalog_is_the_only_input_to_the_think_decision():
 def test_a_configured_effort_travels_as_the_think_level():
     """The setting was reaching the provider as full effort. See the docstring
     of `resolve_think_request` for the measured evidence."""
-    from opalatex.config import resolve_think_request
+    from gilzabots.config import resolve_think_request
 
     for effort in ("low", "medium", "high"):
         assert resolve_think_request(True, effort) == effort
@@ -308,7 +308,7 @@ def test_no_effort_setting_can_switch_the_reasoning_channel_off():
     Ollama rejects both of these as level strings (`HTTP 400 invalid think
     value`), so they resolve to the boolean that keeps the channel isolated.
     """
-    from opalatex.config import resolve_think_request
+    from gilzabots.config import resolve_think_request
 
     assert resolve_think_request(True, "none") is True
     assert resolve_think_request(True, "xhigh") is True
@@ -319,7 +319,7 @@ def test_no_effort_setting_can_switch_the_reasoning_channel_off():
 
 def test_the_effort_does_not_reach_ollama_as_its_own_field():
     """One knob, one wire field: LiteLLM would map it back onto `think` as a bool."""
-    from opalatex.config import sanitize_litellm_kwargs_for_model
+    from gilzabots.config import sanitize_litellm_kwargs_for_model
 
     cleaned = sanitize_litellm_kwargs_for_model(
         "ollama_chat/glm-5.3:cloud",
@@ -341,7 +341,7 @@ def test_the_effort_does_not_reach_ollama_as_its_own_field():
 
 
 def _events_for(chunks, monkeypatch):
-    import opalatex.agent_stdin as agent_stdin
+    import gilzabots.agent_stdin as agent_stdin
 
     published = []
     monkeypatch.setattr(agent_stdin, "event_hook", published.append)
@@ -381,7 +381,7 @@ def test_a_balanced_think_block_is_published_as_reasoning(monkeypatch):
 
 def test_the_reasoning_is_recorded_for_the_turn_it_belongs_to(monkeypatch):
     """It is persisted like any thought, so reopening the chat still shows it."""
-    import opalatex.agent_stdin as agent_stdin
+    import gilzabots.agent_stdin as agent_stdin
 
     recorded = []
     monkeypatch.setattr(agent_stdin, "event_hook", lambda payload: None)

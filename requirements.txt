@@ -1,5 +1,5 @@
 # AgenticBlocks is vendored in ./agenticblocks. Its runtime dependencies are
-# declared here explicitly so a clean OpalaTex installation remains complete.
+# declared here explicitly so a clean GilzaBots installation remains complete.
 pyyaml>=6.0
 pydantic>=2.0.0
 networkx>=3.0
@@ -15,7 +15,7 @@ tree-sitter-language-pack>=1.8.0
 chromadb>=0.4.0
 pywebview>=4.0
 pywinpty>=2.0.0; sys_platform == "win32"
-# Qt 6.11.2 is the oldest release verified to run OpalaTex on Windows. Qt 6.8
+# Qt 6.11.2 is the oldest release verified to run GilzaBots on Windows. Qt 6.8
 # embeds Chromium 122, too old for pdf.js 5 (URL.parse): opening a PDF greys the
 # window. Qt 6.10.2 ships MSVCP140 14.26, which crashes onnxruntime on the first
 # agent message. The -Qt6 packages carry that runtime, so they are pinned to the

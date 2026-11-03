@@ -19,8 +19,8 @@ import pytest
 
 from agenticblocks.blocks.speech import SpeechSynthesisError, phoneme_ids
 from agenticblocks.blocks.speech import local_onnx, phonemes
-from opalatex import voice_store
-from opalatex.voice_store import VoiceStoreError
+from gilzabots import voice_store
+from gilzabots.voice_store import VoiceStoreError
 
 
 # ─── Phoneme mapping ─────────────────────────────────────────────────────────

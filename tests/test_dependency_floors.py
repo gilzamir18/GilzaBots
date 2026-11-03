@@ -73,7 +73,7 @@ def _pyproject_gui_extra():
     """The Qt floors now live in the ``gui`` extra, not in the base install.
 
     The base install is the command-line interface and never imports Qt; the
-    desktop application asks for it with ``pip install 'opalatex[gui]'``. The
+    desktop application asks for it with ``pip install 'gilzabots[gui]'``. The
     floors themselves are unchanged and still have to match requirements.txt.
     """
     data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
@@ -126,10 +126,10 @@ def test_all_qt_packages_share_one_ceiling_in_both_files():
 
 
 def test_the_base_install_carries_no_qt():
-    """`pip install opalatex` must not pull several hundred MB the CLI never loads.
+    """`pip install gilzabots` must not pull several hundred MB the CLI never loads.
 
     Every Qt and pywebview import in the package sits inside a function of
-    `opalatex/ide_server.py`, so the base install stays Qt-free by construction;
+    `gilzabots/ide_server.py`, so the base install stays Qt-free by construction;
     this keeps a dependency line from quietly putting it back.
     """
     assert _pyproject_base() == {}, (

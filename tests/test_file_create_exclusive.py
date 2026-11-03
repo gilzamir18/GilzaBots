@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.ide_server import AsyncHTTPServer
+from gilzabots.ide_server import AsyncHTTPServer
 
 
 def _server():

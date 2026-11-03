@@ -15,10 +15,10 @@ import urllib.request
 
 import pytest
 
-from opalatex import cli_catalog, context_discovery, models_store, openrouter_oauth
-from opalatex.cli_commands import REPLState
-from opalatex.cloud import oauth, transport
-from opalatex.cloud.base import CloudAuthError
+from gilzabots import cli_catalog, context_discovery, models_store, openrouter_oauth
+from gilzabots.cli_commands import REPLState
+from gilzabots.cloud import oauth, transport
+from gilzabots.cloud.base import CloudAuthError
 
 
 @pytest.fixture

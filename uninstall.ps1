@@ -1,4 +1,4 @@
-# OpalaTex Community uninstaller for direct Windows installations.
+# GilzaBots Community uninstaller for direct Windows installations.
 # Application files are removed by default. User data is removed only when
 # -Purge is explicitly supplied.
 param(
@@ -7,9 +7,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$installDir = Join-Path $env:LOCALAPPDATA "OpalaTex"
-$pointerFile = Join-Path $HOME ".opalatexhome"
-$registryPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\OpalaTex"
+$installDir = Join-Path $env:LOCALAPPDATA "GilzaBots"
+$pointerFile = Join-Path $HOME ".gilzabotshome"
+$registryPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\GilzaBots"
 $purgeDataDir = $null
 
 # Run from "Installed apps" or the Start menu, this script owns its console
@@ -18,7 +18,7 @@ $purgeDataDir = $null
 # installation that "will not uninstall" and no reason why. Every failure is
 # written to a log and, unless -Yes asked for an unattended run, kept on screen
 # until the user dismisses it.
-$logPath = Join-Path $env:TEMP "OpalaTex-uninstall.log"
+$logPath = Join-Path $env:TEMP "GilzaBots-uninstall.log"
 function Stop-Uninstall {
     param([Parameter(Mandatory = $true)][string]$Message)
 
@@ -49,12 +49,12 @@ trap {
 # Resolve and confirm the destructive target before changing the installation,
 # so a rejected or unsafe purge cannot leave a half-uninstalled application.
 if ($Purge) {
-    $dataDir = $env:OPALATEX_HOME
+    $dataDir = $env:GILZABOTS_HOME
     if (-not $dataDir -and (Test-Path $pointerFile)) {
         $dataDir = (Get-Content -Raw $pointerFile).Trim()
     }
     if (-not $dataDir) {
-        $dataDir = Join-Path $HOME ".opalatex"
+        $dataDir = Join-Path $HOME ".gilzabots"
     }
 
     if (-not [IO.Path]::IsPathRooted($dataDir)) {
@@ -71,7 +71,7 @@ if ($Purge) {
     }
 
     if (-not $Yes) {
-        $confirmation = Read-Host "Remove all OpalaTex global data at '$purgeDataDir'? Type 'remove' to continue"
+        $confirmation = Read-Host "Remove all GilzaBots global data at '$purgeDataDir'? Type 'remove' to continue"
         if ($confirmation -cne "remove") {
             Write-Host "Global data will be preserved."
             $Purge = $false
@@ -80,19 +80,19 @@ if ($Purge) {
     }
 }
 
-# The monitor daemon (`OpalaTex.exe monitors daemon`) and the background turns it
+# The monitor daemon (`GilzaBots.exe monitors daemon`) and the background turns it
 # starts have no window to close, so they are stopped here rather than reported
 # as "still running". Its login entry and notification registrations go too.
-Get-CimInstance Win32_Process -Filter "Name = 'OpalaTex.exe'" -ErrorAction SilentlyContinue |
+Get-CimInstance Win32_Process -Filter "Name = 'GilzaBots.exe'" -ErrorAction SilentlyContinue |
     Where-Object { $_.CommandLine -match '\smonitors\s' } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "OpalaTexMonitors" -ErrorAction SilentlyContinue
-Remove-Item -Recurse -Force "HKCU:\Software\Classes\opalatex-monitor" -ErrorAction SilentlyContinue
-Remove-Item -Recurse -Force "HKCU:\Software\Classes\AppUserModelId\com.opalacoder.OpalaTex" -ErrorAction SilentlyContinue
-Remove-Item -Recurse -Force "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\com.opalacoder.OpalaTex" -ErrorAction SilentlyContinue
+Remove-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run" -Name "GilzaBotsMonitors" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "HKCU:\Software\Classes\gilzabots-monitor" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "HKCU:\Software\Classes\AppUserModelId\io.github.gilzamir18.GilzaBots" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\io.github.gilzamir18.GilzaBots" -ErrorAction SilentlyContinue
 
-if (Get-Process -Name "OpalaTex" -ErrorAction SilentlyContinue) {
-    Stop-Uninstall "OpalaTex is still running. Close it and run the uninstaller again."
+if (Get-Process -Name "GilzaBots" -ErrorAction SilentlyContinue) {
+    Stop-Uninstall "GilzaBots is still running. Close it and run the uninstaller again."
 }
 
 # The executables the application starts from its own directory (the embedded
@@ -105,7 +105,7 @@ $lockingProcesses = @(Get-Process -ErrorAction SilentlyContinue | Where-Object {
 })
 if ($lockingProcesses.Count -gt 0) {
     $names = ($lockingProcesses | ForEach-Object { "$($_.ProcessName) (PID $($_.Id))" }) -join ", "
-    Stop-Uninstall "Programs started from the OpalaTex folder are still running: $names. Close them (or sign out and back in) and run the uninstaller again."
+    Stop-Uninstall "Programs started from the GilzaBots folder are still running: $names. Close them (or sign out and back in) and run the uninstaller again."
 }
 
 # A Start-menu shortcut starts PowerShell in the application directory. Windows
@@ -115,7 +115,7 @@ if ($lockingProcesses.Count -gt 0) {
 Set-Location $env:TEMP
 [Environment]::CurrentDirectory = $env:TEMP
 
-Write-Host "Uninstalling the direct OpalaTex installation..." -ForegroundColor Cyan
+Write-Host "Uninstalling the direct GilzaBots installation..." -ForegroundColor Cyan
 
 # Application files go first. If they cannot all be removed, the uninstaller
 # stops here with PATH, shortcuts and the Installed-apps entry untouched, so the
@@ -147,7 +147,7 @@ if (Test-Path $registryPath) {
 }
 $userPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
 if ($pathWasAdded -and $null -ne $userPath) {
-    $knownEntries = @($installDir, (Join-Path $installDir "OpalaTex")) |
+    $knownEntries = @($installDir, (Join-Path $installDir "GilzaBots")) |
         ForEach-Object { $_.TrimEnd('\') }
     $keptEntries = @($userPath -split ';') | Where-Object {
         $entry = $_.Trim().TrimEnd('\')
@@ -162,9 +162,9 @@ if ($pathWasAdded -and $null -ne $userPath) {
 
 $wshShell = New-Object -ComObject WScript.Shell
 $shortcutPaths = @(
-    (Join-Path $wshShell.SpecialFolders("Desktop") "OpalaTex.lnk"),
-    (Join-Path $wshShell.SpecialFolders("Programs") "OpalaTex.lnk"),
-    (Join-Path $wshShell.SpecialFolders("Programs") "Uninstall OpalaTex.lnk")
+    (Join-Path $wshShell.SpecialFolders("Desktop") "GilzaBots.lnk"),
+    (Join-Path $wshShell.SpecialFolders("Programs") "GilzaBots.lnk"),
+    (Join-Path $wshShell.SpecialFolders("Programs") "Uninstall GilzaBots.lnk")
 )
 foreach ($shortcutPath in $shortcutPaths) {
     if (Test-Path $shortcutPath) {
@@ -172,16 +172,16 @@ foreach ($shortcutPath in $shortcutPaths) {
         $target = $shortcut.TargetPath
         $arguments = $shortcut.Arguments
         $knownTargets = @(
-            (Join-Path $installDir "OpalaTex.exe"),
-            (Join-Path $installDir "OpalaTex\OpalaTex.exe")
+            (Join-Path $installDir "GilzaBots.exe"),
+            (Join-Path $installDir "GilzaBots\GilzaBots.exe")
         )
         # PyInstaller 6+ bundles this script under `_internal`; older releases
         # kept it beside the executable.
         $knownUninstallers = @(
             (Join-Path $installDir "uninstall.ps1"),
-            (Join-Path $installDir "OpalaTex\uninstall.ps1"),
+            (Join-Path $installDir "GilzaBots\uninstall.ps1"),
             (Join-Path $installDir "_internal\uninstall.ps1"),
-            (Join-Path $installDir "OpalaTex\_internal\uninstall.ps1")
+            (Join-Path $installDir "GilzaBots\_internal\uninstall.ps1")
         )
         $isAppShortcut = [bool]($knownTargets | Where-Object { $_ -ieq $target })
         $isUninstallShortcut = [bool]($knownUninstallers | Where-Object {
@@ -205,19 +205,19 @@ if ($Purge) {
     Write-Host "Removed global data at $purgeDataDir. Project directories were preserved."
 }
 
-Write-Host "OpalaTex application files were removed." -ForegroundColor Green
+Write-Host "GilzaBots application files were removed." -ForegroundColor Green
 if (-not $Purge) {
     Write-Host "Global settings, chats, caches, credentials, and project directories were preserved."
     # Say where, so a user who wanted them gone too does not have to hunt for
     # them. Informational only: a failure to resolve the path must not turn a
     # completed uninstall into a reported failure.
     try {
-        $keptDataDir = $env:OPALATEX_HOME
+        $keptDataDir = $env:GILZABOTS_HOME
         if (-not $keptDataDir -and (Test-Path $pointerFile)) {
             $keptDataDir = (Get-Content -Raw $pointerFile).Trim()
         }
         if (-not $keptDataDir) {
-            $keptDataDir = Join-Path $HOME ".opalatex"
+            $keptDataDir = Join-Path $HOME ".gilzabots"
         }
         Write-Host "Global data is kept in $keptDataDir; delete that folder to remove it as well."
     } catch {

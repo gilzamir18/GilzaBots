@@ -7,7 +7,7 @@ from io import BytesIO
 
 import pytest
 
-from opalatex import jpt
+from gilzabots import jpt
 
 
 def _deck(*elements, background_image=""):

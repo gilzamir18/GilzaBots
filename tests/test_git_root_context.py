@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.ide_server import (
+from gilzabots.ide_server import (
     AsyncHTTPServer,
     GitContextError,
     _discard_git_path,
-    _ensure_opalatex_git_excludes,
-    _is_opalatex_hidden_artifact,
+    _ensure_gilzabots_git_excludes,
+    _is_gilzabots_hidden_artifact,
     _is_workspace_hidden_by_extension,
     _project_path_to_repo_path,
     _repo_path_to_project_path,
@@ -273,20 +273,20 @@ async def test_git_stage_endpoint_stages_all_changes_in_one_request(tmp_path):
     }
 
 
-def test_opalatex_partial_artifacts_are_hidden_from_file_tree(tmp_path):
+def test_gilzabots_partial_artifacts_are_hidden_from_file_tree(tmp_path):
     project = tmp_path / "project"
     project.mkdir()
     (project / "chapter.tex").write_text("chapter", encoding="utf-8")
-    (project / "opalatex_partial_chapter.tex").write_text("generated", encoding="utf-8")
-    (project / "opalatex_partial_chapter.pdf").write_text("generated", encoding="utf-8")
+    (project / "gilzabots_partial_chapter.tex").write_text("generated", encoding="utf-8")
+    (project / "gilzabots_partial_chapter.pdf").write_text("generated", encoding="utf-8")
 
     tree = get_file_tree(str(project))
 
     paths = {item["path"].replace("\\", "/") for item in tree}
     assert "chapter.tex" in paths
-    assert "opalatex_partial_chapter.tex" not in paths
-    assert "opalatex_partial_chapter.pdf" not in paths
-    assert _is_opalatex_hidden_artifact("nested/opalatex_partial_chapter.aux")
+    assert "gilzabots_partial_chapter.tex" not in paths
+    assert "gilzabots_partial_chapter.pdf" not in paths
+    assert _is_gilzabots_hidden_artifact("nested/gilzabots_partial_chapter.aux")
 
 
 def test_latex_auxiliary_files_are_hidden_from_file_tree_by_default(tmp_path):
@@ -319,7 +319,7 @@ def test_latex_auxiliary_files_can_be_shown_in_file_tree(tmp_path):
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
-def test_opalatex_partial_artifacts_are_excluded_from_user_git(tmp_path):
+def test_gilzabots_partial_artifacts_are_excluded_from_user_git(tmp_path):
     project = tmp_path / "project"
     project.mkdir()
     (project / "main.tex").write_text("main", encoding="utf-8")
@@ -329,9 +329,9 @@ def test_opalatex_partial_artifacts_are_excluded_from_user_git(tmp_path):
     _git(project, "commit", "-m", "initial")
 
     ctx = _resolve_git_context(str(project), use_shadow=False)
-    _ensure_opalatex_git_excludes(ctx)
-    (project / "opalatex_partial_main.tex").write_text("generated", encoding="utf-8")
-    (project / "opalatex_partial_main.pdf").write_text("generated", encoding="utf-8")
+    _ensure_gilzabots_git_excludes(ctx)
+    (project / "gilzabots_partial_main.tex").write_text("generated", encoding="utf-8")
+    (project / "gilzabots_partial_main.pdf").write_text("generated", encoding="utf-8")
 
     assert _git(project, "status", "--porcelain").stdout == ""
 

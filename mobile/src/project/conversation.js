@@ -9,7 +9,7 @@
 
 import { activityKey, messageKey } from './keys.js';
 
-const PROGRESS_FENCE = /^\s*```opalatex-progress\n[\s\S]*?\n```\s*/;
+const PROGRESS_FENCE = /^\s*```gilzabots-progress\n[\s\S]*?\n```\s*/;
 
 /** The desktop's progress block is render markup, not part of the answer. */
 export function stripProgressFence(content) {

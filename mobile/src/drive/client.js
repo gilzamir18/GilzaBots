@@ -2,7 +2,7 @@
  * Google Drive REST v3, the subset the app needs.
  *
  * It addresses the same layout the desktop writes
- * (`opalatex/cloud/providers/google_drive.py`): a container folder `OpalaTex`
+ * (`gilzabots/cloud/providers/google_drive.py`): a container folder `GilzaBots`
  * in the Drive root and one folder per project inside it. The scope is
  * `drive.file`, granted per Google Cloud project, so this client sees what the
  * desktop client of the same project created and nothing else in the account.
@@ -16,7 +16,7 @@
 
 export const API_BASE = 'https://www.googleapis.com/drive/v3';
 export const UPLOAD_BASE = 'https://www.googleapis.com/upload/drive/v3/files';
-export const CONTAINER_FOLDER = 'OpalaTex';
+export const CONTAINER_FOLDER = 'GilzaBots';
 export const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const SHORTCUT_MIME = 'application/vnd.google-apps.shortcut';
 const FILE_FIELDS = 'id,name,mimeType,size,md5Checksum,modifiedTime,version,trashed';
@@ -108,7 +108,7 @@ export function createDriveClient({ getToken, fetchImpl = globalThis.fetch.bind(
     return payload.files?.[0]?.id || '';
   }
 
-  /** Project folders in the OpalaTex container. Never creates the container. */
+  /** Project folders in the GilzaBots container. Never creates the container. */
   async function listProjects() {
     const container = await findFolder(CONTAINER_FOLDER, 'root');
     if (!container) return [];
@@ -191,7 +191,7 @@ export function createDriveClient({ getToken, fetchImpl = globalThis.fetch.bind(
   }
 
   async function createFile(parent, name, content, mime) {
-    const boundary = `opalatex-${globalThis.crypto.randomUUID()}`;
+    const boundary = `gilzabots-${globalThis.crypto.randomUUID()}`;
     const metadata = JSON.stringify({ name, parents: [parent] });
     const body =
       `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n` +

@@ -4,7 +4,7 @@ Several documents in one turn used to receive the full truncation percentage
 each, so N documents occupied N times the intended slice of the free context.
 """
 
-from opalatex.agent_stdin import _apply_document_budget
+from gilzabots.agent_stdin import _apply_document_budget
 
 
 def _doc(name: str, chars: int) -> dict:

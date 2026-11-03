@@ -11,8 +11,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.ide_server import AsyncHTTPServer
-from opalatex.translation import (
+from gilzabots.ide_server import AsyncHTTPServer
+from gilzabots.translation import (
     MAX_TRANSLATION_CHARS,
     build_translation_system_prompt,
     execute_translation,
@@ -110,7 +110,7 @@ def _stub_agent(monkeypatch, response):
             return SimpleNamespace(response=response, structured_output=None)
 
     monkeypatch.setattr(agent_mod, "LLMAgentBlock", FakeAgent)
-    monkeypatch.setattr("opalatex.litellm_compat.wrap_agent_litellm_compat", lambda agent: agent)
+    monkeypatch.setattr("gilzabots.litellm_compat.wrap_agent_litellm_compat", lambda agent: agent)
     return captured
 
 
@@ -211,7 +211,7 @@ async def test_execute_translation_reports_an_empty_answer(monkeypatch):
 @pytest.mark.asyncio
 async def test_translation_settings_endpoints_round_trip(tmp_path, monkeypatch):
     settings_file = tmp_path / "ui_settings.json"
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", settings_file)
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", settings_file)
 
     server, responses = _server_with_capture()
     writer = AsyncMock()
@@ -239,7 +239,7 @@ async def test_translation_settings_endpoints_round_trip(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_translate_endpoint_returns_the_translation_and_target_language(tmp_path, monkeypatch):
     settings_file = tmp_path / "ui_settings.json"
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", settings_file)
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", settings_file)
 
     captured = {}
 
@@ -247,7 +247,7 @@ async def test_translate_endpoint_returns_the_translation_and_target_language(tm
         captured.update(text=text, target_language=target_language, model=model)
         return "Uma amostra de texto."
 
-    monkeypatch.setattr("opalatex.translation.execute_translation", fake_execute)
+    monkeypatch.setattr("gilzabots.translation.execute_translation", fake_execute)
 
     server, responses = _server_with_capture()
     await server.route_api(
@@ -281,8 +281,8 @@ async def test_translate_endpoint_returns_the_translation_and_target_language(tm
 async def test_translate_endpoint_falls_back_to_the_saved_setting(tmp_path, monkeypatch):
     """With no target_lang in the request, the editor's "Translate to" wins."""
     settings_file = tmp_path / "ui_settings.json"
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", settings_file)
-    from opalatex.ui_settings import save_ui_settings
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", settings_file)
+    from gilzabots.ui_settings import save_ui_settings
 
     save_ui_settings({"translate_target_lang": "de", "lang": "pt-BR"})
 
@@ -292,7 +292,7 @@ async def test_translate_endpoint_falls_back_to_the_saved_setting(tmp_path, monk
         captured["target_language"] = target_language
         return "Ein Text."
 
-    monkeypatch.setattr("opalatex.translation.execute_translation", fake_execute)
+    monkeypatch.setattr("gilzabots.translation.execute_translation", fake_execute)
 
     server, responses = _server_with_capture()
     await server.route_api(
@@ -312,8 +312,8 @@ async def test_translate_endpoint_falls_back_to_the_saved_setting(tmp_path, monk
 async def test_translate_endpoint_falls_back_to_the_ui_language(tmp_path, monkeypatch):
     """"Translate to" left on "Same as interface language" follows the UI locale."""
     settings_file = tmp_path / "ui_settings.json"
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", settings_file)
-    from opalatex.ui_settings import save_ui_settings
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", settings_file)
+    from gilzabots.ui_settings import save_ui_settings
 
     save_ui_settings({"translate_target_lang": "", "lang": "pt-BR"})
 
@@ -323,7 +323,7 @@ async def test_translate_endpoint_falls_back_to_the_ui_language(tmp_path, monkey
         captured["target_language"] = target_language
         return "Um texto."
 
-    monkeypatch.setattr("opalatex.translation.execute_translation", fake_execute)
+    monkeypatch.setattr("gilzabots.translation.execute_translation", fake_execute)
 
     server, responses = _server_with_capture()
     await server.route_api(
@@ -341,7 +341,7 @@ async def test_translate_endpoint_falls_back_to_the_ui_language(tmp_path, monkey
 @pytest.mark.asyncio
 async def test_translate_endpoint_rejects_an_empty_snippet(tmp_path, monkeypatch):
     settings_file = tmp_path / "ui_settings.json"
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", settings_file)
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", settings_file)
 
     server, responses = _server_with_capture()
     await server.route_api(
@@ -360,12 +360,12 @@ async def test_translate_endpoint_rejects_an_empty_snippet(tmp_path, monkeypatch
 @pytest.mark.asyncio
 async def test_translate_endpoint_reports_a_model_failure_instead_of_guessing(tmp_path, monkeypatch):
     settings_file = tmp_path / "ui_settings.json"
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", settings_file)
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", settings_file)
 
     async def fake_execute(text, target_language, model=None):
         raise RuntimeError("provider unreachable")
 
-    monkeypatch.setattr("opalatex.translation.execute_translation", fake_execute)
+    monkeypatch.setattr("gilzabots.translation.execute_translation", fake_execute)
 
     server, responses = _server_with_capture()
     await server.route_api(

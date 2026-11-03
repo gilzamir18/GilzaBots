@@ -1,7 +1,7 @@
 """
 Tests for the LaTeX graphic (TikZ / PGFPlots) preview backend.
 
-The `render_graphic_to_svg` function in `opalatex.latex_compiler` compiles a
+The `render_graphic_to_svg` function in `gilzabots.latex_compiler` compiles a
 small standalone LaTeX document with Tectonic and converts the first page to
 SVG via PyMuPDF. These tests exercise the function without invoking Tectonic
 or PyMuPDF, focusing on:
@@ -23,7 +23,7 @@ import pytest
 
 
 def _ensure_compiler_importable():
-    """Make sure the opalatex package is importable when running directly."""
+    """Make sure the gilzabots package is importable when running directly."""
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     if root not in sys.path:
         sys.path.insert(0, root)
@@ -41,13 +41,13 @@ def _reload_module_with(monkeypatch, tectonic_path=None, fitz_module=None):
     `get_tectonic_path` itself (rather than `shutil.which`) because the
     real implementation also probes a bundled `bin/tectonic` binary.
     """
-    if "opalatex.latex_compiler" in sys.modules:
-        del sys.modules["opalatex.latex_compiler"]
+    if "gilzabots.latex_compiler" in sys.modules:
+        del sys.modules["gilzabots.latex_compiler"]
 
     if fitz_module is not None:
         sys.modules["fitz"] = fitz_module
 
-    from opalatex import latex_compiler  # noqa: WPS433 (intentional re-import)
+    from gilzabots import latex_compiler  # noqa: WPS433 (intentional re-import)
 
     # Patch the function after import so the local-path probe is short-circuited.
     monkeypatch.setattr(

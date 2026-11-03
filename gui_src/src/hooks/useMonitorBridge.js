@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 
 // How often the window tells the monitor daemon it is alive and asks for work.
 // The daemon treats a window that has not polled for 20 s as closed
-// (opalatex/monitors/service.py GUI_ALIVE_SECONDS) and runs that project's
+// (gilzabots/monitors/service.py GUI_ALIVE_SECONDS) and runs that project's
 // wake-ups itself, so this must stay well below that.
 export const MONITOR_POLL_MS = 4000;
 

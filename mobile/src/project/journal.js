@@ -1,11 +1,11 @@
 /**
- * This device's conversation journal: `.opalatex/session/devices/<id>.json`.
+ * This device's conversation journal: `.gilzabots/session/devices/<id>.json`.
  *
  * The phone never rewrites `chats.json`. That file belongs to the desktops,
  * which merge into it, and a phone uploading its own copy would race them and
  * lose whichever write came second. Instead the phone appends to a file only it
  * writes; desktops read it, fold it into their database and publish the union
- * in `chats.json` (see `opalatex/cloud/chats.py: merge_device_journal`).
+ * in `chats.json` (see `gilzabots/cloud/chats.py: merge_device_journal`).
  *
  * The shape is the export's, restricted to what a device may add: chats
  * (identity only), messages and activity. The format is specified in
@@ -14,10 +14,10 @@
 
 import { activityKey, messageKey } from './keys.js';
 
-export const DEVICE_JOURNAL_KIND = 'opalatex.device-journal';
+export const DEVICE_JOURNAL_KIND = 'gilzabots.device-journal';
 export const DEVICE_JOURNAL_VERSION = 1;
-export const DEVICE_JOURNALS_DIR = '.opalatex/session/devices';
-export const CHATS_EXPORT_PATH = '.opalatex/session/chats.json';
+export const DEVICE_JOURNALS_DIR = '.gilzabots/session/devices';
+export const CHATS_EXPORT_PATH = '.gilzabots/session/chats.json';
 
 export function journalPath(deviceId) {
   return `${DEVICE_JOURNALS_DIR}/${deviceId}.json`;

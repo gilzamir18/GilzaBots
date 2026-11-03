@@ -172,7 +172,7 @@ function renderFencedCode(className, children) {
       />
     );
   }
-  if (lang === 'opalatex-progress') {
+  if (lang === 'gilzabots-progress') {
     // What the model said while it was still working. It is delivered like any
     // other text -- the single text channel is what stopped answers from being
     // dropped -- but it is not the deliverable, so it is folded away instead of

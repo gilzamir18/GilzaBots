@@ -1,4 +1,4 @@
-// The phone's row keys must equal opalatex/cloud/chats.py's, byte for byte:
+// The phone's row keys must equal gilzabots/cloud/chats.py's, byte for byte:
 // a journal row and its copy in chats.json are recognised as one row only then.
 // Expected values were produced by `_message_key` / `_activity_key` in Python.
 import test from 'node:test';

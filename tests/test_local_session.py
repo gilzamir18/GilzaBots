@@ -6,13 +6,13 @@ from urllib.parse import urlencode
 import pytest
 import pytest_asyncio
 
-from opalatex.ide_server import AsyncHTTPServer
+from gilzabots.ide_server import AsyncHTTPServer
 
 
 @pytest_asyncio.fixture
 async def http_server(tmp_path):
     app = AsyncHTTPServer(port=0, static_dir=str(tmp_path))
-    (tmp_path / "index.html").write_text('<html>OpalaTex</html>')
+    (tmp_path / "index.html").write_text('<html>GilzaBots</html>')
     (tmp_path / "document.txt").write_text('original')
     await app.start()
     async def request(method, path, headers=None, payload=None):
@@ -39,7 +39,7 @@ async def test_session_bootstrap_and_file_write_need_no_user_interaction(http_se
     app, request, root = http_server
     payload = {"projectPath": str(root), "filePath": "document.txt", "content": "saved"}
     assert (await request('POST', '/api/file/write', payload=payload))[0] == 401
-    status, headers, _ = await request('POST', '/api/session', {'X-OpalaTex-Bootstrap': '1', 'Sec-Fetch-Site': 'same-origin'})
+    status, headers, _ = await request('POST', '/api/session', {'X-GilzaBots-Bootstrap': '1', 'Sec-Fetch-Site': 'same-origin'})
     assert status == 200
     assert 'HttpOnly' in headers['Set-Cookie'] and 'SameSite=Strict' in headers['Set-Cookie']
     cookie = headers['Set-Cookie'].split(';', 1)[0]
@@ -67,7 +67,7 @@ async def test_foreign_requests_rejected_even_with_valid_cookie(http_server, hea
                                 {'projectPath': str(root), 'filePath': 'document.txt', 'content': 'bad'})
     assert status == 403
     assert (root / 'document.txt').read_text() == 'original'
-    status, response_headers, _ = await request('POST', '/api/session', {**headers, 'X-OpalaTex-Bootstrap': '1'})
+    status, response_headers, _ = await request('POST', '/api/session', {**headers, 'X-GilzaBots-Bootstrap': '1'})
     assert status == 403 and 'Set-Cookie' not in response_headers
 
 
@@ -84,7 +84,7 @@ async def test_bootstrap_requires_custom_header_and_preflight_is_not_open(http_s
 @pytest.mark.asyncio
 async def test_background_tool_uses_authenticated_nonblocking_local_api(http_server, monkeypatch):
     from types import SimpleNamespace
-    from opalatex import tools
+    from gilzabots import tools
     app, _, root = http_server
     sent = []
     app.active_terminal = SimpleNamespace(project_path=str(root), is_running=True, write=sent.append, close=lambda: None)

@@ -1,4 +1,4 @@
-name: Build OpalaTex Mobile (Android)
+name: Build GilzaBots Mobile (Android)
 
 # Separate from the desktop build: a change under mobile/ must not rebuild three
 # desktop installers, and a desktop tag (v*) must not publish an APK.
@@ -63,7 +63,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: opalatex-mobile-debug
+          name: gilzabots-mobile-debug
           path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
 
       # A published build must be signed with the release key, whose SHA-1 is
@@ -72,10 +72,10 @@ jobs:
       - name: Require the signing secrets for a release
         if: startsWith(github.ref, 'refs/tags/mobile-v')
         env:
-          KEYSTORE: ${{ secrets.OPALATEX_ANDROID_KEYSTORE_BASE64 }}
-          STORE_PASSWORD: ${{ secrets.OPALATEX_ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.OPALATEX_ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.OPALATEX_ANDROID_KEY_PASSWORD }}
+          KEYSTORE: ${{ secrets.GILZABOTS_ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.GILZABOTS_ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.GILZABOTS_ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.GILZABOTS_ANDROID_KEY_PASSWORD }}
         run: |
           for name in KEYSTORE STORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
             if [ -z "${!name}" ]; then
@@ -88,12 +88,12 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/mobile-v')
         working-directory: mobile/android
         env:
-          OPALATEX_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.OPALATEX_ANDROID_KEYSTORE_PASSWORD }}
-          OPALATEX_ANDROID_KEY_ALIAS: ${{ secrets.OPALATEX_ANDROID_KEY_ALIAS }}
-          OPALATEX_ANDROID_KEY_PASSWORD: ${{ secrets.OPALATEX_ANDROID_KEY_PASSWORD }}
+          GILZABOTS_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.GILZABOTS_ANDROID_KEYSTORE_PASSWORD }}
+          GILZABOTS_ANDROID_KEY_ALIAS: ${{ secrets.GILZABOTS_ANDROID_KEY_ALIAS }}
+          GILZABOTS_ANDROID_KEY_PASSWORD: ${{ secrets.GILZABOTS_ANDROID_KEY_PASSWORD }}
         run: |
-          echo "${{ secrets.OPALATEX_ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
-          export OPALATEX_ANDROID_KEYSTORE="$RUNNER_TEMP/release.jks"
+          echo "${{ secrets.GILZABOTS_ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
+          export GILZABOTS_ANDROID_KEYSTORE="$RUNNER_TEMP/release.jks"
           ./gradlew assembleRelease bundleRelease --no-daemon
           rm -f "$RUNNER_TEMP/release.jks"
 

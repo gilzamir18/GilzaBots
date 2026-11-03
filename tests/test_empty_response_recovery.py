@@ -17,7 +17,7 @@ from agenticblocks.blocks.llm.memgpt_agent import (
     EMPTY_RESPONSE_PLACEHOLDER,
     MemGPTAgentBlock,
 )
-from opalatex.memgpt_runtime import seed_chat_orchestrator_history
+from gilzabots.memgpt_runtime import seed_chat_orchestrator_history
 
 
 def _response(content="", reasoning=None):

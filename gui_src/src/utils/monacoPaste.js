@@ -15,7 +15,7 @@ export function pastePlainTextIntoMonaco(editor, text) {
   }));
 
   editor.pushUndoStop?.();
-  const applied = editor.executeEdits('opalatex-paste', edits);
+  const applied = editor.executeEdits('gilzabots-paste', edits);
   editor.pushUndoStop?.();
 
   if (applied && selections.length === 1) {

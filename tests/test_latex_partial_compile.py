@@ -1,6 +1,6 @@
 import subprocess
 
-from opalatex import latex_compiler
+from gilzabots import latex_compiler
 
 
 def test_dependent_file_uses_guessed_root_document_for_dynamic_include(tmp_path):
@@ -90,11 +90,11 @@ def test_partial_compile_injects_includeonly(monkeypatch, tmp_path):
     monkeypatch.setattr(latex_compiler, "get_tectonic_path", lambda: "tectonic")
 
     def fake_run(cmd, cwd, capture_output, encoding, errors):
-        preview = tmp_path / "opalatex_partial_one.tex"
+        preview = tmp_path / "gilzabots_partial_one.tex"
         source = preview.read_text(encoding="utf-8")
         assert "\\includeonly{chapters/one}" in source
-        (tmp_path / "opalatex_partial_one.pdf").write_bytes(b"%PDF")
-        (tmp_path / "opalatex_partial_one.synctex.gz").write_bytes(b"synctex")
+        (tmp_path / "gilzabots_partial_one.pdf").write_bytes(b"%PDF")
+        (tmp_path / "gilzabots_partial_one.synctex.gz").write_bytes(b"synctex")
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(latex_compiler.subprocess, "run", fake_run)
@@ -156,7 +156,7 @@ def test_latex_error_log_includes_undefined_command_source_context(tmp_path):
 
     enriched = latex_compiler.enrich_latex_error_log(log, str(tmp_path))
 
-    assert "OpalaTex source context:" in enriched
+    assert "GilzaBots source context:" in enriched
     assert "confr\\ontation" in enriched
     assert "Likely undefined LaTeX command: \\ontation" in enriched
 
@@ -214,10 +214,10 @@ def test_partial_compile_reuses_main_bibliography_artifacts(monkeypatch, tmp_pat
     monkeypatch.setattr(latex_compiler, "get_tectonic_path", lambda: "tectonic")
 
     def fake_run(cmd, cwd, capture_output, encoding, errors):
-        assert (tmp_path / "opalatex_partial_one.aux").read_text(encoding="utf-8") == "\\bibdata{refs}\n"
-        assert "doe2020" in (tmp_path / "opalatex_partial_one.bbl").read_text(encoding="utf-8")
-        (tmp_path / "opalatex_partial_one.pdf").write_bytes(b"%PDF")
-        (tmp_path / "opalatex_partial_one.synctex.gz").write_bytes(b"synctex")
+        assert (tmp_path / "gilzabots_partial_one.aux").read_text(encoding="utf-8") == "\\bibdata{refs}\n"
+        assert "doe2020" in (tmp_path / "gilzabots_partial_one.bbl").read_text(encoding="utf-8")
+        (tmp_path / "gilzabots_partial_one.pdf").write_bytes(b"%PDF")
+        (tmp_path / "gilzabots_partial_one.synctex.gz").write_bytes(b"synctex")
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(latex_compiler.subprocess, "run", fake_run)
@@ -231,7 +231,7 @@ def test_partial_compile_reuses_main_bibliography_artifacts(monkeypatch, tmp_pat
     )
 
     assert result["success"] is True
-    assert "opalatex_partial_one.bbl" in result["log"]
+    assert "gilzabots_partial_one.bbl" in result["log"]
 
 
 def test_partial_compile_runs_bibtex_when_no_bbl_exists(monkeypatch, tmp_path):
@@ -258,15 +258,15 @@ def test_partial_compile_runs_bibtex_when_no_bbl_exists(monkeypatch, tmp_path):
     def fake_run(cmd, cwd, capture_output, encoding, errors):
         calls.append(cmd[0])
         if cmd[0] == "tectonic":
-            preview_source = (tmp_path / "opalatex_partial_one.tex").read_text(encoding="utf-8")
+            preview_source = (tmp_path / "gilzabots_partial_one.tex").read_text(encoding="utf-8")
             assert "\\input{preamble/packages}" in preview_source
             assert "\\input{chapters/one}" in preview_source
             assert "skipped \\input{chapters/two}" in preview_source
-            (tmp_path / "opalatex_partial_one.aux").write_text("\\bibdata{refs}\n\\citation{doe2020}\n", encoding="utf-8")
-            (tmp_path / "opalatex_partial_one.pdf").write_bytes(b"%PDF")
-            (tmp_path / "opalatex_partial_one.synctex.gz").write_bytes(b"synctex")
+            (tmp_path / "gilzabots_partial_one.aux").write_text("\\bibdata{refs}\n\\citation{doe2020}\n", encoding="utf-8")
+            (tmp_path / "gilzabots_partial_one.pdf").write_bytes(b"%PDF")
+            (tmp_path / "gilzabots_partial_one.synctex.gz").write_bytes(b"synctex")
         elif cmd[0] == "bibtex":
-            (tmp_path / "opalatex_partial_one.bbl").write_text("\\bibitem{doe2020} Doe", encoding="utf-8")
+            (tmp_path / "gilzabots_partial_one.bbl").write_text("\\bibitem{doe2020} Doe", encoding="utf-8")
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(latex_compiler.subprocess, "run", fake_run)
@@ -305,13 +305,13 @@ def test_partial_compile_preserves_chapter_number_for_input_chapter(monkeypatch,
     monkeypatch.setattr(latex_compiler, "get_tectonic_path", lambda: "tectonic")
 
     def fake_run(cmd, cwd, capture_output, encoding, errors):
-        preview_source = (tmp_path / "opalatex_partial_discussion.tex").read_text(encoding="utf-8")
+        preview_source = (tmp_path / "gilzabots_partial_discussion.tex").read_text(encoding="utf-8")
         assert "\\setcounter{chapter}{3}\n\\input{discussion}" in preview_source
         assert "skipped \\input{frontmatter}" in preview_source
         assert "skipped \\input{methods}" in preview_source
         assert "skipped \\input{results}" in preview_source
-        (tmp_path / "opalatex_partial_discussion.pdf").write_bytes(b"%PDF")
-        (tmp_path / "opalatex_partial_discussion.synctex.gz").write_bytes(b"synctex")
+        (tmp_path / "gilzabots_partial_discussion.pdf").write_bytes(b"%PDF")
+        (tmp_path / "gilzabots_partial_discussion.synctex.gz").write_bytes(b"synctex")
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(latex_compiler.subprocess, "run", fake_run)
@@ -416,7 +416,7 @@ def test_compile_latex_partial_draft_mode_uses_v2_cli_flags_without_synctex_by_d
     def fake_run(cmd, cwd, capture_output, encoding, errors):
         nonlocal captured_cmd
         captured_cmd = cmd
-        (tmp_path / "opalatex_partial_chapter1.pdf").write_bytes(b"%PDF")
+        (tmp_path / "gilzabots_partial_chapter1.pdf").write_bytes(b"%PDF")
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
     monkeypatch.setattr(latex_compiler.subprocess, "run", fake_run)
@@ -454,8 +454,8 @@ def test_compile_latex_partial_draft_mode_can_enable_synctex(monkeypatch, tmp_pa
     def fake_run(cmd, cwd, capture_output, encoding, errors):
         nonlocal captured_cmd
         captured_cmd = cmd
-        (tmp_path / "opalatex_partial_chapter1.pdf").write_bytes(b"%PDF")
-        (tmp_path / "opalatex_partial_chapter1.synctex.gz").write_bytes(b"synctex")
+        (tmp_path / "gilzabots_partial_chapter1.pdf").write_bytes(b"%PDF")
+        (tmp_path / "gilzabots_partial_chapter1.synctex.gz").write_bytes(b"synctex")
         return subprocess.CompletedProcess(cmd, 0, stdout="ok", stderr="")
 
     monkeypatch.setattr(latex_compiler.subprocess, "run", fake_run)
@@ -472,5 +472,5 @@ def test_compile_latex_partial_draft_mode_can_enable_synctex(monkeypatch, tmp_pa
 
     assert result["success"] is True
     assert captured_cmd[1:4] == ["-X", "compile", "--synctex"]
-    assert result["synctex_path"].endswith("opalatex_partial_chapter1.synctex.gz")
+    assert result["synctex_path"].endswith("gilzabots_partial_chapter1.synctex.gz")
     assert result["compiler_debug"]["synctex_enabled"] is True

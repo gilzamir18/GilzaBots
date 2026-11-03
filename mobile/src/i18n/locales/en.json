@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "OpalaTex",
+    "name": "GilzaBots",
     "loading": "Loading…",
     "retry": "Try again",
     "back": "Back",
@@ -10,8 +10,8 @@
     "close": "Close"
   },
   "signIn": {
-    "title": "Your OpalaTex projects, on the go",
-    "body": "Connect the Google account your desktop OpalaTex mirrors projects to. The app sees only the folders OpalaTex created.",
+    "title": "Your GilzaBots projects, on the go",
+    "body": "Connect the Google account your desktop GilzaBots mirrors projects to. The app sees only the folders GilzaBots created.",
     "connect": "Connect Google Drive",
     "connecting": "Connecting…",
     "failed": "Google authorization failed: {{message}}",
@@ -43,7 +43,7 @@
     "offline": "Offline — showing the cached copy",
     "syncFailed": "Sync failed: {{message}}",
     "noExport": "This project has no conversations in Drive yet. Make sure \"Sync conversations\" is on in the desktop's Cloud sync panel.",
-    "exportNewer": "The conversations were written by a newer OpalaTex. Update the app to read them.",
+    "exportNewer": "The conversations were written by a newer GilzaBots. Update the app to read them.",
     "pickDetail": "Choose a conversation or a file."
   },
   "chats": {

@@ -98,7 +98,7 @@ export default function InlineCreateNode({ kind, initialName = '', onSubmit, onC
   const icon = kind === 'dir'
     ? <><ChevronRight size={14} style={iconStyle} /><Folder size={14} style={{ ...iconStyle, color: 'var(--vscode-fg-folder)' }} /></>
     : kind === 'presentation'
-      ? <Presentation size={14} style={{ ...iconStyle, color: '#007acc' }} />
+      ? <Presentation size={14} style={{ ...iconStyle, color: 'var(--vscode-accent)' }} />
       : <File size={14} style={{ ...iconStyle, color: 'var(--vscode-text-muted)' }} />;
 
   return (

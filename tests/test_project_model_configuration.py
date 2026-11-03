@@ -13,7 +13,7 @@ import tempfile
 
 import pytest
 
-from opalatex.project import ProjectStore
+from gilzabots.project import ProjectStore
 
 
 @pytest.fixture()
@@ -69,7 +69,7 @@ def test_model_selection_round_trips_through_the_store(store, tmp_path):
 
 @pytest.mark.asyncio
 async def test_handle_run_refuses_project_without_model(monkeypatch):
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     events = []
 
@@ -103,7 +103,7 @@ async def test_handle_run_refuses_project_without_model(monkeypatch):
 @pytest.mark.asyncio
 async def test_handle_run_accepts_project_with_configured_model(monkeypatch):
     """The guard must only trigger on the unconfigured case."""
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
     from types import SimpleNamespace
 
     events = []
@@ -158,7 +158,7 @@ def test_every_project_setting_the_ui_offers_survives_sanitizing():
     on purpose: they moved to the model catalog and the project modals no longer
     offer them. `num_ctx` and `debug` stayed, so they must keep surviving a save.
     """
-    from opalatex.config import sanitize_model_params
+    from gilzabots.config import sanitize_model_params
 
     ui_settings = {
         "num_ctx": 8192, "stream": True,
@@ -177,7 +177,7 @@ def test_every_project_setting_the_ui_offers_survives_sanitizing():
 
 def test_unknown_keys_are_still_rejected():
     """The allow-list must keep doing its job; dead keys stay out."""
-    from opalatex.config import sanitize_model_params
+    from gilzabots.config import sanitize_model_params
 
     result = sanitize_model_params({"stream": True, "tool_role_workaround": "assistant"})
 
@@ -192,7 +192,7 @@ def test_think_is_not_a_project_setting():
     the reasoning was shown, so a project could look like thinking was off while
     the provider was reasoning on every turn.
     """
-    from opalatex.config import _MODEL_PARAMS_SCHEMA, sanitize_model_params
+    from gilzabots.config import _MODEL_PARAMS_SCHEMA, sanitize_model_params
 
     assert "think" not in _MODEL_PARAMS_SCHEMA
     assert sanitize_model_params({"think": True, "stream": True}) == {"stream": True}
@@ -206,8 +206,8 @@ def test_ipc_project_update_sanitizes_stored_params(tmp_path, monkeypatch):
     """
     import asyncio
 
-    import opalatex.agent_stdin as stdin_mod
-    from opalatex.project import ProjectStore
+    import gilzabots.agent_stdin as stdin_mod
+    from gilzabots.project import ProjectStore
 
     monkeypatch.setattr(stdin_mod, "print_event", lambda *a, **k: None)
 

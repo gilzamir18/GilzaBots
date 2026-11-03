@@ -353,7 +353,7 @@ export default function GitSidebar({
       const blob = await res.blob();
       const disposition = res.headers.get('Content-Disposition') || '';
       const filenameMatch = disposition.match(/filename="([^"]+)"/);
-      const filename = filenameMatch?.[1] || `opalatex-checkpoint-${commit.short || commit.hash.slice(0, 12)}.zip`;
+      const filename = filenameMatch?.[1] || `gilzabots-checkpoint-${commit.short || commit.hash.slice(0, 12)}.zip`;
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;

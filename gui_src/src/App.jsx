@@ -354,7 +354,7 @@ export default function App() {
   // is looking at and is theirs to save or discard, exactly like a colour they
   // had picked from the properties panel. A theme's picture, when it has one,
   // is embedded as a data URI for the reason every other picture in a deck is —
-  // a `.jpt` pointing at a file inside the OpalaTex installation would break the
+  // a `.jpt` pointing at a file inside the GilzaBots installation would break the
   // moment the deck left this machine.
   const applyDeckTheme = useCallback(async (asset) => {
     const { DEFAULT_THEME, parseDeck, serializeDeck, applyTheme } = await import('./slides/model.js');
@@ -929,7 +929,7 @@ export default function App() {
             payload.worker_model = modelData.id;
           }
 
-          const projectRes = await fetch('/api/opalatex/update-project', {
+          const projectRes = await fetch('/api/gilzabots/update-project', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -991,7 +991,7 @@ export default function App() {
         payload.worker_model = value;
       }
 
-      const res = await fetch('/api/opalatex/update-project', {
+      const res = await fetch('/api/gilzabots/update-project', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
@@ -1495,7 +1495,7 @@ export default function App() {
     && normalizeLogAgent(left.agent) === normalizeLogAgent(right.agent)
   );
   // Reasoning keeps its most recent part, within the configured size; other
-  // entries keep their beginning (opalatex gui_src/src/utils/logMerge.js).
+  // entries keep their beginning (gilzabots gui_src/src/utils/logMerge.js).
   const fitLogMessage = (message, type) => (
     fitMergedLogMessage(message, type, thoughtContextTokensRef.current)
   );
@@ -1742,7 +1742,7 @@ export default function App() {
   }, [activeProject?.project_path]);
 
   // A native crash — the embedded browser faulting, most often inside the
-  // graphics driver QtWebEngine loads into the OpalaTex process itself — kills
+  // graphics driver QtWebEngine loads into the GilzaBots process itself — kills
   // the application without raising a Python exception: the window disappears
   // and nothing is printed anywhere. The backend detects it on the next launch
   // from the run marker the dead process left behind, and this is where the
@@ -1802,7 +1802,7 @@ export default function App() {
     const draftMode = problem.draft ? 'draft mode enabled' : 'draft mode disabled';
 
     return [
-      'Task: Fix the LaTeX compilation error in this OpalaTex project.',
+      'Task: Fix the LaTeX compilation error in this GilzaBots project.',
       '',
       'Use the chat_orchestrator workflow: diagnose the compiler error, inspect project files when needed, edit the relevant file(s) with the available tools, and finish with a concise summary of what changed.',
       'Do not guess silently. If the log points to a different file than the selected file, prioritize the compiler location and read that file before editing.',
@@ -1874,7 +1874,7 @@ export default function App() {
   // ── API calls ─────────────────────────────────────────────────────────────
   const fetchProjects = async (forceSelectName) => {
     try {
-      const res = await fetch('/api/opalatex/list-projects');
+      const res = await fetch('/api/gilzabots/list-projects');
       if (res.ok) {
         const data = await res.json();
         setProjects(data.projects || []);
@@ -1927,7 +1927,7 @@ export default function App() {
   const fetchProblems = async () => {
     if (!activeProject) return;
     try {
-      const res = await fetch(`/api/opalatex/problems?projectPath=${encodeURIComponent(activeProject.project_path)}`);
+      const res = await fetch(`/api/gilzabots/problems?projectPath=${encodeURIComponent(activeProject.project_path)}`);
       if (res.ok) {
         const data = await res.json();
         setProblems(prev => {
@@ -2596,7 +2596,7 @@ export default function App() {
   });
 
   // Commands an agent sends to this window (open_file, close_file,
-  // reveal_in_pdf, set_layout, get_problems; opalatex/ide_control.py). As with the file sync above, every piece of
+  // reveal_in_pdf, set_layout, get_problems; gilzabots/ide_control.py). As with the file sync above, every piece of
   // state is read through a ref: the stream handler that receives a command
   // may be a closure from when the turn started.
   const ideCommandDepsRef = useRef(null);
@@ -2852,7 +2852,7 @@ export default function App() {
         main_file: relPath,
         chat_id: activeChatId
       };
-      const res = await fetch('/api/opalatex/update-project', {
+      const res = await fetch('/api/gilzabots/update-project', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
@@ -2986,7 +2986,7 @@ export default function App() {
     const finalProjectPath = `${basePath}${sep}${newProjName}`;
 
     try {
-      const res = await fetch('/api/opalatex/create-project', {
+      const res = await fetch('/api/gilzabots/create-project', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_name: newProjName, project_path: finalProjectPath, description: newProjDesc, model: newProjModel, worker_model: newProjWorkerModel, mode: newProjMode, model_params: Object.keys(newProjModelParams).length ? newProjModelParams : undefined, worker_model_params: Object.keys(newProjWorkerModelParams).length ? newProjWorkerModelParams : undefined }),
       });
@@ -3019,7 +3019,7 @@ export default function App() {
     setProjectToDelete(null);
     setDeleteCloudLink(null);
     try {
-      const res = await fetch('/api/opalatex/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_name: projName, delete_dir: deleteDir, delete_cloud: deleteCloud }) });
+      const res = await fetch('/api/gilzabots/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_name: projName, delete_dir: deleteDir, delete_cloud: deleteCloud }) });
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
         addLog('info', t('app.projectRemoved', { name: projName }));
@@ -3041,7 +3041,7 @@ export default function App() {
     e.stopPropagation();
     let fresh = proj;
     try {
-      const res = await fetch('/api/opalatex/list-projects');
+      const res = await fetch('/api/gilzabots/list-projects');
       if (res.ok) {
         const { projects: list } = await res.json();
         const found = list.find(p => p.name === proj.name);
@@ -3061,7 +3061,7 @@ export default function App() {
     setEditProjError('');
 
     try {
-      const res = await fetch('/api/opalatex/update-project', {
+      const res = await fetch('/api/gilzabots/update-project', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project_name: editingProject.name, user_prompt_prefix: editingProject.user_prompt_prefix, display_name: editingProject.project_name, project_path: editingProject.project_path, main_file: editingProject.main_file, git_root_path: editingProject.git_root_path || '', compile_on_save_partial: editingProject.compile_on_save_partial === true && editingProject.compile_on_save_full !== true, compile_on_save_full: editingProject.compile_on_save_full === true, model: editingProject.model, worker_model: editingProject.worker_model, mode: editingProject.mode, description: editingProject.description, model_params: editingProject.model_params, worker_model_params: editingProject.worker_model_params, use_shared_memory: editingProject.use_shared_memory, chat_id: activeChatId }),
       });
@@ -3101,7 +3101,7 @@ export default function App() {
   const updateActiveGitRoot = async (gitRootPath) => {
     if (!activeProject) return;
     try {
-      const res = await fetch('/api/opalatex/update-project', {
+      const res = await fetch('/api/gilzabots/update-project', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3165,7 +3165,7 @@ export default function App() {
     else if (dirPicker.target === 'import') {
       // Call import-project API
       try {
-        const res = await fetch('/api/opalatex/import-project', {
+        const res = await fetch('/api/gilzabots/import-project', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ project_path: dirPicker.current })
         });
@@ -3261,7 +3261,7 @@ export default function App() {
     if (isInterruptPending) return;
     setIsInterruptPending(true);
     try {
-      const res = await fetch('/api/opalatex/interrupt', { method: 'POST' });
+      const res = await fetch('/api/gilzabots/interrupt', { method: 'POST' });
       if (res.ok) {
         addLog('info', t('app.interruptSent'));
         setConfirmRequest(null);
@@ -3293,7 +3293,7 @@ export default function App() {
       callback: async (value) => {
         if (value !== 'yes') return;
         try {
-          const res = await fetch('/api/opalatex/interrupt', { method: 'POST' });
+          const res = await fetch('/api/gilzabots/interrupt', { method: 'POST' });
           addLog(res.ok ? 'info' : 'error', res.ok ? t('app.interruptSent') : t('app.interruptFailed'));
         } catch (err) {
           addLog('error', t('app.interruptError', { error: err.message }));
@@ -3459,7 +3459,7 @@ export default function App() {
                 originalText,
                 model?.getEOL?.() || '\n',
               );
-              editorRef.current.executeEdits('opalatex-inline', [{
+              editorRef.current.executeEdits('gilzabots-inline', [{
                 range: monacoRange,
                 text: normalizedCode,
                 forceMoveMarkers: true,
@@ -3525,7 +3525,7 @@ export default function App() {
         break;
       }
       case 'ide_command': {
-        // The agent waits for this answer (opalatex/ide_control.py); a refusal
+        // The agent waits for this answer (gilzabots/ide_control.py); a refusal
         // is posted too, so it fails with the reason instead of timing out.
         const commandId = data.id;
         Promise.resolve(ideCommandRunnerRef.current(data))
@@ -3535,7 +3535,7 @@ export default function App() {
             } else {
               addLog('error', t('app.ideCommandRefused', 'Agent command {{action}} not carried out: {{error}}', { action: data.action, error: result.error }));
             }
-            return fetch('/api/opalatex/ide_command_result', {
+            return fetch('/api/gilzabots/ide_command_result', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ ...result, id: commandId }),
@@ -3642,7 +3642,7 @@ export default function App() {
 
     let result = {};
     try {
-      const res = await fetch('/api/opalatex/message', {
+      const res = await fetch('/api/gilzabots/message', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           content: text,
@@ -3686,7 +3686,7 @@ export default function App() {
     if (!entry) return;
     if (entry.itemId) {
       try {
-        const res = await fetch('/api/opalatex/message/cancel', {
+        const res = await fetch('/api/gilzabots/message/cancel', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ item_id: entry.itemId }),
         });
@@ -3871,7 +3871,7 @@ export default function App() {
 
     if (userText.trim().startsWith('/')) {
       try {
-        const res = await fetch('/api/opalatex/slash-command', {
+        const res = await fetch('/api/gilzabots/slash-command', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ prompt: userText.trim(), project_name: activeProject.name, project_path: activeProject.project_path, chat_id: targetChatId }),
         });
@@ -3904,7 +3904,7 @@ export default function App() {
     // the queue instead of marking it done.
     let runOutcome = 'not_started';
     try {
-      const res = await fetch('/api/opalatex/run', {
+      const res = await fetch('/api/gilzabots/run', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           command: 'run', agent: 'chat_orchestrator', prompt: requestPrompt,
@@ -4321,7 +4321,7 @@ export default function App() {
     if (!current) return;
     addLog('info', t('app.confirmationValue', { prompt: current.prompt, value }));
     try {
-      const res = await fetch('/api/opalatex/input_response', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.id, value }) });
+      const res = await fetch('/api/gilzabots/input_response', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: current.id, value }) });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         throw new Error(text || `HTTP ${res.status}`);
@@ -4341,7 +4341,7 @@ export default function App() {
     if (!current) return;
     addLog('info', t('app.confirmationValue', { prompt: current.prompt, value }));
     try {
-      const res = await fetch('/api/opalatex/input_response', {
+      const res = await fetch('/api/gilzabots/input_response', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: current.id, value }),
@@ -4373,7 +4373,7 @@ export default function App() {
     addLog('info', t('app.confirmationValue', { prompt, value }));
     try {
       if (isSlashCommand) {
-        const res = await fetch('/api/opalatex/slash-command/continue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, value }) });
+        const res = await fetch('/api/gilzabots/slash-command/continue', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, value }) });
         if (!res.ok) {
           const text = await res.text().catch(() => '');
           throw new Error(text || `HTTP ${res.status}`);
@@ -4385,7 +4385,7 @@ export default function App() {
           fetchGitStatus();
         }
       } else {
-        const res = await fetch('/api/opalatex/input_response', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, value }) });
+        const res = await fetch('/api/gilzabots/input_response', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, value }) });
         if (!res.ok) {
           const text = await res.text().catch(() => '');
           throw new Error(text || `HTTP ${res.status}`);
@@ -4509,7 +4509,7 @@ export default function App() {
     addLog('info', t('app.inlineEditStarting', { instruction }));
 
     try {
-      const res = await fetch('/api/opalatex/run', {
+      const res = await fetch('/api/gilzabots/run', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           command: 'run',
@@ -4554,7 +4554,7 @@ export default function App() {
         const failureMessage = message || t('app.inlineAgentNoOutput', 'Inline agent finished without producing content.');
         if (!inlineErrorMessage) {
           inlineErrorMessage = failureMessage;
-          setAlertMessage(t('app.inlineAgentErrorAlert', 'OpalaTex could not generate inline content: {{message}}', { message: failureMessage }));
+          setAlertMessage(t('app.inlineAgentErrorAlert', 'GilzaBots could not generate inline content: {{message}}', { message: failureMessage }));
         }
         addProblem({ tool, message: failureMessage, severity });
         setActiveBottomTab('problems');
@@ -4783,7 +4783,7 @@ export default function App() {
               const docIdx = fullContent.indexOf('\\begin{document}');
               if (docIdx !== -1) {
                 const insertPos = model.getPositionAt(docIdx);
-                editorRef.current.executeEdits('opalatex_graphicx', [{
+                editorRef.current.executeEdits('gilzabots_graphicx', [{
                   range: new monacoRef.current.Range(insertPos.lineNumber, 1, insertPos.lineNumber, 1),
                   text: '\\usepackage{graphicx}\n\n',
                   forceMoveMarkers: true,
@@ -4794,7 +4794,7 @@ export default function App() {
             }
             refText = `\\begin{figure}[htbp]\n\\centering\n\\includegraphics[width=0.8\\textwidth]{${relIllustrationPath}.pdf}\n\\end{figure}`;
           } else if (ext === 'md' || ext === 'markdown') {
-            // Markdown preview in OpalaTex resolves paths from the project root,
+            // Markdown preview in GilzaBots resolves paths from the project root,
             // so always use root-relative path regardless of file depth
             refText = `![Ilustração](illustrations/illustration_${timestamp}.svg)`;
           } else if (ext === 'html' || ext === 'htm') {
@@ -4811,7 +4811,7 @@ export default function App() {
           const separator = updatedText.endsWith('\n') ? '' : '\n';
           const codeToInsert = updatedText + separator + '\n' + refText + '\n';
 
-          editorRef.current.executeEdits('opalatex_inline', [{
+          editorRef.current.executeEdits('gilzabots_inline', [{
             range: updatedRange,
             text: codeToInsert,
             forceMoveMarkers: true,
@@ -4848,7 +4848,7 @@ export default function App() {
           if (mode === 'generate') {
             const range = new monacoRef.current.Range(startLine, inlinePrompt.cursorCol, startLine, inlinePrompt.cursorCol);
             const model = editorRef.current.getModel();
-            editorRef.current.executeEdits('opalatex_inline', [{
+            editorRef.current.executeEdits('gilzabots_inline', [{
               range: range,
               text: normalizeInlineReplacementSpacing(codeToInsert, '', model?.getEOL?.() || '\n'),
               forceMoveMarkers: true,
@@ -4863,7 +4863,7 @@ export default function App() {
               originalText,
               model?.getEOL?.() || '\n',
             );
-            editorRef.current.executeEdits('opalatex_inline', [{
+            editorRef.current.executeEdits('gilzabots_inline', [{
               range: range,
               text: normalizedCode,
               forceMoveMarkers: true,
@@ -4878,7 +4878,7 @@ export default function App() {
       addProblem({ tool: t('app.inlineAgentTool', 'Inline agent'), message: err.message, severity: 'error' });
       setActiveBottomTab('problems');
       setIsTerminalCollapsed(false);
-      setAlertMessage(t('app.inlineAgentErrorAlert', 'OpalaTex could not generate inline content: {{message}}', { message: err.message }));
+      setAlertMessage(t('app.inlineAgentErrorAlert', 'GilzaBots could not generate inline content: {{message}}', { message: err.message }));
     } finally {
       setInlinePrompt(null);
       setIsInlineRunning(false);
@@ -4921,7 +4921,7 @@ export default function App() {
 
     bindRunChat(activeChatId);
     try {
-      const res = await fetch('/api/opalatex/run', {
+      const res = await fetch('/api/gilzabots/run', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command: 'run', agent: 'chat_orchestrator', prompt: userText, project_name: activeProject.name, project_path: activeProject.project_path, model: activeProject.model, max_heartbeats: resolveEffectiveMaxHeartbeats(), current_file: selectedFile || '', open_files: openFiles, editor_content: fileContent || '', selected_text: selectedText || '', lang: i18n.language || 'en', chat_id: activeChatId, model_params: ephemeralParams }),
       });
@@ -5185,7 +5185,7 @@ export default function App() {
               onInlineSubmit={handleInlineSubmit}
               isInlineRunning={isInlineRunning}
               onInlineCancel={() => {
-                fetch('/api/opalatex/interrupt', { method: 'POST' }).catch(() => { });
+                fetch('/api/gilzabots/interrupt', { method: 'POST' }).catch(() => { });
                 setIsInlineRunning(false);
               }}
               onToggleTerminal={() => {

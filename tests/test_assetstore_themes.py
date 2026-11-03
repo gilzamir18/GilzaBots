@@ -16,17 +16,17 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.ide_server import AsyncHTTPServer
-from opalatex.assetstore import (
+from gilzabots.ide_server import AsyncHTTPServer
+from gilzabots.assetstore import (
     VALID_TYPES,
     install_asset,
     list_assets,
     resolve_asset_icon_path,
     theme_image_path,
 )
-from opalatex.jpt.model import THEME_FIELDS
+from gilzabots.jpt.model import THEME_FIELDS
 
-BUNDLED = Path(__file__).resolve().parent.parent / "opalatex" / "assetstore" / "theme"
+BUNDLED = Path(__file__).resolve().parent.parent / "gilzabots" / "assetstore" / "theme"
 
 
 def _api_harness():
@@ -89,7 +89,7 @@ def test_a_sidecar_can_only_set_fields_the_format_defines():
 
 
 def test_a_sidecar_field_that_is_not_a_theme_field_is_dropped(tmp_path):
-    from opalatex import assetstore
+    from gilzabots import assetstore
     store = tmp_path / "theme"
     store.mkdir()
     (store / "odd.yaml").write_text(
@@ -106,7 +106,7 @@ def test_a_sidecar_field_that_is_not_a_theme_field_is_dropped(tmp_path):
 
 
 def test_a_picture_named_outside_the_store_is_ignored(tmp_path):
-    from opalatex import assetstore
+    from gilzabots import assetstore
     store = tmp_path / "theme"
     store.mkdir()
     (store / "escape.yaml").write_text("name: Escape\nimage: ../../../etc/hostname\n", encoding="utf-8")

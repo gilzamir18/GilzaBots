@@ -4,22 +4,22 @@ The main agent does the user's task, so it holds the workspace action tools --
 file writes *and* command execution -- under both policies (PROJECT_DESIGN
 2.23). The policy decides only how much auxiliary work it hands to helpers
 through `run_skill`, and that is a block of its prompt. It is a per-model catalog
-field (`opalatex/models_store.py`) resolved by `config.model_orchestrator_policy`,
+field (`gilzabots/models_store.py`) resolved by `config.model_orchestrator_policy`,
 deliberately separate from `prompt_profile`: "light prompt + delegate" has to
 remain expressible.
 
 What the mode withholds (writes and commands in plan mode) is still enforced by
-tool-list composition in `build_chat_orchestrator` and by the `opalatex_tool`
+tool-list composition in `build_chat_orchestrator` and by the `gilzabots_tool`
 gate, independently of the policy.
 """
 
 import pytest
 
-from opalatex.memgpt_runtime import (
+from gilzabots.memgpt_runtime import (
     build_chat_orchestrator,
     _orchestrator_body_variant,
 )
-from opalatex.project import ProjectData
+from gilzabots.project import ProjectData
 
 
 WRITE_TOOLS = {
@@ -52,7 +52,7 @@ EXEC_TOOLS = {
 @pytest.fixture(autouse=True)
 def _restore_terminal_flag():
     """Keep the global terminal-access flag from leaking between tests."""
-    from opalatex import tools
+    from gilzabots import tools
 
     original = tools._ORCHESTRATOR_HAS_TERMINAL
     yield
@@ -61,7 +61,7 @@ def _restore_terminal_flag():
 
 def _catalog(tmp_path, monkeypatch, model_id, **fields):
     """Register *model_id* in an isolated model catalog and return a project."""
-    from opalatex import models_store
+    from gilzabots import models_store
 
     monkeypatch.setattr(models_store, "_MODELS_STORE_PATH", tmp_path / "models_store.json")
     models_store.add_or_update_connection(
@@ -95,7 +95,7 @@ def test_direct_orchestrator_can_create_a_file(tmp_path, monkeypatch):
 
 def test_unregistered_model_defaults_to_direct_with_write_file(tmp_path, monkeypatch):
     """A model absent from the catalog keeps the shipped behavior, plus write_file."""
-    from opalatex import models_store
+    from gilzabots import models_store
 
     monkeypatch.setattr(models_store, "_MODELS_STORE_PATH", tmp_path / "models_store.json")
     project = ProjectData(
@@ -143,7 +143,7 @@ def test_plan_mode_withholds_writes_under_every_policy(tmp_path, monkeypatch, po
 def test_the_main_agent_holds_the_whole_action_set(tmp_path, monkeypatch):
     """Composed from `tools.get_workspace_action_tools()`, asserted as a set
     identity so a tool added there can never silently skip the main agent."""
-    from opalatex.tools import get_workspace_action_tools
+    from gilzabots.tools import get_workspace_action_tools
 
     project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy="delegate")
     action_names = {t.name for t in get_workspace_action_tools()}
@@ -161,13 +161,13 @@ def test_the_main_agent_holds_the_whole_action_set(tmp_path, monkeypatch):
 def test_execution_tools_stay_unsafe_for_the_orchestrator(tmp_path, tool_name, args):
     """Granting the tools must not weaken the mode gate.
 
-    The gate in `opalatex_tool` wraps the same function objects for both roles,
+    The gate in `gilzabots_tool` wraps the same function objects for both roles,
     so a direct orchestrator inherits plan-mode refusal and edit-mode
     confirmation unchanged -- these tools are declared is_safe=False.
     """
     import asyncio
     from types import SimpleNamespace
-    import opalatex.tools as tools
+    import gilzabots.tools as tools
 
     tools.set_project_context(SimpleNamespace(project_path=str(tmp_path), mode="plan"))
     tool = getattr(tools, tool_name)
@@ -182,7 +182,7 @@ def test_execution_tools_stay_unsafe_for_the_orchestrator(tmp_path, tool_name, a
 @pytest.mark.parametrize("policy", ["direct", "delegate"])
 def test_main_agent_is_told_to_convert_documents_itself(tmp_path, monkeypatch, policy):
     """Guidance must name a route this caller can take (PROJECT_DESIGN 2.6)."""
-    from opalatex.tools import _binary_read_error
+    from gilzabots.tools import _binary_read_error
 
     project = _catalog(tmp_path, monkeypatch, "ollama/m", orchestrator_policy=policy)
     build_chat_orchestrator(project, None)
@@ -194,7 +194,7 @@ def test_main_agent_is_told_to_convert_documents_itself(tmp_path, monkeypatch, p
 
 def test_main_agent_in_plan_mode_is_not_sent_to_a_skill(tmp_path, monkeypatch):
     """In plan mode commands and helpers are both blocked: asking is the route."""
-    from opalatex.tools import _binary_read_error
+    from gilzabots.tools import _binary_read_error
 
     project = _catalog(tmp_path, monkeypatch, "ollama/m")
     project.mode = "plan"
@@ -207,7 +207,7 @@ def test_main_agent_in_plan_mode_is_not_sent_to_a_skill(tmp_path, monkeypatch):
 
 def test_helper_advice_ignores_the_main_agent_mode(tmp_path, monkeypatch):
     """A helper always has run_command, whatever the main agent holds now."""
-    import opalatex.tools as tools
+    import gilzabots.tools as tools
 
     project = _catalog(tmp_path, monkeypatch, "ollama/m")
     project.mode = "plan"
@@ -248,8 +248,8 @@ def test_light_profile_still_writes_directly_by_default(tmp_path, monkeypatch):
 # ── Body variant selection ───────────────────────────────────────────────────
 
 def _orchestrator_skill_dir():
-    from opalatex.memgpt_runtime import CHAT_ORCHESTRATOR_SKILL
-    from opalatex.skills import find_skill_dir
+    from gilzabots.memgpt_runtime import CHAT_ORCHESTRATOR_SKILL
+    from gilzabots.skills import find_skill_dir
 
     skill_dir = find_skill_dir(CHAT_ORCHESTRATOR_SKILL, "")
     assert skill_dir, "chat-orchestrator skill must be discoverable"
@@ -314,7 +314,7 @@ def test_every_orchestrator_prompt_understands_packaged_jpt(
 
 def test_fallback_body_makes_the_main_agent_do_the_task(monkeypatch):
     """The no-SKILL.md safety net describes the same roles as the bundled body."""
-    import opalatex.memgpt_runtime as runtime
+    import gilzabots.memgpt_runtime as runtime
 
     monkeypatch.setattr(runtime, "find_skill_dir", lambda *a, **k: None)
 

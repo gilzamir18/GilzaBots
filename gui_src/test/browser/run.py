@@ -531,8 +531,8 @@ async def check_clipboard(page: Page, check: Checks) -> None:
     await asyncio.sleep(0.4)
     written = await page.js("window.__clipboard()")
     check("copy hands the system clipboard a deck payload",
-          "opalatex.slides.elements" in (written or "") and '"shape": "rect"' in (written or ""),
-          f"{len(written or '')} bytes, tagged={'opalatex.slides.elements' in (written or '')}")
+          "gilzabots.slides.elements" in (written or "") and '"shape": "rect"' in (written or ""),
+          f"{len(written or '')} bytes, tagged={'gilzabots.slides.elements' in (written or '')}")
 
     await page.chord("v", "KeyV", 86)
     await asyncio.sleep(0.8)

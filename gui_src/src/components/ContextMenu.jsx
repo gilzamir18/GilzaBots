@@ -59,28 +59,28 @@ export default function ContextMenu({
         className="vscode-context-menu-item"
         onClick={() => handleCreateNewFile(parentPath)}
       >
-        <Plus size={13} style={{ color: '#007acc' }} />
+        <Plus size={13} style={{ color: 'var(--vscode-accent)' }} />
         <span>{t('contextMenu.newFile')}</span>
       </div>
       <div
         className="vscode-context-menu-item"
         onClick={() => handleCreateNewPresentation(parentPath)}
       >
-        <Presentation size={13} style={{ color: '#007acc' }} />
+        <Presentation size={13} style={{ color: 'var(--vscode-accent)' }} />
         <span>{t('contextMenu.newPresentation')}</span>
       </div>
       <div
         className="vscode-context-menu-item"
         onClick={() => handleCreateNewDir(parentPath)}
       >
-        <FolderPlus size={13} style={{ color: '#007acc' }} />
+        <FolderPlus size={13} style={{ color: 'var(--vscode-accent)' }} />
         <span>{t('contextMenu.newDir')}</span>
       </div>
       <div
         className="vscode-context-menu-item"
         onClick={() => handleImportFile(parentPath)}
       >
-        <Upload size={13} style={{ color: '#007acc' }} />
+        <Upload size={13} style={{ color: 'var(--vscode-accent)' }} />
         <span>{t('contextMenu.importFile', 'Import File...')}</span>
       </div>
       {rightClickedNode && (
@@ -90,7 +90,7 @@ export default function ContextMenu({
               className="vscode-context-menu-item"
               onClick={() => handleSetMainFile(rightClickedNode)}
             >
-              <ExternalLink size={13} style={{ color: '#007acc' }} />
+              <ExternalLink size={13} style={{ color: 'var(--vscode-accent)' }} />
               <span>{t('contextMenu.setMainFile', 'Definir como Main File')}</span>
             </div>
           )}
@@ -98,7 +98,7 @@ export default function ContextMenu({
             className="vscode-context-menu-item"
             onClick={() => handleOpenInSystem(rightClickedNode)}
           >
-            <ExternalLink size={13} style={{ color: '#007acc' }} />
+            <ExternalLink size={13} style={{ color: 'var(--vscode-accent)' }} />
             <span>{t('contextMenu.openInSystem', 'Abrir com app padrão')}</span>
           </div>
           <div
@@ -119,7 +119,7 @@ export default function ContextMenu({
             className="vscode-context-menu-item"
             onClick={() => handleMoveToNode(rightClickedNode)}
           >
-            <FolderInput size={13} style={{ color: '#007acc' }} />
+            <FolderInput size={13} style={{ color: 'var(--vscode-accent)' }} />
             <span>{t('contextMenu.moveTo', 'Move to...')}</span>
           </div>
           <div
@@ -136,7 +136,7 @@ export default function ContextMenu({
           className="vscode-context-menu-item"
           onClick={() => handlePasteNode(parentPath)}
         >
-          <ClipboardPaste size={13} style={{ color: '#007acc' }} />
+          <ClipboardPaste size={13} style={{ color: 'var(--vscode-accent)' }} />
           <span>{t('contextMenu.paste', 'Colar')}</span>
         </div>
       )}

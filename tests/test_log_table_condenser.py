@@ -10,8 +10,8 @@ import sys
 from pathlib import Path
 import pytest
 
-from opalatex.assetstore import list_assets
-from opalatex.skills import discover_skills, parse_skill_md
+from gilzabots.assetstore import list_assets
+from gilzabots.skills import discover_skills, parse_skill_md
 
 _script_path = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),

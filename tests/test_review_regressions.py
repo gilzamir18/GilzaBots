@@ -7,21 +7,21 @@ from types import SimpleNamespace
 
 import pytest
 
-from opalatex.cloud.engine import SyncEngine
-from opalatex.cloud.providers.local_folder import LocalFolderProvider
-from opalatex.cloud.state import CloudSettings, CloudState
+from gilzabots.cloud.engine import SyncEngine
+from gilzabots.cloud.providers.local_folder import LocalFolderProvider
+from gilzabots.cloud.state import CloudSettings, CloudState
 
 
 @pytest.mark.parametrize("command", ["pwd", "echo ok ; touch marker", "find . -delete", "echo $(touch marker)"])
 def test_plan_blocks_all_shell_even_with_remembered_permission(monkeypatch, command):
-    import opalatex.tools as tools
+    import gilzabots.tools as tools
     monkeypatch.setattr(tools, "_PROJECT_SESSION", SimpleNamespace(mode="plan", results={"allowed_tools": ["run_command"]}))
     monkeypatch.setattr(tools.subprocess, "run", lambda *a, **kw: pytest.fail("Shell must not execute in plan mode"))
     assert "Execution blocked" in asyncio.run(tools.run_command._func(command))
 
 
 def test_plan_blocks_remembered_file_write_but_allows_persistent_memory(tmp_path, monkeypatch):
-    import opalatex.tools as tools
+    import gilzabots.tools as tools
     saved = []
     project = SimpleNamespace(mode="plan", results={"allowed_tools": ["write_file"]}, use_shared_memory=True, core_memory="")
     monkeypatch.setattr(tools, "_PROJECT_SESSION", project)
@@ -34,10 +34,10 @@ def test_plan_blocks_remembered_file_write_but_allows_persistent_memory(tmp_path
 
 
 def test_plan_catalog_changes_only_after_explicit_approval(tmp_path, monkeypatch):
-    from opalatex.memgpt_runtime import build_chat_orchestrator
-    from opalatex.project import ProjectData
-    import opalatex.tools as tools
-    import opalatex.agent_stdin as bridge
+    from gilzabots.memgpt_runtime import build_chat_orchestrator
+    from gilzabots.project import ProjectData
+    import gilzabots.tools as tools
+    import gilzabots.agent_stdin as bridge
     project = ProjectData(name="review", project_path=str(tmp_path), mode="plan", model="ollama/test")
     agent = build_chat_orchestrator(project)
     names = {tool.name for tool in agent.tools}
@@ -61,8 +61,8 @@ def test_plan_catalog_changes_only_after_explicit_approval(tmp_path, monkeypatch
 
 @pytest.mark.parametrize("outcome", ["timeout", "cancel", "no"])
 def test_unapproved_plan_never_enables_execution(monkeypatch, outcome):
-    import opalatex.tools as tools
-    import opalatex.agent_stdin as bridge
+    import gilzabots.tools as tools
+    import gilzabots.agent_stdin as bridge
     project = SimpleNamespace(mode="plan", results={}, plan_text="")
     monkeypatch.setattr(tools, "_PROJECT_SESSION", project)
     records = []
@@ -100,7 +100,7 @@ def mirror(tmp_path):
     return local, root, provider, state
 
 
-@pytest.mark.parametrize("name", [".env", ".git/config", "nested/node_modules/a.js", ".opalatex/cloud/state.json"])
+@pytest.mark.parametrize("name", [".env", ".git/config", "nested/node_modules/a.js", ".gilzabots/cloud/state.json"])
 def test_remote_excluded_file_never_overwrites_local(mirror, name):
     local, root, provider, state = mirror
     for directory, text in [(local, "local"), (root, "remote")]:
@@ -163,7 +163,7 @@ def test_edit_during_upload_is_detected_next_pass(mirror, monkeypatch, conflict)
 def test_chat_export_is_ignored_when_chat_sync_disabled(mirror):
     local, root, provider, state = mirror
     state.settings.include_chats = False
-    name = ".opalatex/session/chats.json"
+    name = ".gilzabots/session/chats.json"
     target = local / name
     target.parent.mkdir(parents=True)
     target.write_text('{"private":"conversation"}')
@@ -172,7 +172,7 @@ def test_chat_export_is_ignored_when_chat_sync_disabled(mirror):
 
 
 def test_file_changed_while_preparing_snapshot_is_not_uploaded(mirror, monkeypatch):
-    import opalatex.cloud.engine as engine
+    import gilzabots.cloud.engine as engine
     local, root, provider, state = mirror
     source = local / 'main.tex'
     source.write_text('initial')
@@ -191,7 +191,7 @@ def test_file_changed_while_preparing_snapshot_is_not_uploaded(mirror, monkeypat
 
 
 def test_failed_upload_cleans_snapshot_and_preserves_baseline(mirror, monkeypatch):
-    from opalatex.cloud.base import CloudError
+    from gilzabots.cloud.base import CloudError
     local, root, provider, state = mirror
     source = local / 'main.tex'
     source.write_text('initial')

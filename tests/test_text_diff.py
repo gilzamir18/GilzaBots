@@ -13,7 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from opalatex.text_diff import line_diff, summarize_blocks
+from gilzabots.text_diff import line_diff, summarize_blocks
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _OPS = os.path.join(_REPO_ROOT, "skills", "elementary-ops", "scripts", "ops.py")
@@ -36,7 +36,7 @@ def _call(tool, *args, **kwargs):
 
 @pytest.fixture
 def project(tmp_path):
-    from opalatex.tools import set_project_context
+    from gilzabots.tools import set_project_context
 
     set_project_context(SimpleNamespace(project_path=str(tmp_path)))
     return tmp_path
@@ -105,7 +105,7 @@ def test_the_skill_script_renders_exactly_like_the_module():
 # ---------------------------------------------------------------------------
 
 def test_diff_files_is_a_safe_worker_tool():
-    from opalatex.tools import diff_files, get_helper_tools
+    from gilzabots.tools import diff_files, get_helper_tools
 
     assert "diff_files" in {getattr(t, "name", None) for t in get_helper_tools()}
     # Read-only: it must answer in plan mode without a permission prompt.
@@ -113,7 +113,7 @@ def test_diff_files_is_a_safe_worker_tool():
 
 
 def test_diff_files_answers_in_plan_mode(tmp_path):
-    from opalatex.tools import diff_files, set_project_context
+    from gilzabots.tools import diff_files, set_project_context
 
     (tmp_path / "a.txt").write_text("x\n", encoding="utf-8")
     (tmp_path / "b.txt").write_text("y\n", encoding="utf-8")
@@ -122,7 +122,7 @@ def test_diff_files_answers_in_plan_mode(tmp_path):
 
 
 def test_diff_files_reports_identical_files_in_one_line(project):
-    from opalatex.tools import diff_files
+    from gilzabots.tools import diff_files
 
     (project / "a.tex").write_text("same\ntext\n", encoding="utf-8")
     (project / "b.tex").write_text("same\ntext\n", encoding="utf-8")
@@ -131,7 +131,7 @@ def test_diff_files_reports_identical_files_in_one_line(project):
 
 
 def test_diff_files_compares_ranges_with_file_line_numbers(project):
-    from opalatex.tools import diff_files
+    from gilzabots.tools import diff_files
 
     lines = [f"line {i}" for i in range(1, 51)]
     (project / "a.tex").write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -146,7 +146,7 @@ def test_diff_files_compares_ranges_with_file_line_numbers(project):
 
 
 def test_diff_files_compares_two_ranges_of_one_file(project):
-    from opalatex.tools import diff_files
+    from gilzabots.tools import diff_files
 
     (project / "notes.md").write_text("alpha\nbeta\n---\nalpha\ngamma\n", encoding="utf-8")
     out = _call(diff_files, "notes.md", "notes.md", start_a=1, end_a=2, start_b=4, end_b=5)
@@ -154,7 +154,7 @@ def test_diff_files_compares_two_ranges_of_one_file(project):
 
 
 def test_diff_files_pages_a_long_diff_without_losing_the_summary(project, monkeypatch):
-    import opalatex.tools as tools
+    import gilzabots.tools as tools
 
     monkeypatch.setattr(tools, "_DIFF_PAGE_CHARS", 400)
     (project / "a.txt").write_text("".join(f"old {i}\n" for i in range(60)), encoding="utf-8")
@@ -184,7 +184,7 @@ def test_diff_files_pages_a_long_diff_without_losing_the_summary(project, monkey
     ],
 )
 def test_diff_files_fails_fast_on_bad_arguments(project, kwargs, message):
-    from opalatex.tools import diff_files
+    from gilzabots.tools import diff_files
 
     (project / "a.txt").write_text("1\n2\n3\n", encoding="utf-8")
     (project / "b.txt").write_text("1\nX\n3\n", encoding="utf-8")
@@ -193,7 +193,7 @@ def test_diff_files_fails_fast_on_bad_arguments(project, kwargs, message):
 
 
 def test_diff_files_refuses_missing_and_binary_files(project):
-    from opalatex.tools import diff_files
+    from gilzabots.tools import diff_files
 
     (project / "a.txt").write_text("1\n", encoding="utf-8")
     (project / "blob.bin").write_bytes(b"\x00\x01\x02binary")

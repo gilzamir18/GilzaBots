@@ -31,8 +31,8 @@ const TRANSLATE_LANGUAGES = [
 ];
 
 const TRANSLATE_CUSTOM = '__custom__';
-const DIRECT_INSTALL_COMMAND = 'curl -fsSL https://raw.githubusercontent.com/opalacoderdev/OpalaTex/master/install.sh -o opalatex-install.sh && bash opalatex-install.sh';
-const FEEDBACK_ISSUE_URL = 'https://github.com/opalacoderdev/OpalaTex/issues/new';
+const DIRECT_INSTALL_COMMAND = 'curl -fsSL https://raw.githubusercontent.com/gilzamir18/GilzaBots/main/install.sh -o gilzabots-install.sh && bash gilzabots-install.sh';
+const FEEDBACK_ISSUE_URL = 'https://github.com/gilzamir18/GilzaBots/issues/new';
 
 // IDE global settings modal (theme, font size, tab size, word wrap, minimap, optional deps).
 export default function SettingsModal({
@@ -67,8 +67,8 @@ export default function SettingsModal({
   const { t } = useTranslation();
   const { showAlert, showConfirm } = useCustomDialog();
   const [selectedLang, setSelectedLang] = React.useState('');
-  const [opalatexHome, setOpalaTexHome] = React.useState('');
-  const [opalatexHomeError, setOpalaTexHomeError] = React.useState('');
+  const [gilzabotsHome, setGilzaBotsHome] = React.useState('');
+  const [gilzabotsHomeError, setGilzaBotsHomeError] = React.useState('');
   const [draftSynctexEnabled, setDraftSynctexEnabled] = React.useState(false);
   const [webengineGpu, setWebengineGpu] = React.useState('auto');
   const [workspaceHiddenExtensions, setWorkspaceHiddenExtensions] = React.useState([]);
@@ -118,15 +118,15 @@ export default function SettingsModal({
       .then(cfg => { if (cfg?.lang !== undefined) setSelectedLang(cfg.lang); })
       .catch(() => { });
 
-    fetch('/api/settings/opalatexhome')
+    fetch('/api/settings/gilzabotshome')
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (!data) return;
         // A configured directory the backend could not open is reported here
         // rather than silently replaced by the fallback it is actually using.
-        setOpalaTexHomeError(data.error || '');
+        setGilzaBotsHomeError(data.error || '');
         const shown = data.error ? (data.configured_path || data.path) : data.path;
-        if (shown) setOpalaTexHome(shown);
+        if (shown) setGilzaBotsHome(shown);
       })
       .catch(() => { });
 
@@ -264,10 +264,10 @@ export default function SettingsModal({
     if (!body?.requiresRestart) return;
 
     const shouldRestart = await showConfirm(
-      t('settingsModal.graphicsRestartConfirm', 'This setting only applies to a new app window. Restart OpalaTex now?')
+      t('settingsModal.graphicsRestartConfirm', 'This setting only applies to a new app window. Restart GilzaBots now?')
     );
     if (!shouldRestart) {
-      await showAlert(t('settingsModal.graphicsRestartAlert', 'The setting was saved and will apply the next time OpalaTex starts.'));
+      await showAlert(t('settingsModal.graphicsRestartAlert', 'The setting was saved and will apply the next time GilzaBots starts.'));
       return;
     }
     await performRestart();
@@ -438,27 +438,27 @@ export default function SettingsModal({
     }
   };
 
-  // Saving OPALATEX_HOME only takes effect on the next launch, so the user is
+  // Saving GILZABOTS_HOME only takes effect on the next launch, so the user is
   // asked right away whether to restart; declining leaves the saved value in
   // place with a reminder that it is still pending.
-  const saveOpalaTexHome = async () => {
+  const saveGilzaBotsHome = async () => {
     let data;
     try {
-      const res = await fetch('/api/settings/opalatexhome', {
+      const res = await fetch('/api/settings/gilzabotshome', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: opalatexHome })
+        body: JSON.stringify({ path: gilzabotsHome })
       });
       data = await res.json().catch(() => ({}));
       if (!res.ok || data?.error) {
         const message = data?.error || String(res.status);
-        setOpalaTexHomeError(message);
+        setGilzaBotsHomeError(message);
         await showAlert(t('settingsModal.globalDataDirError') + message);
         return;
       }
-      setOpalaTexHomeError('');
+      setGilzaBotsHomeError('');
     } catch (err) {
-      setOpalaTexHomeError(String(err));
+      setGilzaBotsHomeError(String(err));
       await showAlert(t('settingsModal.globalDataDirError') + err);
       return;
     }
@@ -1001,7 +1001,7 @@ export default function SettingsModal({
               </div>
 
               {/* Graphics mode for the app window itself. The embedded browser
-                  loads the graphics driver into the OpalaTex process, so a
+                  loads the graphics driver into the GilzaBots process, so a
                   driver fault closes the whole application with no message;
                   this is the recovery for a machine where that happens. */}
               <div className="flex flex-col" style={{ gap: '6px' }}>
@@ -1016,7 +1016,7 @@ export default function SettingsModal({
                   <span>{t('settingsModal.graphicsHardwareAcceleration', 'Use hardware acceleration (GPU) for the app window')}</span>
                 </label>
                 <span style={{ fontSize: '11px', color: 'var(--vscode-descriptionForeground)' }}>
-                  {t('settingsModal.graphicsHint', 'The app window renders through the graphics driver, which runs inside the OpalaTex process: if the driver faults, the window closes with no error message. Turn this off if OpalaTex closes by itself. Takes effect after a restart.')}
+                  {t('settingsModal.graphicsHint', 'The app window renders through the graphics driver, which runs inside the GilzaBots process: if the driver faults, the window closes with no error message. Turn this off if GilzaBots closes by itself. Takes effect after a restart.')}
                 </span>
               </div>
 
@@ -1249,22 +1249,22 @@ export default function SettingsModal({
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input
                     type="text"
-                    value={opalatexHome}
-                    onChange={(e) => setOpalaTexHome(e.target.value)}
+                    value={gilzabotsHome}
+                    onChange={(e) => setGilzaBotsHome(e.target.value)}
                     className="vscode-settings-input"
                     style={{ flex: 1 }}
                     placeholder={t('settingsModal.globalDataDirPlaceholder')}
                   />
                   <button
-                    onClick={saveOpalaTexHome}
+                    onClick={saveGilzaBotsHome}
                     disabled={isRestarting}
                     className="vscode-button"
                   >
                     {isRestarting ? t('settingsModal.restarting') : t('settingsModal.save')}
                   </button>
                 </div>
-                {opalatexHomeError && (
-                  <span style={{ fontSize: '11px', color: 'var(--vscode-errorForeground)' }}>{opalatexHomeError}</span>
+                {gilzabotsHomeError && (
+                  <span style={{ fontSize: '11px', color: 'var(--vscode-errorForeground)' }}>{gilzabotsHomeError}</span>
                 )}
                 <span style={{ fontSize: '11px', color: 'var(--vscode-text-muted)' }}>{t('settingsModal.globalDataDirHint')}</span>
               </div>
@@ -1413,7 +1413,7 @@ export default function SettingsModal({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <span className="vscode-sidebar-section-title" style={{ padding: 0 }}>{t('settingsModal.author')}</span>
                 <span style={{ fontSize: '13px', color: 'var(--vscode-text-fg)' }}>
-                  dev@opalacoder.com</span>
+                  Gilzamir Gomes</span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <span className="vscode-sidebar-section-title" style={{ padding: 0 }}>{t('settingsModal.license')}</span>
@@ -1478,7 +1478,7 @@ export default function SettingsModal({
                   <button
                     className="vscode-button"
                     style={{ alignSelf: 'flex-start' }}
-                    onClick={() => openExternal('https://www.paypal.com/donate/?business=DKWJSCLDJG6XY&no_recurring=0&item_name=Manuten%C3%A7%C3%A3o+do+Software+Open+Source+OpalaTex&currency_code=BRL')}
+                    onClick={() => openExternal('https://www.paypal.com/donate/?business=DKWJSCLDJG6XY&no_recurring=0&item_name=Manuten%C3%A7%C3%A3o+do+Software+Open+Source+GilzaBots&currency_code=BRL')}
                   >
                     {t('settingsModal.donationButton')}
                   </button>

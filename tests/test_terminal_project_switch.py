@@ -10,8 +10,8 @@ import sys
 
 import pytest
 
-from opalatex import terminal_manager
-from opalatex.ide_server import AsyncHTTPServer
+from gilzabots import terminal_manager
+from gilzabots.ide_server import AsyncHTTPServer
 
 
 class FakeSession:

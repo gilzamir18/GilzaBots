@@ -43,7 +43,7 @@ def _host_stack(soname):
 
 
 def _bundle(tmp_path, *files):
-    bundle = tmp_path / "OpalaTex"
+    bundle = tmp_path / "GilzaBots"
     internal = bundle / "_internal"
     for relative in files:
         target = internal / relative
@@ -166,5 +166,5 @@ def test_the_linux_build_runs_the_gate_after_pyinstaller():
     script = (ROOT / "build_exe.sh").read_text(encoding="utf-8")
 
     assert script.index("pyinstaller --name") < script.index(
-        "python scripts/check_bundle_libraries.py dist/OpalaTex"
+        "python scripts/check_bundle_libraries.py dist/GilzaBots"
     )

@@ -1,7 +1,7 @@
 """Under snap, user-facing default locations must be the real home.
 
 Inside a snap ``~`` is ``~/snap/<name>/<revision>``. A project created there
-(the directory picker's default, and ``~/OpalaTexPilot``) was stored by its
+(the directory picker's default, and ``~/GilzaBotsPilot``) was stored by its
 absolute path, so after the next refresh it pointed at the previous revision's
 directory, which AppArmor makes read-only: creating a file in the project then
 failed with a read-only error.
@@ -13,26 +13,26 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex import config
-from opalatex.ide_server import AsyncHTTPServer
+from gilzabots import config
+from gilzabots.ide_server import AsyncHTTPServer
 
 
 @pytest.fixture
 def snap_env(monkeypatch, tmp_path):
     real_home = tmp_path / "real-home"
     real_home.mkdir()
-    revision_home = tmp_path / "real-home" / "snap" / "opalatex" / "48"
+    revision_home = tmp_path / "real-home" / "snap" / "gilzabots" / "48"
     revision_home.mkdir(parents=True)
-    monkeypatch.setenv("SNAP_NAME", "opalatex")
+    monkeypatch.setenv("SNAP_NAME", "gilzabots")
     monkeypatch.setenv("SNAP_REAL_HOME", str(real_home))
     monkeypatch.setenv("HOME", str(revision_home))
-    monkeypatch.setenv("OPALATEX_HOME", str(revision_home / ".opalatex"))
+    monkeypatch.setenv("GILZABOTS_HOME", str(revision_home / ".gilzabots"))
     return real_home
 
 
 def test_user_home_is_the_real_home_under_snap(snap_env):
     assert config.user_home_dir() == str(snap_env)
-    assert config.expand_user_path("~/OpalaTexPilot") == str(snap_env / "OpalaTexPilot")
+    assert config.expand_user_path("~/GilzaBotsPilot") == str(snap_env / "GilzaBotsPilot")
     assert config.expand_user_path("~") == str(snap_env)
 
 
@@ -47,12 +47,12 @@ def test_user_home_is_plain_home_outside_snap(monkeypatch, tmp_path):
 
 
 def test_the_home_directory_itself_is_refused_as_a_project_folder_under_snap(snap_env, monkeypatch):
-    """The `home` plug allows files in `~` but not `~/.opalatex`.
+    """The `home` plug allows files in `~` but not `~/.gilzabots`.
 
-    Stands in for the AppArmor denial by making `.opalatex` unwritable to
+    Stands in for the AppArmor denial by making `.gilzabots` unwritable to
     creation (a regular file in its place); the hint must name the snap rule.
     """
-    (snap_env / ".opalatex").write_text("")
+    (snap_env / ".gilzabots").write_text("")
 
     message = config.project_dir_error(str(snap_env))
 
@@ -96,7 +96,7 @@ async def test_create_project_rejects_a_folder_it_cannot_write(monkeypatch, tmp_
     locked.chmod(0o555)
     server, responses = _api_harness()
     try:
-        await _post(server, "/api/opalatex/create-project",
+        await _post(server, "/api/gilzabots/create-project",
                     {"project_name": "P", "project_path": str(locked)})
     finally:
         locked.chmod(0o755)

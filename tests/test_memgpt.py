@@ -5,8 +5,8 @@ import sys
 import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from opalatex.memgpt_runtime import build_chat_orchestrator
-from opalatex.project import ProjectData, ProjectStore
+from gilzabots.memgpt_runtime import build_chat_orchestrator
+from gilzabots.project import ProjectData, ProjectStore
 from agenticblocks.blocks.llm.agent import AgentInput
 
 @pytest.mark.integration

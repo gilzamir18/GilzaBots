@@ -1,4 +1,4 @@
-"""opalatex.docker_sandbox / sandbox_config: settings, diagnostics and command routing."""
+"""gilzabots.docker_sandbox / sandbox_config: settings, diagnostics and command routing."""
 import asyncio
 import json
 import os
@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from agenticblocks.blocks.patterns.sandbox import DockerContainerManager
-from opalatex import docker_sandbox, sandbox_config
+from gilzabots import docker_sandbox, sandbox_config
 
 
 def _call(tool, *args, **kwargs):
@@ -19,13 +19,13 @@ def _call(tool, *args, **kwargs):
 
 @pytest.fixture
 def project(tmp_path, monkeypatch):
-    from opalatex.tools import set_project_context
+    from gilzabots.tools import set_project_context
 
     root = tmp_path / "my_project"
     root.mkdir()
     set_project_context(SimpleNamespace(project_path=str(root)))
     # Only the project's own skill folders; the machine's are not part of the test.
-    monkeypatch.setattr("opalatex.skills.skill_search_dirs", lambda project_path="": [
+    monkeypatch.setattr("gilzabots.skills.skill_search_dirs", lambda project_path="": [
         os.path.join(project_path, "skills"),
     ])
     return root
@@ -70,7 +70,7 @@ def test_container_name_deterministic():
     name2 = docker_sandbox.container_name_for_project(p2)
 
     assert name1 == name1_repeat
-    assert name1.startswith("opalatex-sandbox-")
+    assert name1.startswith("gilzabots-sandbox-")
     assert name1 != name2
 
 
@@ -111,7 +111,7 @@ def test_verify_docker_permission_denied_snap(monkeypatch):
     assert res["ready"] is False
     assert res["daemon_running"] is False
     assert "Snap confinement" in res["problem"]
-    assert res["action_command"] == "sudo snap connect opalatex:docker"
+    assert res["action_command"] == "sudo snap connect gilzabots:docker"
 
 
 def test_verify_docker_permission_denied_linux(monkeypatch):
@@ -147,7 +147,7 @@ def _denied(monkeypatch, in_snap, plug=None, pending=False):
 def test_a_group_added_after_login_asks_for_a_new_session_not_usermod_again(monkeypatch):
     res = _denied(monkeypatch, in_snap=False, pending=True)
     assert "Log out and back in" in res["problem"]
-    assert "restarting OpalaTex is not enough" in res["problem"]
+    assert "restarting GilzaBots is not enough" in res["problem"]
     assert res["action_command"] == ""
 
 
@@ -156,14 +156,14 @@ def test_a_connected_snap_plug_moves_on_to_the_docker_group(monkeypatch):
     res = _denied(monkeypatch, in_snap=True, plug=True, pending=False)
     assert res["action_command"] == "sudo usermod -aG docker $USER"
     # snapctl could not tell: the plug stays the first suspect
-    assert _denied(monkeypatch, in_snap=True, plug=None)["action_command"] == "sudo snap connect opalatex:docker"
+    assert _denied(monkeypatch, in_snap=True, plug=None)["action_command"] == "sudo snap connect gilzabots:docker"
 
 
-def test_only_the_opalatex_snap_counts_as_snap_confinement(monkeypatch):
+def test_only_the_gilzabots_snap_counts_as_snap_confinement(monkeypatch):
     monkeypatch.setenv("SNAP", "/snap/some-ide/7")
     monkeypatch.setenv("SNAP_NAME", "some-ide")
     assert docker_sandbox._running_in_snap() is False
-    monkeypatch.setenv("SNAP_NAME", "opalatex")
+    monkeypatch.setenv("SNAP_NAME", "gilzabots")
     assert docker_sandbox._running_in_snap() is True
 
 
@@ -272,7 +272,7 @@ def test_the_project_container_mounts_the_project_and_outside_skill_folders(proj
     outside = tmp_path / "user-skills"
     outside.mkdir()
     (project / "skills").mkdir()
-    monkeypatch.setattr("opalatex.skills.skill_search_dirs", lambda project_path="": [
+    monkeypatch.setattr("gilzabots.skills.skill_search_dirs", lambda project_path="": [
         os.path.join(project_path, "skills"), str(outside), str(tmp_path / "absent"),
     ])
     monkeypatch.setattr(docker_sandbox, "find_docker_bin", lambda: "/usr/bin/docker")
@@ -283,7 +283,7 @@ def test_the_project_container_mounts_the_project_and_outside_skill_folders(proj
     kw = ensure.call_args.kwargs
     assert kw["volume_mount"] == str(project)
     assert [(m.source, m.readonly) for m in kw["mounts"]] == [(str(outside), True)]
-    assert kw["mounts"][0].target.startswith("/opalatex/skills/")
+    assert kw["mounts"][0].target.startswith("/gilzabots/skills/")
     assert (kw["user"], kw["env"], kw["pull"]) == ("1000:1000", {"HOME": "/tmp"}, "never")
 
 
@@ -300,60 +300,60 @@ def test_a_missing_image_points_to_the_pull_button(project, monkeypatch):
 def test_container_path_maps_the_project_and_skill_folders(project, tmp_path, monkeypatch):
     outside = tmp_path / "user-skills"
     (outside / "s" / "scripts").mkdir(parents=True)
-    monkeypatch.setattr("opalatex.skills.skill_search_dirs", lambda project_path="": [str(outside)])
+    monkeypatch.setattr("gilzabots.skills.skill_search_dirs", lambda project_path="": [str(outside)])
 
     assert docker_sandbox.container_path(str(project / "a" / "b.py")) == "/workspace/a/b.py"
     mapped = docker_sandbox.container_path(str(outside / "s" / "scripts" / "x.py"))
-    assert mapped.startswith("/opalatex/skills/") and mapped.endswith("/s/scripts/x.py")
+    assert mapped.startswith("/gilzabots/skills/") and mapped.endswith("/s/scripts/x.py")
     with pytest.raises(ValueError, match="outside the project folder"):
         docker_sandbox.container_path(str(tmp_path / "elsewhere.py"))
 
 
 def test_run_command_is_routed_to_the_sandbox(project):
-    from opalatex.tools import run_command
+    from gilzabots.tools import run_command
 
     sandbox_config.save_config({"enabled": True})
     answer = {"stdout": "hello sandbox\n", "stderr": "", "exit_code": 0, "error": None}
-    with patch("opalatex.docker_sandbox.run_in_sandbox", return_value=answer) as sandbox:
+    with patch("gilzabots.docker_sandbox.run_in_sandbox", return_value=answer) as sandbox:
         out = json.loads(json.loads(_call(run_command, "echo hello", timeout_seconds=7))["result"])
     sandbox.assert_called_once_with("echo hello", str(project), 7)
     assert out == {"stdout": "hello sandbox", "stderr": "", "exit_code": 0}
 
 
 def test_a_sandbox_timeout_reports_partial_output_and_whether_it_stopped(project):
-    from opalatex.tools import run_command
+    from gilzabots.tools import run_command
 
     sandbox_config.save_config({"enabled": True})
     timed_out = {"stdout": "started\n", "stderr": "", "exit_code": 124, "error": "TimeoutExpired", "stop_error": None}
-    with patch("opalatex.docker_sandbox.run_in_sandbox", return_value=timed_out):
+    with patch("gilzabots.docker_sandbox.run_in_sandbox", return_value=timed_out):
         with pytest.raises(ValueError) as error:
             _call(run_command, "sleep 99", timeout_seconds=1)
     assert "timed out after 1 seconds and was stopped" in str(error.value)
     assert "stdout before the timeout:\nstarted" in str(error.value)
 
-    with patch("opalatex.docker_sandbox.run_in_sandbox", return_value={**timed_out, "stop_error": "tr: not found"}):
+    with patch("gilzabots.docker_sandbox.run_in_sandbox", return_value={**timed_out, "stop_error": "tr: not found"}):
         with pytest.raises(ValueError) as error:
             _call(run_command, "sleep 99", timeout_seconds=1)
     assert "could not be stopped (tr: not found)" in str(error.value)
 
 
 def test_run_python_script_runs_python3_on_the_container_path(project):
-    from opalatex.tools import run_python_script
+    from gilzabots.tools import run_python_script
 
     script = project / "scripts" / "test.py"
     script.parent.mkdir()
     script.write_text("print('hi')")
     sandbox_config.save_config({"enabled": True})
-    with patch("opalatex.tools._run_captured", return_value="{}") as run:
+    with patch("gilzabots.tools._run_captured", return_value="{}") as run:
         _call(run_python_script, str(script), args="--flag")
     assert run.call_args[0][0] == 'python3 "/workspace/scripts/test.py" --flag'
 
 
 def test_run_python_script_refuses_a_script_the_container_cannot_see(project, tmp_path):
-    from opalatex.tools import run_python_script
+    from gilzabots.tools import run_python_script
 
     sandbox_config.save_config({"enabled": True})
-    with patch("opalatex.tools._run_captured") as run:
+    with patch("gilzabots.tools._run_captured") as run:
         with pytest.raises(ValueError, match="outside the project folder"):
             _call(run_python_script, str(tmp_path / "elsewhere.py"))
     run.assert_not_called()
@@ -370,9 +370,9 @@ def test_a_terminal_command_runs_a_self_removing_script(project, monkeypatch):
     line, script = docker_sandbox.sandbox_terminal_command('npm create "x y"', str(project), tty=True)
 
     name = docker_sandbox.container_name_for_project(str(project))
-    inner = "/workspace/.opalatex/sandbox/" + os.path.basename(script)
+    inner = "/workspace/.gilzabots/sandbox/" + os.path.basename(script)
     assert line == f"docker exec -it -w /workspace {name} sh {inner}"
-    assert os.path.dirname(script) == str(project / ".opalatex" / "sandbox")
+    assert os.path.dirname(script) == str(project / ".gilzabots" / "sandbox")
     with open(script, encoding="utf-8", newline="") as f:
         assert f.read() == 'rm -f -- "$0"\nnpm create "x y"\n'
 
@@ -388,8 +388,8 @@ def test_a_terminal_command_refuses_a_docker_path_it_cannot_type(project, monkey
 
 
 def test_an_interactive_command_fails_when_the_container_does_not_start(project, monkeypatch):
-    import opalatex.terminal as T
-    from opalatex.tools import run_interactive_command
+    import gilzabots.terminal as T
+    from gilzabots.tools import run_interactive_command
 
     sandbox_config.save_config({"enabled": True})
     monkeypatch.setattr(docker_sandbox, "find_docker_bin", lambda: "/usr/bin/docker")
@@ -401,8 +401,8 @@ def test_an_interactive_command_fails_when_the_container_does_not_start(project,
 
 
 def test_an_interactive_command_opens_the_container_and_cleans_up(project, monkeypatch):
-    import opalatex.terminal as T
-    from opalatex.tools import run_interactive_command
+    import gilzabots.terminal as T
+    from gilzabots.tools import run_interactive_command
 
     sandbox_config.save_config({"enabled": True})
     _started(monkeypatch)
@@ -415,13 +415,13 @@ def test_an_interactive_command_opens_the_container_and_cleans_up(project, monke
 
     monkeypatch.setattr(T, "a_interactive_terminal", terminal)
     assert _call(run_interactive_command, "npm create vite").startswith("FAILURE")
-    assert seen["command"].startswith("docker exec -it -w /workspace opalatex-sandbox-")
-    assert os.listdir(project / ".opalatex" / "sandbox") == []
+    assert seen["command"].startswith("docker exec -it -w /workspace gilzabots-sandbox-")
+    assert os.listdir(project / ".gilzabots" / "sandbox") == []
 
 
 def test_a_background_command_reaches_the_runner_through_the_container(project, monkeypatch):
-    from opalatex import agent_stdin
-    from opalatex.tools import run_background_command
+    from gilzabots import agent_stdin
+    from gilzabots.tools import run_background_command
 
     sandbox_config.save_config({"enabled": True})
     _started(monkeypatch)
@@ -438,14 +438,14 @@ def test_a_background_command_reaches_the_runner_through_the_container(project, 
     finally:
         agent_stdin.set_background_command_runner(None)
     # The CLI's runner has no terminal, so no TTY is requested.
-    assert seen["command"].startswith("docker exec -w /workspace opalatex-sandbox-")
+    assert seen["command"].startswith("docker exec -w /workspace gilzabots-sandbox-")
     assert seen["cwd"] == str(project)
 
 
 def test_a_disabled_sandbox_runs_commands_locally(project):
-    from opalatex.tools import run_command
+    from gilzabots.tools import run_command
 
-    with patch("opalatex.docker_sandbox.run_in_sandbox") as sandbox:
+    with patch("gilzabots.docker_sandbox.run_in_sandbox") as sandbox:
         out = json.loads(json.loads(_call(run_command, "echo hello local"))["result"])
     sandbox.assert_not_called()
     assert out["stdout"] == "hello local"

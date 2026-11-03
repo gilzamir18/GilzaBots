@@ -9,7 +9,7 @@ import gzip
 
 import pytest
 
-from opalatex.synctex_parser import find_pdf_position, select_record_line
+from gilzabots.synctex_parser import find_pdf_position, select_record_line
 
 
 def write_synctex(tmp_path, source_name, records):

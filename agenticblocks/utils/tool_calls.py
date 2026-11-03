@@ -98,7 +98,7 @@ def is_ollama_tool_call_json_error(exc: BaseException) -> bool:
     """
     message = str(exc).lower()
     return (
-        "opalatex_ollama_tool_call_json_escape" in message
+        "gilzabots_ollama_tool_call_json_escape" in message
         or (
             "ollama" in message
             and (

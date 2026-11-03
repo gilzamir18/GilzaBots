@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the OpalaTex snap with snapcraft's managed LXD instance.
+# Build the GilzaBots snap with snapcraft's managed LXD instance.
 #
 # Usage: ./generate_snap.sh [--clean] [extra snapcraft pack arguments...]
 #   --clean   run `snapcraft clean` first, discarding the cached build instance
@@ -34,7 +34,7 @@ info() { printf '\n==> %s\n' "$*"; }
 fail() { printf '\nERROR: %s\n' "$*" >&2; exit 1; }
 
 echo "=========================================="
-echo "        OpalaTex - Snap Build             "
+echo "        GilzaBots - Snap Build             "
 echo "=========================================="
 
 # --- 1. Prerequisites --------------------------------------------------------
@@ -117,7 +117,7 @@ if ! snapcraft pack ${PACK_ARGS[@]+"${PACK_ARGS[@]}"}; then
     fail "snapcraft pack failed${LOG:+. Full log: $LOG}"
 fi
 
-SNAP_FILE="opalatex_${VERSION}_amd64.snap"
+SNAP_FILE="gilzabots_${VERSION}_amd64.snap"
 if [ -f "$SNAP_FILE" ]; then
     info "Snap built: $(pwd)/$SNAP_FILE"
     echo "Install it locally with: sudo snap install --dangerous ./$SNAP_FILE"

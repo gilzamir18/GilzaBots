@@ -18,12 +18,12 @@ import yaml
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-LAUNCHER = ROOT / "snap" / "local" / "opalatex-launch"
+LAUNCHER = ROOT / "snap" / "local" / "gilzabots-launch"
 
 
 def _stage_packages():
     snapcraft = yaml.safe_load((ROOT / "snapcraft.yaml").read_text(encoding="utf-8"))
-    return snapcraft["parts"]["opalatex"]["stage-packages"]
+    return snapcraft["parts"]["gilzabots"]["stage-packages"]
 
 
 def test_the_snap_stages_both_halves_of_espeak_ng():

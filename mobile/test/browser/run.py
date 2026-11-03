@@ -68,7 +68,7 @@ class FakeDrive:
         self.files: dict[str, dict] = {"root": {"id": "root", "name": "My Drive", "mimeType": FOLDER, "parents": [], "content": None}}
         self.ids = itertools.count(1)
         self.clock = itertools.count(1)
-        container = self.add("OpalaTex", "root", FOLDER)
+        container = self.add("GilzaBots", "root", FOLDER)
         self.root = self.add("thesis", container, FOLDER)
         export = {
             "version": 1, "project": "thesis_db", "updated_at": "2026-10-19T10:00:00.000000+00:00",
@@ -83,7 +83,7 @@ class FakeDrive:
             ],
             "activity": [],
         }
-        self.write(".opalatex/session/chats.json", json.dumps(export))
+        self.write(".gilzabots/session/chats.json", json.dumps(export))
         self.write("main.tex", "\\section{Intro}\nHello world\n")
         self.write("notes.md", "# Notes\n\nNever opened on the phone.\n")
 
@@ -313,7 +313,7 @@ async def main(headful: bool, shots: str) -> int:
     drive_open = asyncio.Event()
     drive_open.set()
     debug_port = free_port()
-    profile = tempfile.mkdtemp(prefix="opalatex-mobile-chrome-")
+    profile = tempfile.mkdtemp(prefix="gilzabots-mobile-chrome-")
     chrome = subprocess.Popen([
         find_chrome(), *([] if headful else ["--headless"]),
         f"--remote-debugging-port={debug_port}", f"--user-data-dir={profile}",
@@ -422,7 +422,7 @@ async def main(headful: bool, shots: str) -> int:
                 journal = json.loads(journal_files[0]["content"])
                 roles = [(m["role"], m["content"]) for m in journal["messages"]]
                 check("the journal holds the turn in the desktop format",
-                      journal["kind"] == "opalatex.device-journal" and journal["project"] == "thesis_db"
+                      journal["kind"] == "gilzabots.device-journal" and journal["project"] == "thesis_db"
                       and roles == [("user", "Please update the intro"), ("assistant", "Updated the intro. Energy is $E=mc^2$.")], str(roles))
                 check("reasoning is stored as a thought row", any(a["event"] == "thought" and "read_file" in a["content"] for a in journal["activity"]))
 
@@ -453,7 +453,7 @@ async def main(headful: bool, shots: str) -> int:
                   [m["content"] for m in model_requests[-1]["messages"] if m["role"] == "user"].count("Third question") == 1)
             # The journal is uploaded before the turn ends (the Stop button goes).
             await page.wait("!document.querySelector(\"button[aria-label='Stop']\")", 10)
-            journal = json.loads(drive.read(".opalatex/session/devices/" + journal_files[0]["name"]) or "{}")
+            journal = json.loads(drive.read(".gilzabots/session/devices/" + journal_files[0]["name"]) or "{}")
             check("the journal holds the question once",
                   [m["content"] for m in journal.get("messages", [])].count("Third question") == 1)
 
@@ -476,7 +476,7 @@ async def main(headful: bool, shots: str) -> int:
                   [m["content"] for m in model_requests[-1]["messages"] if m["role"] == "user"][-1] == "Third question")
             # The journal is uploaded before the turn ends (the Stop button goes).
             await page.wait("!document.querySelector(\"button[aria-label='Stop']\")", 10)
-            journal = json.loads(drive.read(".opalatex/session/devices/" + journal_files[0]["name"]) or "{}")
+            journal = json.loads(drive.read(".gilzabots/session/devices/" + journal_files[0]["name"]) or "{}")
             branch_ids = [c["id"] for c in journal.get("chats", []) if c["name"] == "Main Chat (branch)"]
             check("the branch is a new chat in the journal", len(branch_ids) == 1, str(journal.get("chats")))
             check("the original answer is kept",
@@ -497,7 +497,7 @@ async def main(headful: bool, shots: str) -> int:
             check("the file never opened was downloaded for offline use",
                   sum(1 for url in drive_calls if "alt=media" in url) > media_before)
             await page.screenshot(os.path.join(shots, "6-offline.png"))
-            check("internal OpalaTex files are not listed", not await page.js("document.body.innerText.includes('.opalatex')"))
+            check("internal GilzaBots files are not listed", not await page.js("document.body.innerText.includes('.gilzabots')"))
             await page.click_text("main.tex", ".row")
             check("the viewer shows the edited file", await page.wait("document.querySelector('.source')?.innerText.includes('Hello from the phone')"))
             await page.screenshot(os.path.join(shots, "4-file.png"))

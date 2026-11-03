@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.ide_server import AsyncHTTPServer
-from opalatex.synctex_parser import companion_synctex_path
+from gilzabots.ide_server import AsyncHTTPServer
+from gilzabots.synctex_parser import companion_synctex_path
 
 
 def write_synctex(path, source_path, source_line=7):

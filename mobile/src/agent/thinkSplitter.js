@@ -5,7 +5,7 @@
  * distills) often stream their reasoning as tagged text instead of a separate
  * field. A tag can be split across chunks, so a trailing partial tag is held
  * back until the next chunk decides it. Mirrors the desktop's
- * `opalatex/think_stream.py` for balanced tags.
+ * `gilzabots/think_stream.py` for balanced tags.
  */
 
 const OPEN = '<think>';

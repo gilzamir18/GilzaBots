@@ -1,7 +1,7 @@
-"""Tests for opalatex.chat_meta_params."""
+"""Tests for gilzabots.chat_meta_params."""
 
 import pytest
-from opalatex.chat_meta_params import parse_meta_params, apply_meta_params
+from gilzabots.chat_meta_params import parse_meta_params, apply_meta_params
 
 
 # ── parse_meta_params ────────────────────────────────────────────────────────

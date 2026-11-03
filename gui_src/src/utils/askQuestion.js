@@ -68,7 +68,7 @@ export const clearAnsweredRequest = (answeredId) => (current) => (
   current && current.id === answeredId ? null : current
 );
 
-/** Return the wire value expected by /api/opalatex/input_response. */
+/** Return the wire value expected by /api/gilzabots/input_response. */
 export const formatAskResponse = ({
   inputValue = '',
   isMultiSelect = false,

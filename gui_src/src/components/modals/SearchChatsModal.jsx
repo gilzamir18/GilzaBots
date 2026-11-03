@@ -92,7 +92,7 @@ export default function SearchChatsModal({
                   cursor: 'pointer',
                   border: '1px solid var(--vscode-border)'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.border = '1px solid #007acc'}
+                onMouseEnter={(e) => e.currentTarget.style.border = '1px solid var(--vscode-accent)'}
                 onMouseLeave={(e) => e.currentTarget.style.border = '1px solid var(--vscode-border)'}
               >
                 <div style={{ fontWeight: 'bold', fontSize: '13px', color: 'var(--vscode-text-fg)', marginBottom: '4px' }}>

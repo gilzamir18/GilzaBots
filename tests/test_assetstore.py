@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from opalatex.assetstore import resolve_asset_icon_path
+from gilzabots.assetstore import resolve_asset_icon_path
 
 
 def _meta(meta_dir: Path, icon: str | None) -> dict:

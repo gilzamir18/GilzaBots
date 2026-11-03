@@ -7,7 +7,7 @@
  * the journal is written here *before* any upload is attempted.
  */
 
-const DB_NAME = 'opalatex-mobile';
+const DB_NAME = 'gilzabots-mobile';
 const STORE = 'kv';
 
 export function createMemoryKv() {

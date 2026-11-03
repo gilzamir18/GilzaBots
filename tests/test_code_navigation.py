@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from opalatex import code_index
-from opalatex.code_index import CodeIndex, _extract
+from gilzabots import code_index
+from gilzabots.code_index import CodeIndex, _extract
 
 
 def _names(symbols):
@@ -120,8 +120,8 @@ def test_the_index_answers_from_a_worker_thread(tmp_path):
 
 @pytest.fixture
 def project(tmp_path):
-    from opalatex.code_index import CODE_INDEX
-    from opalatex.tools import set_project_context
+    from gilzabots.code_index import CODE_INDEX
+    from gilzabots.tools import set_project_context
 
     (tmp_path / "pkg").mkdir()
     (tmp_path / "pkg" / "config.py").write_text(
@@ -142,7 +142,7 @@ def _call(tool, *args):
 
 
 def test_find_symbol_returns_the_definition_and_its_python_callers(project):
-    from opalatex.tools import find_symbol
+    from gilzabots.tools import find_symbol
 
     out = _call(find_symbol, "load_config")
     assert f"function load_config — {os.path.join('pkg', 'config.py')}:1" in out
@@ -151,7 +151,7 @@ def test_find_symbol_returns_the_definition_and_its_python_callers(project):
 
 
 def test_find_symbol_does_not_claim_no_callers_outside_python(project):
-    from opalatex.tools import find_symbol
+    from gilzabots.tools import find_symbol
 
     out = _call(find_symbol, "render")
     assert "web.js:1" in out
@@ -160,21 +160,21 @@ def test_find_symbol_does_not_claim_no_callers_outside_python(project):
 
 
 def test_find_symbol_finds_latex_labels_and_macros_without_the_backslash(project):
-    from opalatex.tools import find_symbol
+    from gilzabots.tools import find_symbol
 
     assert "label sec:metodo — main.tex:2" in _call(find_symbol, "sec:metodo")
     assert "macro \\R — main.tex:1" in _call(find_symbol, "R")
 
 
 def test_find_symbol_lists_similar_names_or_points_at_search_code(project):
-    from opalatex.tools import find_symbol
+    from gilzabots.tools import find_symbol
 
     assert "Similar names: load_config" in _call(find_symbol, "load_conf")
     assert "search_code" in _call(find_symbol, "does_not_exist_anywhere")
 
 
 def test_code_outline_of_a_file_and_of_the_project(project):
-    from opalatex.tools import code_outline
+    from gilzabots.tools import code_outline
 
     out = _call(code_outline, "pkg/config.py")
     assert "1  function    load_config" in out
@@ -189,7 +189,7 @@ def test_code_outline_of_a_file_and_of_the_project(project):
 
 
 def test_code_outline_refuses_paths_outside_the_project(project):
-    from opalatex.tools import code_outline
+    from gilzabots.tools import code_outline
 
     with pytest.raises(ValueError) as error:
         _call(code_outline, str(project.parent))
@@ -197,7 +197,7 @@ def test_code_outline_refuses_paths_outside_the_project(project):
 
 
 def test_navigation_tools_reach_helpers_and_orchestrators():
-    from opalatex.tools import code_outline, find_symbol, get_helper_tools, get_code_navigation_tools
+    from gilzabots.tools import code_outline, find_symbol, get_helper_tools, get_code_navigation_tools
 
     assert get_code_navigation_tools() == [find_symbol, code_outline]
     worker_tools = get_helper_tools()

@@ -1,6 +1,6 @@
 """Tests for the native get_editor_state tool and the state the IDE stages for it.
 
-The GUI writes <project>/.opalatex/_editor_state.json at the start of every agent
+The GUI writes <project>/.gilzabots/_editor_state.json at the start of every agent
 turn; the tool is the read side of that contract. It is a safe tool, so it must
 answer in plan mode without a permission prompt -- exactly when the agent needs
 to know which file the user is looking at.
@@ -10,7 +10,7 @@ import asyncio
 import json
 from types import SimpleNamespace
 
-from opalatex.tools import (
+from gilzabots.tools import (
     editor_state_path,
     get_editor_state,
     set_project_context,
@@ -98,8 +98,8 @@ def test_runs_in_plan_mode_without_a_permission_prompt(tmp_path):
 
 
 def test_tool_is_offered_to_orchestrator_and_helpers():
-    from opalatex.tools import get_helper_tools
-    from opalatex.agent_stdin import ALL_TOOLS_MAP
+    from gilzabots.tools import get_helper_tools
+    from gilzabots.agent_stdin import ALL_TOOLS_MAP
 
     assert any(getattr(t, "name", "") == "get_editor_state" for t in get_helper_tools())
     assert "get_editor_state" in ALL_TOOLS_MAP
@@ -109,7 +109,7 @@ def test_tool_is_offered_to_orchestrator_and_helpers():
 
 
 def test_stage_editor_state_records_the_tab_list(tmp_path):
-    from opalatex.agent_stdin import stage_editor_state
+    from gilzabots.agent_stdin import stage_editor_state
 
     staged = stage_editor_state(str(tmp_path), {
         "current_file": "a.tex",
@@ -127,7 +127,7 @@ def test_absent_open_files_preserves_the_previous_list(tmp_path):
     # A caller that does not know the tab list omits the key. Overwriting the
     # staged one with [] would make the next get_editor_state report "no tabs",
     # so absent and empty have to stay distinct.
-    from opalatex.agent_stdin import stage_editor_state
+    from gilzabots.agent_stdin import stage_editor_state
 
     stage_editor_state(str(tmp_path), {"current_file": "a.tex", "open_files": ["a.tex", "b.tex"]})
     staged = stage_editor_state(str(tmp_path), {"current_file": "a.tex"})
@@ -137,7 +137,7 @@ def test_absent_open_files_preserves_the_previous_list(tmp_path):
 
 def test_explicit_empty_open_files_clears_the_list(tmp_path):
     # Closing every tab is a fact the caller does know, and must be recorded.
-    from opalatex.agent_stdin import stage_editor_state
+    from gilzabots.agent_stdin import stage_editor_state
 
     stage_editor_state(str(tmp_path), {"current_file": "a.tex", "open_files": ["a.tex"]})
     staged = stage_editor_state(str(tmp_path), {"current_file": "", "open_files": []})

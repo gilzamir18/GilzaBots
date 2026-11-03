@@ -19,8 +19,8 @@ import sys
 
 import pytest
 
-from opalatex.assetstore import asset_matches_install, find_assets, install_asset, list_assets
-from opalatex.skills import discover_skills, parse_skill_md
+from gilzabots.assetstore import asset_matches_install, find_assets, install_asset, list_assets
+from gilzabots.skills import discover_skills, parse_skill_md
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _SKILL_DIR = os.path.join(_REPO_ROOT, "skills", "elementary-ops")
@@ -109,7 +109,7 @@ def test_skill_ships_a_shorter_light_body_with_the_same_contract():
     for profile in ("full", "light"):
         body = parse_skill_md(_SKILL_DIR, profile)["body"]
         for rule in ("NOT APPLICABLE", "BLOCKED", "at most 2", "diff_files", "ELEMENTARY OPS REPORT",
-                     "run_python_script", ".opalatex/ops/"):
+                     "run_python_script", ".gilzabots/ops/"):
             assert rule in body, (profile, rule)
 
 
@@ -147,7 +147,7 @@ def test_skill_is_registered_in_the_asset_store_and_matches_the_source(tmp_path)
     assert "elementary-ops" in {a["id"] for a in list_assets("skill")}
     meta = find_assets("skill", "elementary-ops")[0]
     install_asset(meta, str(tmp_path))
-    installed = tmp_path / ".opalatex" / "skills" / "elementary-ops"
+    installed = tmp_path / ".gilzabots" / "skills" / "elementary-ops"
     assert asset_matches_install(meta, str(tmp_path))
     for rel in ("SKILL.md", "SKILL.light.md", os.path.join("scripts", "ops.py")):
         with open(os.path.join(_SKILL_DIR, rel), "rb") as a, open(installed / rel, "rb") as b:

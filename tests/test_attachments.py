@@ -1,4 +1,4 @@
-"""Tests for opalatex.attachments module.
+"""Tests for gilzabots.attachments module.
 
 Covers:
 - PDF text extraction (pymupdf4llm)
@@ -79,7 +79,7 @@ def _minimal_pptx_b64() -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_compress_image_returns_valid_base64_jpeg():
-    from opalatex.attachments import compress_image
+    from gilzabots.attachments import compress_image
 
     b64 = _tiny_png_b64()
     result = compress_image(b64, "image/png", max_side=50)
@@ -93,7 +93,7 @@ def test_compress_image_returns_valid_base64_jpeg():
 
 
 def test_compress_image_respects_max_side():
-    from opalatex.attachments import compress_image
+    from gilzabots.attachments import compress_image
     from PIL import Image
 
     b64 = _tiny_png_b64()  # 200×300
@@ -108,7 +108,7 @@ def test_compress_image_respects_max_side():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_build_attachment_descriptor_image():
-    from opalatex.attachments import build_attachment_descriptor
+    from gilzabots.attachments import build_attachment_descriptor
 
     b64 = _tiny_jpeg_b64()
     desc = build_attachment_descriptor("photo.jpg", b64, "image/jpeg")
@@ -122,10 +122,10 @@ def test_build_attachment_descriptor_image():
 
 
 def test_build_attachment_descriptor_pdf_preserves_original(tmp_path, monkeypatch):
-    from opalatex import attachments
+    from gilzabots import attachments
 
     raw = base64.b64encode(b"%PDF-1.4 fake").decode()
-    monkeypatch.setenv("OPALATEX_HOME", str(tmp_path))
+    monkeypatch.setenv("GILZABOTS_HOME", str(tmp_path))
     monkeypatch.setattr(attachments, "extract_pdf_text", lambda data_b64, max_chars=None: "PDF text")
 
     desc = attachments.build_attachment_descriptor("paper.pdf", raw, "application/pdf")
@@ -139,9 +139,9 @@ def test_build_attachment_descriptor_pdf_preserves_original(tmp_path, monkeypatc
 
 
 def test_store_original_upload_is_content_addressed(tmp_path, monkeypatch):
-    from opalatex.attachments import store_original_upload
+    from gilzabots.attachments import store_original_upload
 
-    monkeypatch.setenv("OPALATEX_HOME", str(tmp_path))
+    monkeypatch.setenv("GILZABOTS_HOME", str(tmp_path))
     raw = base64.b64encode(b"%PDF-1.4 fake").decode()
 
     first = store_original_upload(raw, "paper.pdf")
@@ -153,9 +153,9 @@ def test_store_original_upload_is_content_addressed(tmp_path, monkeypatch):
 
 def test_store_original_upload_names_the_cache_by_mime_when_the_upload_has_no_extension(tmp_path, monkeypatch):
     """The by-path extractor dispatches on the extension, so it must be there."""
-    from opalatex.attachments import store_original_upload
+    from gilzabots.attachments import store_original_upload
 
-    monkeypatch.setenv("OPALATEX_HOME", str(tmp_path))
+    monkeypatch.setenv("GILZABOTS_HOME", str(tmp_path))
     raw = base64.b64encode(b"%PDF-1.4 fake").decode()
 
     path = store_original_upload(raw, "scan", "application/pdf")
@@ -165,16 +165,16 @@ def test_store_original_upload_names_the_cache_by_mime_when_the_upload_has_no_ex
 
 def test_store_original_upload_survives_an_unwritable_cache(tmp_path, monkeypatch):
     """A failed cache write must not fail the upload: the text still works."""
-    from opalatex import attachments
+    from gilzabots import attachments
 
-    monkeypatch.setenv("OPALATEX_HOME", str(tmp_path))
+    monkeypatch.setenv("GILZABOTS_HOME", str(tmp_path))
     monkeypatch.setattr(attachments.os, "makedirs", lambda *a, **k: (_ for _ in ()).throw(OSError("read-only")))
 
     assert attachments.store_original_upload(base64.b64encode(b"x").decode(), "a.pdf") == ""
 
 
 def test_extract_docx_text_reads_document_xml():
-    from opalatex.attachments import extract_docx_text
+    from gilzabots.attachments import extract_docx_text
 
     text = extract_docx_text(_minimal_docx_b64())
     assert "Hello DOCX" in text
@@ -182,7 +182,7 @@ def test_extract_docx_text_reads_document_xml():
 
 
 def test_extract_pptx_text_reads_slides_in_order():
-    from opalatex.attachments import extract_pptx_text
+    from gilzabots.attachments import extract_pptx_text
 
     text = extract_pptx_text(_minimal_pptx_b64())
     assert text.index("Title slide") < text.index("Second slide")
@@ -191,9 +191,9 @@ def test_extract_pptx_text_reads_slides_in_order():
 
 
 def test_build_attachment_descriptor_docx_by_extension_when_mime_missing(tmp_path, monkeypatch):
-    from opalatex.attachments import DOCX_MIME, build_attachment_descriptor
+    from gilzabots.attachments import DOCX_MIME, build_attachment_descriptor
 
-    monkeypatch.setenv("OPALATEX_HOME", str(tmp_path))
+    monkeypatch.setenv("GILZABOTS_HOME", str(tmp_path))
     raw = _minimal_docx_b64()
     desc = build_attachment_descriptor("notes.docx", raw, "application/octet-stream")
 
@@ -204,9 +204,9 @@ def test_build_attachment_descriptor_docx_by_extension_when_mime_missing(tmp_pat
 
 
 def test_build_attachment_descriptor_pptx_preserves_original(tmp_path, monkeypatch):
-    from opalatex.attachments import PPTX_MIME, build_attachment_descriptor
+    from gilzabots.attachments import PPTX_MIME, build_attachment_descriptor
 
-    monkeypatch.setenv("OPALATEX_HOME", str(tmp_path))
+    monkeypatch.setenv("GILZABOTS_HOME", str(tmp_path))
     raw = _minimal_pptx_b64()
     desc = build_attachment_descriptor("deck.pptx", raw, PPTX_MIME)
 
@@ -217,7 +217,7 @@ def test_build_attachment_descriptor_pptx_preserves_original(tmp_path, monkeypat
 
 
 def test_build_attachment_descriptor_unknown_passes_through():
-    from opalatex.attachments import build_attachment_descriptor
+    from gilzabots.attachments import build_attachment_descriptor
 
     raw = base64.b64encode(b"binary data").decode()
     desc = build_attachment_descriptor("file.bin", raw, "application/octet-stream")
@@ -246,7 +246,7 @@ def test_agent_input_accepts_attachments():
 
 
 def test_read_file_extracts_attachment_from_the_cached_original(tmp_path):
-    import opalatex.tools as tools
+    import gilzabots.tools as tools
 
     cached = tmp_path / "paper.docx"
     cached.write_bytes(base64.b64decode(_minimal_docx_b64()))
@@ -268,7 +268,7 @@ def test_read_file_extracts_attachment_from_the_cached_original(tmp_path):
 
 def test_read_file_falls_back_to_extracted_text_when_the_cache_is_gone(tmp_path):
     """An old chat whose cached original was deleted still reads its text."""
-    import opalatex.tools as tools
+    import gilzabots.tools as tools
 
     tools.set_recent_file_attachments({
         "input_file_0.pdf": {
@@ -287,11 +287,11 @@ def test_read_file_falls_back_to_extracted_text_when_the_cache_is_gone(tmp_path)
 
 def test_read_file_extracts_recent_pdf_attachment(monkeypatch):
     """Legacy history rows still carry the original as inline base64."""
-    import opalatex.tools as tools
+    import gilzabots.tools as tools
 
     raw = base64.b64encode(b"%PDF-1.4 fake").decode()
     monkeypatch.setattr(
-        "opalatex.attachments.extract_document_text",
+        "gilzabots.attachments.extract_document_text",
         lambda data_b64, mime, filename="": f"extracted:{mime}:{filename}:{data_b64}",
     )
 
@@ -317,7 +317,7 @@ def test_read_file_extracts_recent_pdf_attachment(monkeypatch):
 def test_vision_gate_strips_image_for_text_only_model(monkeypatch):
     """Image attachments must be removed and a note added to the prompt
     when the model reports no vision support."""
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     # Patch litellm.supports_vision to return False
     import litellm

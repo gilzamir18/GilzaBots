@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from opalatex import latex_compiler
+from gilzabots import latex_compiler
 
 
 @pytest.mark.skipif(not latex_compiler.get_tectonic_path(), reason="Tectonic is not installed")
@@ -44,9 +44,9 @@ def test_real_tectonic_total_and_partial_from_input_chapter(tmp_path):
     )
     assert partial["success"], partial["log"]
     assert partial["partial_mode"] == "input-wrapper"
-    assert os.path.basename(partial["pdf_path"]) == "opalatex_partial_section_alpha.pdf"
+    assert os.path.basename(partial["pdf_path"]) == "gilzabots_partial_section_alpha.pdf"
     assert not (source_dir / "section_alpha.pdf").exists()
 
-    wrapper = (source_dir / "opalatex_partial_section_alpha.tex").read_text(encoding="utf-8")
-    assert "% OpalaTex partial compile skipped \\input{section_intro}" in wrapper
+    wrapper = (source_dir / "gilzabots_partial_section_alpha.tex").read_text(encoding="utf-8")
+    assert "% GilzaBots partial compile skipped \\input{section_intro}" in wrapper
     assert "\\input{section_alpha}" in wrapper

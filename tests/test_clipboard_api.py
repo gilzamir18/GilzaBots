@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.ide_server import AsyncHTTPServer
+from gilzabots.ide_server import AsyncHTTPServer
 
 
 def _server_with_capture():
@@ -23,7 +23,7 @@ def _server_with_capture():
 @pytest.mark.asyncio
 async def test_read_image_returns_clipboard_png(monkeypatch):
     payload = base64.b64encode(b"fake-png-bytes").decode()
-    monkeypatch.setattr("opalatex.ide_server._read_clipboard_image", lambda: payload)
+    monkeypatch.setattr("gilzabots.ide_server._read_clipboard_image", lambda: payload)
 
     server, responses = _server_with_capture()
     await server.route_api("GET", "/api/clipboard/read-image", {}, {}, b"", AsyncMock())
@@ -37,7 +37,7 @@ async def test_read_image_returns_clipboard_png(monkeypatch):
 @pytest.mark.asyncio
 async def test_read_image_reports_an_empty_clipboard(monkeypatch):
     """No image on the clipboard is a normal outcome, not an error."""
-    monkeypatch.setattr("opalatex.ide_server._read_clipboard_image", lambda: "")
+    monkeypatch.setattr("gilzabots.ide_server._read_clipboard_image", lambda: "")
 
     server, responses = _server_with_capture()
     await server.route_api("GET", "/api/clipboard/read-image", {}, {}, b"", AsyncMock())

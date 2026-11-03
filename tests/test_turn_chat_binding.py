@@ -3,7 +3,7 @@
 Traced in a real database: "Continue" was pressed in a secondary chat, and the
 turn's reply, all 745 of its activity rows and its working memory were written
 into the project's main chat instead -- overwriting the main chat's own saved
-memory. `/api/opalatex/update-project` loads the project's *default* chat and
+memory. `/api/gilzabots/update-project` loads the project's *default* chat and
 used to swap it in for the live project, rebinding a turn in flight; a slash
 command reloads the project the same way.
 
@@ -21,16 +21,16 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-import opalatex.agent_stdin as stdin_mod
-from opalatex.ide_server import AsyncHTTPServer
-from opalatex.project import PROJECT_SETTINGS_FIELDS, ProjectData, ProjectStore
+import gilzabots.agent_stdin as stdin_mod
+from gilzabots.ide_server import AsyncHTTPServer
+from gilzabots.project import PROJECT_SETTINGS_FIELDS, ProjectData, ProjectStore
 
 
 @pytest.fixture()
 def api(tmp_path, monkeypatch):
     db_path = str(tmp_path / "projects.db")
     store = ProjectStore(db_path=db_path)
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", db_path)
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", db_path)
 
     project_dir = tmp_path / "project"
     project_dir.mkdir()
@@ -57,13 +57,13 @@ def api(tmp_path, monkeypatch):
     monkeypatch.setattr(stdin_mod, "current_memgpt", "the running turn's orchestrator")
     yield types.SimpleNamespace(store=store, server=server, responses=responses, live=live)
 
-    import opalatex.tools as _tools
+    import gilzabots.tools as _tools
     _tools._PROJECT_SESSION = None
 
 
 async def _update(api, payload):
     await api.server.route_api(
-        "POST", "/api/opalatex/update-project", {}, {},
+        "POST", "/api/gilzabots/update-project", {}, {},
         json.dumps(payload).encode("utf-8"), AsyncMock(),
     )
     return api.responses[-1]
@@ -74,7 +74,7 @@ async def test_saving_settings_during_a_turn_does_not_move_the_turn_to_another_c
     def must_not_rebuild(*_a, **_k):
         raise AssertionError("a running turn keeps the orchestrator it was built with")
 
-    monkeypatch.setattr("opalatex.memgpt_runtime.build_chat_orchestrator", must_not_rebuild)
+    monkeypatch.setattr("gilzabots.memgpt_runtime.build_chat_orchestrator", must_not_rebuild)
     alive = asyncio.create_task(asyncio.Event().wait())
     api.server.active_agent_task = alive
     try:
@@ -108,7 +108,7 @@ async def test_the_turn_end_save_does_not_revert_settings_edited_mid_turn(api):
 async def test_saving_settings_between_turns_rebuilds_for_the_live_chat(api, monkeypatch):
     built = []
     monkeypatch.setattr(
-        "opalatex.memgpt_runtime.build_chat_orchestrator",
+        "gilzabots.memgpt_runtime.build_chat_orchestrator",
         lambda project, store: built.append(project) or "rebuilt",
     )
 
@@ -135,7 +135,7 @@ def test_settings_are_copied_without_the_chat_view():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("path", ["/api/opalatex/slash-command", "/api/opalatex/slash-command/continue"])
+@pytest.mark.parametrize("path", ["/api/gilzabots/slash-command", "/api/gilzabots/slash-command/continue"])
 async def test_slash_commands_are_refused_while_a_turn_is_alive(api, monkeypatch, path):
     async def must_not_run(_data):
         raise AssertionError("a slash command reloads the project a running turn persists through")

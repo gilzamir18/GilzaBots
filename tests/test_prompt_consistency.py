@@ -102,8 +102,8 @@ def test_the_idle_alert_still_says_so_when_nothing_ran():
 
 @pytest.mark.parametrize("lang", ["en", "pt"])
 def test_runtime_corrections_are_english_and_claim_nothing(lang):
-    from opalatex.agent_stdin import _empty_response_retry_prompt, _serialized_tool_call_retry_prompt
-    from opalatex.i18n import set_lang
+    from gilzabots.agent_stdin import _empty_response_retry_prompt, _serialized_tool_call_retry_prompt
+    from gilzabots.i18n import set_lang
 
     set_lang(lang)
     try:
@@ -167,7 +167,7 @@ def test_achievements_are_never_a_step_of_their_own(variant):
 
 @pytest.mark.parametrize("variant", _VARIANTS)
 def test_the_command_list_matches_the_registry(variant):
-    from opalatex.cli_commands import _registry
+    from gilzabots.cli_commands import _registry
 
     text = _variant(variant)
     missing = [
@@ -181,8 +181,8 @@ def test_the_command_list_matches_the_registry(variant):
 
 
 def test_the_worker_and_fallback_achievements_policy_is_shared():
-    import opalatex.memgpt_runtime as runtime
-    from opalatex.prompt_profiles import ACHIEVEMENTS_POLICY, get_profile
+    import gilzabots.memgpt_runtime as runtime
+    from gilzabots.prompt_profiles import ACHIEVEMENTS_POLICY, get_profile
 
     for profile in ("full", "light"):
         text = get_profile(profile)["achievements_instructions"]()
@@ -196,7 +196,7 @@ def test_the_worker_and_fallback_achievements_policy_is_shared():
 # ── Profiles ────────────────────────────────────────────────────────────────
 
 def test_edit_mode_does_not_ask_for_a_permission_the_gate_already_asks():
-    from opalatex.prompt_profiles import get_profile
+    from gilzabots.prompt_profiles import get_profile
 
     for profile in ("full", "light"):
         text = get_profile(profile)["mode_instructions"]("edit")
@@ -205,7 +205,7 @@ def test_edit_mode_does_not_ask_for_a_permission_the_gate_already_asks():
 
 
 def test_plan_mode_names_the_same_tools_in_both_profiles():
-    from opalatex.prompt_profiles import get_profile
+    from gilzabots.prompt_profiles import get_profile
 
     tools = ("inspect_git", "inspect_project", "read_document", "search_code", "read_content_pos")
     for profile in ("full", "light"):
@@ -215,8 +215,8 @@ def test_plan_mode_names_the_same_tools_in_both_profiles():
 
 @pytest.mark.parametrize("profile", ["full", "light"])
 def test_the_worker_tool_list_is_the_toolset_it_receives(profile):
-    from opalatex.prompt_profiles import get_profile
-    from opalatex.tools import get_helper_tools
+    from gilzabots.prompt_profiles import get_profile
+    from gilzabots.tools import get_helper_tools
 
     tools = get_helper_tools(vision=True)
     block = get_profile(profile)["worker_tools_block"](tools)
@@ -231,7 +231,7 @@ def test_the_worker_intro_does_not_name_the_skill_in_either_profile():
     """The shared tail of the worker prompt names the skill once, for both profiles."""
     import inspect
 
-    from opalatex.prompt_profiles import get_profile
+    from gilzabots.prompt_profiles import get_profile
 
     for profile in ("full", "light"):
         intro = get_profile(profile)["worker_intro"]
@@ -242,7 +242,7 @@ def test_the_worker_intro_does_not_name_the_skill_in_either_profile():
 def test_the_helper_write_rule_names_only_its_scratch_area():
     """A helper writes notes, never project files (PROJECT_DESIGN 2.23), so its
     prompt must not teach it to edit existing project files."""
-    source = open(os.path.join(_REPO_ROOT, "opalatex", "memgpt_runtime.py"), encoding="utf-8").read()
+    source = open(os.path.join(_REPO_ROOT, "gilzabots", "memgpt_runtime.py"), encoding="utf-8").read()
 
     assert "ALWAYS use the write_file tool" not in source
     assert "Write scratch files (notes, plans, JSON) only through the file tools" in source
@@ -276,6 +276,6 @@ def test_inline_editor_examples_follow_its_own_fence_rule():
     ("````content\nRun the test suite:\n```bash\nnpm test\n```\n````", "Run the test suite:\n```bash\nnpm test\n```"),
 ])
 def test_inline_editor_example_shapes_survive_the_backend(reply, expected):
-    from opalatex.agent_stdin import _normalize_inline_fenced_replacement
+    from gilzabots.agent_stdin import _normalize_inline_fenced_replacement
 
     assert _normalize_inline_fenced_replacement(reply) == expected

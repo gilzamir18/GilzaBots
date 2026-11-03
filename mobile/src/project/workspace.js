@@ -19,7 +19,7 @@ export const MAX_TEXT_BYTES = 2 * 1024 * 1024;
 const OFFLINE_BLOB_EXTENSIONS = new Set(['pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp']);
 export const MAX_OFFLINE_BLOB_BYTES = 50 * 1024 * 1024;
 
-const isInternal = (path) => path === '.opalatex' || path.startsWith('.opalatex/');
+const isInternal = (path) => path === '.gilzabots' || path.startsWith('.gilzabots/');
 
 /** How a file is kept for offline use, or null when it is not. */
 export function offlineKindOf(path, node) {
@@ -179,7 +179,7 @@ export function createWorkspace({ drive, kv, root }) {
   }
 
   /**
-   * OpalaTex's own documents (`chats.json`, device journals). No size cap: a
+   * GilzaBots's own documents (`chats.json`, device journals). No size cap: a
    * long project's export is tens of megabytes, and it is the conversation.
    */
   async function readInternalText(path) {
@@ -268,7 +268,7 @@ export function createWorkspace({ drive, kv, root }) {
   }
 
   /**
-   * Free the space the offline copy uses. OpalaTex's own documents stay: they
+   * Free the space the offline copy uses. GilzaBots's own documents stay: they
    * are the conversations, shown even without "available offline".
    */
   async function purgeCache() {

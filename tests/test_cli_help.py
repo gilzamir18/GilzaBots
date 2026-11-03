@@ -13,9 +13,9 @@ import re
 import pytest
 from rich.console import Console
 
-import opalatex.terminal as T
-from opalatex.cli_commands import COMMAND_GROUPS, REPLState, _registry
-from opalatex.project import ProjectStore
+import gilzabots.terminal as T
+from gilzabots.cli_commands import COMMAND_GROUPS, REPLState, _registry
+from gilzabots.project import ProjectStore
 
 
 @pytest.fixture
@@ -138,7 +138,7 @@ def test_the_chat_receives_the_help_as_preformatted_text():
     listings, which turned worked examples into bullets and dropped the shapes
     they exist to show.
     """
-    from opalatex.agent_stdin import handle_slash_command
+    from gilzabots.agent_stdin import handle_slash_command
 
     result = asyncio.run(handle_slash_command({"prompt": "/help /models"}))
     text = result["messages"][0]
@@ -148,14 +148,14 @@ def test_the_chat_receives_the_help_as_preformatted_text():
 
 
 def test_a_terminal_only_command_is_named_as_such_not_as_unknown():
-    from opalatex.agent_stdin import handle_slash_command
+    from gilzabots.agent_stdin import handle_slash_command
 
     result = asyncio.run(handle_slash_command({"prompt": "/help /chat"}))
     assert "command-line interface" in result["messages"][0]
 
 
 def test_the_chat_listing_hides_terminal_only_commands():
-    from opalatex.agent_stdin import handle_slash_command
+    from gilzabots.agent_stdin import handle_slash_command
 
     text = asyncio.run(handle_slash_command({"prompt": "/help"}))["messages"][0]
     assert "/thoughts" not in text

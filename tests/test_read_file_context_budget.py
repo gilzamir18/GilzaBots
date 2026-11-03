@@ -10,11 +10,11 @@ import asyncio
 
 import pytest
 
-from opalatex import token_usage, tools
+from gilzabots import token_usage, tools
 
 
 def _read_file(path):
-    """Call read_file past the @opalatex_tool FunctionBlock/permission wrapper."""
+    """Call read_file past the @gilzabots_tool FunctionBlock/permission wrapper."""
     return asyncio.run(tools.read_file._func(path))
 
 

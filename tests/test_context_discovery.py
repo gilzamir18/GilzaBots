@@ -2,13 +2,13 @@
 
 A catalog entry with an empty num_ctx used to be given 65,536 tokens whenever it
 was not a local Ollama model. For a model that really holds a million tokens,
-that guess became OpalaTex's own ceiling: read_file refused a file at 109K
+that guess became GilzaBots's own ceiling: read_file refused a file at 109K
 tokens of a 1M window ("the context window is exhausted (109,239 of 65,536
 tokens already used)") and MemGPT evicted the conversation at a fraction of
 what the provider accepted. "Auto" now asks the provider; a self-hosted Ollama
 model keeps a parsimonious fixed default, since there num_ctx sizes the memory
 the server allocates; and a window nobody reports stays unknown, in which case
-OpalaTex applies no limit of its own.
+GilzaBots applies no limit of its own.
 """
 import asyncio
 import urllib.error
@@ -17,7 +17,7 @@ from unittest.mock import patch
 
 import pytest
 
-from opalatex import config, context_discovery, models_store, token_usage, tools
+from gilzabots import config, context_discovery, models_store, token_usage, tools
 
 
 class _Transport:
@@ -211,8 +211,8 @@ def test_discovered_window_is_not_sent_to_the_provider(catalog, monkeypatch):
         worker_model_params={}, api_base=None, worker_api_base=None,
         api_key=None, worker_api_key=None,
     )
-    with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-        with patch("opalatex.tools._PROJECT_SESSION", session):
+    with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+        with patch("gilzabots.tools._PROJECT_SESSION", session):
             kwargs = config.get_agent_llm_kwargs("memgpt")
             window = config.resolve_effective_num_ctx("memgpt")
     assert "discovered_num_ctx" not in kwargs
@@ -232,8 +232,8 @@ def _session(model, **overrides):
 def test_hosted_model_without_a_reported_window_is_unknown_not_65536():
     entry = {"id": "openai/some-model", "provider": "openai", "name": "some-model",
              "api_base": "https://api.example.com/v1", "num_ctx": None}
-    with patch("opalatex.tools._PROJECT_SESSION", _session("openai/some-model")):
-        with patch("opalatex.models_store.get_model", return_value=entry):
+    with patch("gilzabots.tools._PROJECT_SESSION", _session("openai/some-model")):
+        with patch("gilzabots.models_store.get_model", return_value=entry):
             assert config.resolve_effective_num_ctx("memgpt") is None
 
 
@@ -241,9 +241,9 @@ def test_unknown_window_sends_no_num_ctx():
     entry = {"id": "openai/some-model", "provider": "openai", "name": "some-model",
              "api_base": "https://api.example.com/v1", "num_ctx": None}
     session = _session("openai/some-model", model_params={"stream": True})
-    with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-        with patch("opalatex.tools._PROJECT_SESSION", session):
-            with patch("opalatex.models_store.get_model", return_value=entry):
+    with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+        with patch("gilzabots.tools._PROJECT_SESSION", session):
+            with patch("gilzabots.models_store.get_model", return_value=entry):
                 kwargs = config.get_agent_llm_kwargs("memgpt")
     assert "num_ctx" not in kwargs
 
@@ -252,14 +252,14 @@ def test_self_hosted_ollama_on_auto_keeps_the_parsimonious_defaults():
     local = {"id": "ollama/m", "provider": "ollama", "name": "m",
              "api_base": "http://localhost:11434/v1", "num_ctx": None}
     remote = dict(local, api_base="http://100.85.255.111:11434/v1")
-    with patch("opalatex.models_store.get_model", return_value=local):
+    with patch("gilzabots.models_store.get_model", return_value=local):
         assert config.auto_num_ctx("ollama/m") == (8192, "local_default")
-    with patch("opalatex.models_store.get_model", return_value=remote):
+    with patch("gilzabots.models_store.get_model", return_value=remote):
         assert config.auto_num_ctx("ollama/m") == (65536, "local_default")
 
 
 def test_a_catalog_read_failure_is_not_turned_into_a_guess():
-    with patch("opalatex.models_store.get_model", side_effect=RuntimeError("catalog unreadable")):
+    with patch("gilzabots.models_store.get_model", side_effect=RuntimeError("catalog unreadable")):
         with pytest.raises(RuntimeError):
             config.model_num_ctx("openai/some-model")
 
@@ -280,7 +280,7 @@ def unknown_window(monkeypatch):
 
 def test_read_file_is_not_refused_when_the_window_is_unknown(tmp_path, monkeypatch, unknown_window):
     # The reported case: 109,239 tokens in use on a model whose window was never
-    # 65,536. With no known window there is no OpalaTex-side refusal.
+    # 65,536. With no known window there is no GilzaBots-side refusal.
     target = tmp_path / "gridworld_online.py"
     target.write_text("x = 1\n" * 100_000, encoding="utf-8")
     monkeypatch.setattr(tools, "_resolve_path", lambda p: str(target))

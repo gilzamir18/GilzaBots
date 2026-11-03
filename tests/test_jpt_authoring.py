@@ -14,12 +14,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from opalatex import jpt
-from opalatex.jpt import layout, metrics
+from gilzabots import jpt
+from gilzabots.jpt import layout, metrics
 # The package re-exports `lint` as the function, which shadows the module of
 # the same name — so the module's other helpers are imported by name.
-from opalatex.jpt.lint import MIN_CONTRAST, check_latex, contrast_ratio
-from opalatex.tools import (
+from gilzabots.jpt.lint import MIN_CONTRAST, check_latex, contrast_ratio
+from gilzabots.tools import (
     check_presentation, create_presentation, edit_presentation, read_file,
     set_project_context, write_content_pos, write_file,
 )
@@ -491,7 +491,7 @@ def test_create_pptx_file_keeps_backslashes_in_a_bullet(tmp_path):
     """The sibling tool had the same latent defect: the escape repair ran over
     valid JSON, so a bullet holding a Windows path or a LaTeX command lost it."""
     pptx = pytest.importorskip("pptx")
-    from opalatex.tools import create_pptx_file
+    from gilzabots.tools import create_pptx_file
 
     _run(create_pptx_file, tmp_path, path="d.pptx", slides_json=json.dumps(
         [{"title": "Paths", "bullets": [r"C:\temp\report", r"\theta rises"]}]))
@@ -697,7 +697,7 @@ def test_an_edit_keeps_the_deck_self_contained(tmp_path):
 
 
 def test_a_picture_over_the_size_limit_keeps_its_reference_and_says_so(tmp_path):
-    from opalatex.jpt import assets
+    from gilzabots.jpt import assets
     figure = _figure(tmp_path)
     deck = jpt.compile_outline({"slides": [
         {"layout": "image", "title": "Big", "image": figure}]})
@@ -709,7 +709,7 @@ def test_a_picture_over_the_size_limit_keeps_its_reference_and_says_so(tmp_path)
 
 
 def test_a_missing_picture_is_left_for_the_linter_to_name(tmp_path):
-    from opalatex.jpt import assets
+    from gilzabots.jpt import assets
     deck = jpt.compile_outline({"slides": [
         {"layout": "image", "title": "Gone", "image": "figures/gone.png"}]})
     report = assets.embed_images(deck, str(tmp_path))
@@ -719,7 +719,7 @@ def test_a_missing_picture_is_left_for_the_linter_to_name(tmp_path):
 
 
 def test_data_uris_and_urls_are_left_alone(tmp_path):
-    from opalatex.jpt import assets
+    from gilzabots.jpt import assets
     assert assets.is_portable("data:image/png;base64,iVBORw0KGgo=")
     assert assets.is_portable("https://example.com/a.png")
     assert not assets.is_portable("figures/a.png")
@@ -777,7 +777,7 @@ def test_a_role_that_is_not_a_role_is_refused():
 
 
 def test_set_presentation_theme_applies_a_store_theme(tmp_path):
-    from opalatex.tools import set_presentation_theme
+    from gilzabots.tools import set_presentation_theme
 
     _run(create_presentation, tmp_path, path="d.jpt", outline_json=json.dumps({
         "title": "Talk", "slides": [
@@ -797,7 +797,7 @@ def test_set_presentation_theme_applies_a_store_theme(tmp_path):
 def test_a_named_theme_replaces_the_look_rather_than_blending_into_it(tmp_path):
     """Applying Madrid and then a theme with no header must not leave Madrid's
     band standing: the deck would look like neither."""
-    from opalatex.tools import set_presentation_theme
+    from gilzabots.tools import set_presentation_theme
 
     _run(create_presentation, tmp_path, path="d.jpt", outline_json=json.dumps({
         "slides": [{"layout": "bullets", "title": "One", "bullets": ["a"]}]}))
@@ -810,7 +810,7 @@ def test_a_named_theme_replaces_the_look_rather_than_blending_into_it(tmp_path):
 
 
 def test_explicit_fields_tweak_the_theme_instead_of_replacing_it(tmp_path):
-    from opalatex.tools import set_presentation_theme
+    from gilzabots.tools import set_presentation_theme
 
     _run(create_presentation, tmp_path, path="d.jpt", outline_json=json.dumps({
         "slides": [{"layout": "bullets", "title": "One", "bullets": ["a"]}]}))
@@ -824,7 +824,7 @@ def test_explicit_fields_tweak_the_theme_instead_of_replacing_it(tmp_path):
 
 def test_an_unknown_theme_answers_with_the_catalogue(tmp_path):
     """The discovery path: no second tool to list them."""
-    from opalatex.tools import set_presentation_theme
+    from gilzabots.tools import set_presentation_theme
 
     _run(create_presentation, tmp_path, path="d.jpt", outline_json=json.dumps({
         "slides": [{"layout": "bullets", "title": "One", "bullets": ["a"]}]}))
@@ -833,7 +833,7 @@ def test_an_unknown_theme_answers_with_the_catalogue(tmp_path):
 
 
 def test_a_misspelled_theme_field_is_refused_with_the_known_ones(tmp_path):
-    from opalatex.tools import set_presentation_theme
+    from gilzabots.tools import set_presentation_theme
 
     _run(create_presentation, tmp_path, path="d.jpt", outline_json=json.dumps({
         "slides": [{"layout": "bullets", "title": "One", "bullets": ["a"]}]}))

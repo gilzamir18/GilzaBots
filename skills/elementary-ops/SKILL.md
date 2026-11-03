@@ -34,10 +34,10 @@ a checkable one → `ask_question` **once**.
 2. **Plan.** Choose operations **only** from the catalog below, at most 12 steps,
    results named `s1`, `s2`, ... End with at least one `check` that states the
    answer.
-3. **Write** the plan with `write_file` to `.opalatex/ops/<short-name>.plan`
+3. **Write** the plan with `write_file` to `.gilzabots/ops/<short-name>.plan`
    inside the project.
 4. **Run** it:
-   `run_python_script("<skill_dir>/scripts/ops.py", 'run ".opalatex/ops/<short-name>.plan"')`.
+   `run_python_script("<skill_dir>/scripts/ops.py", 'run ".gilzabots/ops/<short-name>.plan"')`.
    `run` validates the whole plan before executing anything. A `PLAN ERROR`
    names the line and what to change: fix that line and run again, **at most 2
    corrections**, then report `STATUS: BLOCKED` with the last error.

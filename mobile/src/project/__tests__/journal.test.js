@@ -11,11 +11,11 @@ const msg = (cid, content, chat = 'c1', ts = '2026-10-19T12:00:00.000000+00:00')
 });
 
 test('journal paths follow the desktop rule', () => {
-  assert.equal(journalPath('dev-1'), '.opalatex/session/devices/dev-1.json');
-  assert.ok(isDeviceJournalPath('.opalatex/session/devices/dev-1.json'));
-  assert.ok(!isDeviceJournalPath('.opalatex/session/devices/nested/x.json'));
-  assert.ok(!isDeviceJournalPath('.opalatex/session/devices/.tmp.json'));
-  assert.ok(!isDeviceJournalPath('.opalatex/session/chats.json'));
+  assert.equal(journalPath('dev-1'), '.gilzabots/session/devices/dev-1.json');
+  assert.ok(isDeviceJournalPath('.gilzabots/session/devices/dev-1.json'));
+  assert.ok(!isDeviceJournalPath('.gilzabots/session/devices/nested/x.json'));
+  assert.ok(!isDeviceJournalPath('.gilzabots/session/devices/.tmp.json'));
+  assert.ok(!isDeviceJournalPath('.gilzabots/session/chats.json'));
 });
 
 test('a journal names itself and its version', () => {

@@ -726,7 +726,7 @@ test('text keeps its prose face and falls back to the bundled math font for miss
 test('the Qt PDF frame protocol preserves a suggested name', () => {
   assert.equal(
     pdfExportFrameName('m1-2', 'Aula 02: vetores.pdf'),
-    'opalatex-pdf-v1:m1-2:Aula%2002%3A%20vetores.pdf',
+    'gilzabots-pdf-v1:m1-2:Aula%2002%3A%20vetores.pdf',
   );
 });
 

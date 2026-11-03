@@ -260,7 +260,7 @@ export default function ExplorerSidebar({
             setRenamingNodePath(selectedFile);
           }
         }}
-        style={dragOverPath === '__root__' ? { border: '2px dashed #007acc', backgroundColor: 'rgba(0, 122, 204, 0.05)', outline: 'none' } : { outline: 'none' }}
+        style={dragOverPath === '__root__' ? { border: '2px dashed var(--vscode-accent)', backgroundColor: 'var(--vscode-hover-item)', outline: 'none' } : { outline: 'none' }}
       >
         <div className="vscode-sidebar-section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>{t('explorerSidebar.workspaceFiles')}</span>

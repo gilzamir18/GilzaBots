@@ -1,4 +1,4 @@
-"""Regression tests for git root validation in `/api/opalatex/update-project`.
+"""Regression tests for git root validation in `/api/gilzabots/update-project`.
 
 The edit modal re-sends every project field on save, including the git root it
 loaded from the database. Validating that echoed value made a *stored* git root
@@ -20,15 +20,15 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.ide_server import AsyncHTTPServer
-from opalatex.project import ProjectStore
+from gilzabots.ide_server import AsyncHTTPServer
+from gilzabots.project import ProjectStore
 
 
 @pytest.fixture()
 def api(tmp_path, monkeypatch):
     db_path = str(tmp_path / "projects.db")
     store = ProjectStore(db_path=db_path)
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", db_path)
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", db_path)
 
     responses = []
     server = AsyncHTTPServer()
@@ -54,7 +54,7 @@ def api(tmp_path, monkeypatch):
 async def _update(api, payload):
     await api.server.route_api(
         "POST",
-        "/api/opalatex/update-project",
+        "/api/gilzabots/update-project",
         {},
         {},
         json.dumps(payload).encode("utf-8"),
@@ -73,7 +73,7 @@ def _set_stored_git_root(api, value):
 @pytest.mark.asyncio
 async def test_unrelated_edit_survives_a_stale_stored_git_root(api):
     """The bug: a stored Windows path blocked every save on Linux."""
-    stale = "G:\\Meu Drive\\OpalaTex\\AgenticBook"
+    stale = "G:\\Meu Drive\\GilzaBots\\AgenticBook"
     _set_stored_git_root(api, stale)
 
     status, body = await _update(api, {
@@ -107,7 +107,7 @@ async def test_unchanged_valid_git_root_reports_no_warning(api):
 
 @pytest.mark.asyncio
 async def test_clearing_a_stale_git_root_still_works(api):
-    _set_stored_git_root(api, "G:\\Meu Drive\\OpalaTex\\AgenticBook")
+    _set_stored_git_root(api, "G:\\Meu Drive\\GilzaBots\\AgenticBook")
 
     status, body = await _update(api, {"project_name": "myproj", "git_root_path": ""})
 
@@ -118,7 +118,7 @@ async def test_clearing_a_stale_git_root_still_works(api):
 
 @pytest.mark.asyncio
 async def test_changed_git_root_is_still_validated(api):
-    _set_stored_git_root(api, "G:\\Meu Drive\\OpalaTex\\AgenticBook")
+    _set_stored_git_root(api, "G:\\Meu Drive\\GilzaBots\\AgenticBook")
 
     status, body = await _update(api, {
         "project_name": "myproj",

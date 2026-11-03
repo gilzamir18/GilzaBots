@@ -15,26 +15,26 @@ import types
 
 import pytest
 
-import opalatex.agent_stdin as agent_stdin
-import opalatex.cli as cli
-import opalatex.cli_render as cli_render
-from opalatex.cli_commands import REPLState, _registry
-from opalatex.project import ProjectStore
+import gilzabots.agent_stdin as agent_stdin
+import gilzabots.cli as cli
+import gilzabots.cli_render as cli_render
+from gilzabots.cli_commands import REPLState, _registry
+from gilzabots.project import ProjectStore
 
 
 # ── Packaging promise ────────────────────────────────────────────────────────
 
 
 def test_the_cli_never_imports_the_desktop_stack():
-    """`pip install opalatex` must not need Qt, so the CLI must not load it.
+    """`pip install gilzabots` must not need Qt, so the CLI must not load it.
 
-    Every Qt/pywebview import sits inside a function of `opalatex/ide_server.py`;
+    Every Qt/pywebview import sits inside a function of `gilzabots/ide_server.py`;
     this is what keeps a module-level one from creeping back and breaking a
     command-line-only install at import time.
     """
     probe = (
-        "import opalatex.cli, opalatex.cli_render, opalatex.agent_stdin, "
-        "opalatex.memgpt_runtime, sys;"
+        "import gilzabots.cli, gilzabots.cli_render, gilzabots.agent_stdin, "
+        "gilzabots.memgpt_runtime, sys;"
         "loaded = {m.split('.')[0] for m in sys.modules};"
         "print(sorted(loaded & {'PyQt6', 'qtpy', 'webview', 'faster_whisper'}))"
     )
@@ -53,12 +53,12 @@ def test_importing_agent_stdin_leaves_stdout_alone():
 
     The redirection used to run at import time, and the REPL imports this module
     to reuse the turn engine -- so every Rich frame the CLI drew went to stderr
-    and `opalatex --cli > log.txt` captured nothing.
+    and `gilzabots --cli > log.txt` captured nothing.
     """
     # The second report is written to the protocol channel on purpose: once the
     # protocol has claimed stdout, `print` is exactly what must no longer land there.
     probe = (
-        "import sys; import opalatex.agent_stdin as a;"
+        "import sys; import gilzabots.agent_stdin as a;"
         "before = sys.stdout is sys.stderr;"
         "a.claim_stdout_for_protocol();"
         "after = sys.stdout is sys.stderr;"
@@ -146,7 +146,7 @@ def test_an_unknown_project_name_stops_the_run(tmp_path):
 @pytest.fixture
 def catalog(tmp_path, monkeypatch):
     """An isolated model store, so a test never touches the real catalog."""
-    from opalatex import models_store
+    from gilzabots import models_store
     monkeypatch.setattr(models_store, "_MODELS_STORE_PATH", tmp_path / "models.json")
     models_store._invalidate_models_cache()
     yield models_store
@@ -206,21 +206,21 @@ def test_the_model_flag_has_no_built_in_default():
 
 
 def test_a_folder_that_cannot_hold_project_state_is_asked_for_again(tmp_path, monkeypatch, catalog, capsys):
-    """Under snap, `~` itself accepts files but not `~/.opalatex`.
+    """Under snap, `~` itself accepts files but not `~/.gilzabots`.
 
-    Stands in for that with a `.opalatex` that is a file: the folder is writable,
+    Stands in for that with a `.gilzabots` that is a file: the folder is writable,
     its state directory is not. Creating the project there anyway printed
     "Failed to save editor state: Permission denied" on every message.
     """
     blocked = tmp_path / "home"
     blocked.mkdir()
-    (blocked / ".opalatex").write_text("")
+    (blocked / ".gilzabots").write_text("")
 
     project = _create(tmp_path, monkeypatch, ["T", str(blocked), "", "desc"])
 
     assert "as a project folder" in " ".join(capsys.readouterr().out.split())
     assert project.project_path == str(blocked / "T")
-    assert (blocked / "T" / ".opalatex").is_dir()
+    assert (blocked / "T" / ".gilzabots").is_dir()
 
 
 def test_project_new_creates_a_project_and_switches_to_it(tmp_path, monkeypatch, catalog):
@@ -249,11 +249,11 @@ def test_project_new_can_be_cancelled(tmp_path, monkeypatch, catalog):
 
 def test_opening_a_project_whose_folder_cannot_hold_its_state_says_so(tmp_path, capsys):
     """A project registered at `~` under snap before the folder was checked."""
-    (tmp_path / ".opalatex").write_text("")
+    (tmp_path / ".gilzabots").write_text("")
     store, project = _project(tmp_path)
     capsys.readouterr()
 
-    from opalatex.cli_commands import warn_if_project_dir_unusable
+    from gilzabots.cli_commands import warn_if_project_dir_unusable
     assert warn_if_project_dir_unusable(project) is True
     out = " ".join(capsys.readouterr().out.split())
     assert "as a project folder" in out
@@ -264,7 +264,7 @@ def test_a_usable_project_folder_prints_nothing(tmp_path, capsys):
     store, project = _project(tmp_path)
     capsys.readouterr()
 
-    from opalatex.cli_commands import warn_if_project_dir_unusable
+    from gilzabots.cli_commands import warn_if_project_dir_unusable
     assert warn_if_project_dir_unusable(project) is False
     assert capsys.readouterr().out == ""
 
@@ -280,9 +280,9 @@ def _start(tmp_path, monkeypatch, cwd, answers, store=None, **arg_overrides):
 
 
 def test_a_directory_with_an_unregistered_project_is_opened(tmp_path, monkeypatch, catalog):
-    """A project copied or cloned from elsewhere: `.opalatex/` present, no registration."""
+    """A project copied or cloned from elsewhere: `.gilzabots/` present, no registration."""
     folder = tmp_path / "thesis"
-    (folder / ".opalatex").mkdir(parents=True)
+    (folder / ".gilzabots").mkdir(parents=True)
 
     store, project = _start(tmp_path, monkeypatch, folder, [])
 
@@ -296,7 +296,7 @@ def test_a_directory_that_is_not_a_project_offers_to_leave(tmp_path, monkeypatch
 
     with pytest.raises(cli.T.AppExit):
         _start(tmp_path, monkeypatch, folder, ["3"])
-    assert not (folder / ".opalatex").exists()
+    assert not (folder / ".gilzabots").exists()
 
 
 def test_a_project_can_be_created_in_the_current_directory(tmp_path, monkeypatch, catalog):
@@ -317,31 +317,31 @@ def test_a_project_can_be_created_in_another_directory(tmp_path, monkeypatch, ca
     _store, project = _start(tmp_path, monkeypatch, folder, ["2", "Other", str(other), "desc"])
 
     assert project.project_path == str(other)
-    assert not (folder / ".opalatex").exists()
+    assert not (folder / ".gilzabots").exists()
 
 
 def test_a_directory_that_cannot_take_a_project_returns_to_the_question(tmp_path, monkeypatch, catalog, capsys):
     """Under snap, `~` itself: creating there fails, and the run must not just end."""
     folder = tmp_path / "home"
     folder.mkdir()
-    (folder / ".opalatex").write_text("")  # stands in for the AppArmor denial
+    (folder / ".gilzabots").write_text("")  # stands in for the AppArmor denial
 
     with pytest.raises(cli.T.AppExit):
         _start(tmp_path, monkeypatch, folder, ["1", "3"])
     out = " ".join(capsys.readouterr().out.split())
     assert "as a project folder" in out
-    assert out.count("not an OpalaTex project") == 2
+    assert out.count("not an GilzaBots project") == 2
 
 
 def test_a_registration_without_its_state_directory_is_explained(tmp_path, monkeypatch, catalog, capsys):
     store, project = _project(tmp_path)
     import shutil
-    shutil.rmtree(tmp_path / ".opalatex")
+    shutil.rmtree(tmp_path / ".gilzabots")
 
     with pytest.raises(cli.T.AppExit):
         _start(tmp_path, monkeypatch, tmp_path, ["1", "3"], store=store)
     out = " ".join(capsys.readouterr().out.split())
-    assert f"opalatex --delete {project.name}" in out
+    assert f"gilzabots --delete {project.name}" in out
     assert "already being used by the project" in out
 
 
@@ -561,7 +561,7 @@ def test_the_repl_adopts_the_state_the_turn_owns(tmp_path, monkeypatch):
 def _render(events, **kwargs):
     from rich.console import Console
 
-    import opalatex.terminal as T
+    import gilzabots.terminal as T
 
     renderer = cli_render.TerminalEventRenderer(**kwargs)
     console = Console(file=_Buffer(), width=200, no_color=True, highlight=False)
@@ -743,7 +743,7 @@ def test_an_unanswered_request_times_out_rather_than_hanging():
 
 def test_an_unsafe_tool_is_refused_when_the_terminal_says_no(tmp_path):
     """Edit mode asks before each change, and 'no' has to mean no everywhere."""
-    import opalatex.tools as tools
+    import gilzabots.tools as tools
 
     store, project = _project(tmp_path, mode="edit")
     tools.set_project_context(project, store)
@@ -774,7 +774,7 @@ def test_the_orchestrator_is_built_only_when_a_command_needs_it(tmp_path, monkey
     """The GUI builds a REPLState per slash command; `/help` must not build an agent."""
     store, project = _project(tmp_path)
     built = []
-    import opalatex.memgpt_runtime as runtime
+    import gilzabots.memgpt_runtime as runtime
 
     monkeypatch.setattr(
         runtime, "build_chat_orchestrator",
@@ -807,7 +807,7 @@ def test_help_hides_terminal_only_commands_outside_the_terminal(tmp_path):
 
 
 def test_mode_is_stored_and_reaches_the_permission_gate(tmp_path):
-    import opalatex.tools as tools
+    import gilzabots.tools as tools
 
     store, project = _project(tmp_path, mode="auto")
     state = REPLState(project, store, renderer=object())
@@ -856,7 +856,7 @@ def test_cost_reports_the_measurement_that_was_persisted(tmp_path):
     state = REPLState(store.load("p"), store, renderer=object())
 
     messages = []
-    import opalatex.terminal as T
+    import gilzabots.terminal as T
 
     original = T.console.print
     T.console.print = lambda *a, **k: messages.append(" ".join(str(x) for x in a))
@@ -927,7 +927,7 @@ def test_bookkeeping_events_print_nothing():
 
 def test_the_permission_question_is_asked_in_the_active_language():
     """It was hardcoded Portuguese, so an English session was asked in Portuguese."""
-    from opalatex.i18n import _ as translate, set_lang
+    from gilzabots.i18n import _ as translate, set_lang
 
     set_lang("en")
     try:
@@ -948,7 +948,7 @@ def test_asking_for_the_window_without_the_bundle_says_so(monkeypatch, tmp_path,
     monkeypatch.setattr(cli, "gui_bundle_path", lambda: str(tmp_path / "absent" / "index.html"))
     started = []
     monkeypatch.setattr(
-        "opalatex.ide_server.start_gui_server",
+        "gilzabots.ide_server.start_gui_server",
         lambda **kw: started.append(kw),
         raising=False,
     )
@@ -976,7 +976,7 @@ def _registered(store, tmp_path, key, *, with_state=True):
     folder = tmp_path / key
     folder.mkdir()
     if with_state:
-        (folder / ".opalatex").mkdir()
+        (folder / ".gilzabots").mkdir()
     return store.create(name=key, mode="auto", model="", project_name=key.title(),
                         project_path=str(folder))
 
@@ -1032,13 +1032,13 @@ def test_a_project_whose_folder_is_gone_is_listed_but_not_opened(tmp_path, monke
     out = " ".join(capsys.readouterr().out.split())
     assert "(folder not found)" in out
     assert "does not exist on disk" in out
-    assert "opalatex --delete gone" in out
+    assert "gilzabots --delete gone" in out
 
 
 def test_an_existing_project_folder_can_be_imported_from_the_list(tmp_path, monkeypatch, catalog):
     store = ProjectStore(db_path=os.path.join(str(tmp_path), "s.db"))
     cloned = tmp_path / "cloned"
-    (cloned / ".opalatex").mkdir(parents=True)
+    (cloned / ".gilzabots").mkdir(parents=True)
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
 
@@ -1053,7 +1053,7 @@ def test_an_unregistered_project_in_the_working_directory_is_the_default(tmp_pat
     store = ProjectStore(db_path=os.path.join(str(tmp_path), "s.db"))
     _registered(store, tmp_path, "thesis")
     cloned = tmp_path / "cloned"
-    (cloned / ".opalatex").mkdir(parents=True)
+    (cloned / ".gilzabots").mkdir(parents=True)
 
     project = _pick(tmp_path, monkeypatch, cloned, [""], store)
 
@@ -1067,7 +1067,7 @@ def test_a_failed_import_returns_to_the_list(tmp_path, monkeypatch, catalog, cap
 
     with pytest.raises(cli.T.AppExit):
         _pick(tmp_path, monkeypatch, plain, ["3", str(plain), "4"], store)
-    assert "not a valid OpalaTex project" in " ".join(capsys.readouterr().out.split())
+    assert "not a valid GilzaBots project" in " ".join(capsys.readouterr().out.split())
 
 
 def test_here_skips_the_list(tmp_path, monkeypatch, catalog):
@@ -1085,8 +1085,8 @@ def test_here_skips_the_list(tmp_path, monkeypatch, catalog):
 
 def test_the_orchestrator_is_told_its_replies_are_read_in_a_terminal(tmp_path):
     """The desktop chat renders Markdown and math; a terminal prints them literally."""
-    from opalatex import agent_stdin, cli_render
-    from opalatex.memgpt_runtime import chat_orchestrator_system_prompt
+    from gilzabots import agent_stdin, cli_render
+    from gilzabots.memgpt_runtime import chat_orchestrator_system_prompt
 
     _store, project = _project(tmp_path)
 
@@ -1106,7 +1106,7 @@ def test_the_orchestrator_is_told_its_replies_are_read_in_a_terminal(tmp_path):
 
 
 def test_bare_load_in_the_terminal_offers_the_project_list(tmp_path, monkeypatch, catalog):
-    from opalatex.cli_commands import REPLState, _registry
+    from gilzabots.cli_commands import REPLState, _registry
     store = ProjectStore(db_path=os.path.join(str(tmp_path), "s.db"))
     thesis = _registered(store, tmp_path, "thesis")
     _registered(store, tmp_path, "paper")

@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-"""Inject the Google OAuth client that a build of OpalaTex ships with.
+"""Inject the Google OAuth client that a build of GilzaBots ships with.
 
 Without this file the Cloud sync panel can still connect, but only after the
 user registers their own OAuth client and pastes it in. Running this before
 PyInstaller is what turns the normal path into a single "Connect with Google"
 click: the credentials land in
-``opalatex/cloud/providers/bundled_google_client.json``, which the packaged app
+``gilzabots/cloud/providers/bundled_google_client.json``, which the packaged app
 reads as package data.
 
 The file is git-ignored on purpose. A desktop OAuth client is a *public* client
@@ -30,7 +30,7 @@ import sys
 
 TARGET = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "opalatex", "cloud", "providers", "bundled_google_client.json",
+    "gilzabots", "cloud", "providers", "bundled_google_client.json",
 )
 
 
@@ -54,7 +54,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument(
         "--from-env",
         action="store_true",
-        help="read OPALATEX_GDRIVE_CLIENT_ID and OPALATEX_GDRIVE_CLIENT_SECRET",
+        help="read GILZABOTS_GDRIVE_CLIENT_ID and GILZABOTS_GDRIVE_CLIENT_SECRET",
     )
     parser.add_argument("--clear", action="store_true", help="remove the bundled client")
     args = parser.parse_args(argv)
@@ -75,13 +75,13 @@ def main(argv: list[str]) -> int:
             print(f"Could not read {args.from_file}: {exc}", file=sys.stderr)
             return 1
     elif args.from_env:
-        client_id = os.environ.get("OPALATEX_GDRIVE_CLIENT_ID", "").strip()
-        client_secret = os.environ.get("OPALATEX_GDRIVE_CLIENT_SECRET", "").strip()
+        client_id = os.environ.get("GILZABOTS_GDRIVE_CLIENT_ID", "").strip()
+        client_secret = os.environ.get("GILZABOTS_GDRIVE_CLIENT_SECRET", "").strip()
 
     if not client_id:
         print(
             "No client id given. Pass --client-id, --from-file or --from-env "
-            "(OPALATEX_GDRIVE_CLIENT_ID).",
+            "(GILZABOTS_GDRIVE_CLIENT_ID).",
             file=sys.stderr,
         )
         return 1

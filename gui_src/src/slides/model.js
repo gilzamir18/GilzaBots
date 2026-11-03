@@ -12,7 +12,7 @@
 //   1. Every operation is pure and returns a new deck. Nothing mutates in
 //      place, so undo/redo is a stack of deck references and React re-renders
 //      on identity.
-//   2. Unknown keys survive. A deck written by a newer version of OpalaTex —
+//   2. Unknown keys survive. A deck written by a newer version of GilzaBots —
 //      or by an agent that set a field this build does not know — round-trips
 //      unchanged instead of being silently stripped. `serialize` writes known
 //      keys in a fixed order and appends the rest, so diffs stay readable.
@@ -554,7 +554,7 @@ export function reorderElement(deck, slideId, elementId, direction) {
 // decides what to do with it (paste it as a text box, or ignore it). Nothing
 // guesses.
 
-export const CLIPBOARD_KIND = 'opalatex.slides.elements';
+export const CLIPBOARD_KIND = 'gilzabots.slides.elements';
 export const CLIPBOARD_VERSION = 1;
 
 /** Distance between a pasted copy and the original it landed on top of. */

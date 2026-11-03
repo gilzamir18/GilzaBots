@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 // Clickable question menu shown inside the built-in tutorial chat.
 //
-// The questions and their answers live in `opalatex/guides/tutorial.<lang>.md` and are
+// The questions and their answers live in `gilzabots/guides/tutorial.<lang>.md` and are
 // served by `/api/tutorial/*`; this component only renders what the backend sent and
 // reports which topic was clicked. Answering happens server-side without an LLM call,
 // so the tutorial works before any provider or model has been registered.

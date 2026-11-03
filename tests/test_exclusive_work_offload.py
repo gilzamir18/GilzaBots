@@ -15,8 +15,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-import opalatex.latex_compiler as latex_compiler
-from opalatex.ide_server import AsyncHTTPServer
+import gilzabots.latex_compiler as latex_compiler
+from gilzabots.ide_server import AsyncHTTPServer
 
 
 async def _wait_until(predicate, timeout=5.0):
@@ -202,7 +202,7 @@ GIT_ENDPOINTS = [
 async def test_git_endpoints_run_git_in_a_worker_thread(tmp_path, monkeypatch, method, path, query, body):
     """A git call no longer holds the event loop: a diff makes up to a dozen
     of them and a commit runs the repository's hooks."""
-    import opalatex.ide_server as ide_server
+    import gilzabots.ide_server as ide_server
 
     assert path in AsyncHTTPServer.EXCLUSIVE_WORK_PATHS
     started = threading.Event()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Refuse to package a Qt that is known to break OpalaTex.
+"""Refuse to package a Qt that is known to break GilzaBots.
 
 The Qt a user runs is decided at build time, not at install time: install.ps1
 and install.sh download the release this pipeline produces and never resolve a

@@ -17,8 +17,8 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from opalatex import token_usage
-from opalatex.project import ProjectStore
+from gilzabots import token_usage
+from gilzabots.project import ProjectStore
 
 
 def _store_with_project(tmp_path):
@@ -141,7 +141,7 @@ def test_a_branched_chat_starts_unmeasured(tmp_path):
 # ---------------------------------------------------------------------------
 
 def test_a_turn_persists_its_measurement_for_the_chat_it_ran_in(tmp_path, monkeypatch):
-    from opalatex import agent_stdin
+    from gilzabots import agent_stdin
 
     store, project = _store_with_project(tmp_path)
     chat_id = project.current_chat_id
@@ -169,7 +169,7 @@ async def test_a_real_turn_writes_the_measurement_to_the_database(tmp_path, monk
     that the turn's ``finally`` block reaches it with the scope still bound to
     the chat that ran.
     """
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
     from agenticblocks.runtime.state import TokenUsage
 
     store, project = _store_with_project(tmp_path)
@@ -222,7 +222,7 @@ def test_occupancy_is_derived_from_the_saved_working_state(tmp_path):
     orchestrator will restore is what fills the window, so counting it beats
     reporting nothing and letting the panel estimate over the visible bubbles.
     """
-    from opalatex.memgpt_runtime import derive_context_usage_from_state
+    from gilzabots.memgpt_runtime import derive_context_usage_from_state
 
     store, project = _store_with_project(tmp_path)
     store.save_chat_agent_state("proj", project.current_chat_id, {
@@ -243,7 +243,7 @@ def test_occupancy_is_derived_from_the_saved_working_state(tmp_path):
 
 
 def test_a_chat_that_never_ran_derives_nothing(tmp_path):
-    from opalatex.memgpt_runtime import derive_context_usage_from_state
+    from gilzabots.memgpt_runtime import derive_context_usage_from_state
 
     store, project = _store_with_project(tmp_path)
 
@@ -252,7 +252,7 @@ def test_a_chat_that_never_ran_derives_nothing(tmp_path):
 
 def test_the_derived_count_includes_the_system_prompt(tmp_path):
     """The prompt is most of a short chat's window, and all of an empty one's."""
-    from opalatex.memgpt_runtime import (
+    from gilzabots.memgpt_runtime import (
         chat_orchestrator_system_prompt, derive_context_usage_from_state,
     )
 
@@ -277,8 +277,8 @@ def test_rendering_the_system_prompt_does_not_rescope_the_global_tools(tmp_path)
     prompt renderer must not, or opening a chat while another project's turn is
     running would send that turn's writes to the wrong directory.
     """
-    from opalatex import tools
-    from opalatex.memgpt_runtime import chat_orchestrator_system_prompt
+    from gilzabots import tools
+    from gilzabots.memgpt_runtime import chat_orchestrator_system_prompt
 
     store, project = _store_with_project(tmp_path)
     before = tools.get_project_path()
@@ -291,7 +291,7 @@ def test_rendering_the_system_prompt_does_not_rescope_the_global_tools(tmp_path)
 @pytest.mark.asyncio
 async def test_a_real_measurement_wins_over_the_derived_count(tmp_path, monkeypatch):
     """Ranking: provider measurement first, derived count only as the last resort."""
-    from opalatex.ide_server import _chat_context_usage
+    from gilzabots.ide_server import _chat_context_usage
 
     store, project = _store_with_project(tmp_path)
     chat_id = project.current_chat_id
@@ -308,7 +308,7 @@ async def test_a_real_measurement_wins_over_the_derived_count(tmp_path, monkeypa
 
 
 def test_a_turn_without_a_measurement_keeps_the_previous_one(tmp_path, monkeypatch):
-    from opalatex import agent_stdin
+    from gilzabots import agent_stdin
 
     store, project = _store_with_project(tmp_path)
     chat_id = project.current_chat_id

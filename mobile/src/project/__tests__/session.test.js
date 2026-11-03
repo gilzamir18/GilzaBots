@@ -27,9 +27,9 @@ function exportDoc(extra = {}) {
 
 function setup() {
   const fake = createFakeDrive();
-  const container = fake.folder('OpalaTex');
+  const container = fake.folder('GilzaBots');
   const root = fake.folder('thesis', container);
-  fake.write('.opalatex/session/chats.json', JSON.stringify(exportDoc()), root);
+  fake.write('.gilzabots/session/chats.json', JSON.stringify(exportDoc()), root);
   fake.write('main.tex', '\\section{Intro}\nHello', root);
   const drive = createDriveClient({ getToken: goodToken(), fetchImpl: fake.fetchImpl, sleep: async () => {} });
   const kv = createMemoryKv();
@@ -67,8 +67,8 @@ test('a turn lands in the journal on Drive, in the desktop format', async () => 
     tools: createTools(session.workspace), approve: async () => true, today: '2026-10-19', device,
   });
   assert.equal(result.uploaded, true);
-  const journal = JSON.parse(fake.read('.opalatex/session/devices/dev-1.json', root));
-  assert.equal(journal.kind, 'opalatex.device-journal');
+  const journal = JSON.parse(fake.read('.gilzabots/session/devices/dev-1.json', root));
+  assert.equal(journal.kind, 'gilzabots.device-journal');
   assert.equal(journal.project, 'thesis_db');
   assert.deepEqual(journal.messages.map((m) => [m.role, m.content]), [
     ['user', 'What does the intro say?'], ['assistant', 'The intro says Hello.'],
@@ -89,7 +89,7 @@ test('a new chat travels in the journal with its identity', async () => {
     session, chat: null, text: 'Start a new topic here please', complete: scripted([{ content: 'Sure.' }]),
     tools: [], approve: async () => true, today: '2026-10-19', device,
   });
-  const journal = JSON.parse(fake.read('.opalatex/session/devices/dev-1.json', root));
+  const journal = JSON.parse(fake.read('.gilzabots/session/devices/dev-1.json', root));
   assert.equal(journal.chats.length, 1);
   assert.equal(journal.chats[0].name, 'Start a new topic here please');
   assert.ok(journal.messages.every((m) => m.chat_id === journal.chats[0].id));
@@ -100,17 +100,17 @@ test('once a desktop folds the journal in, the journal shrinks and nothing doubl
   await session.pull();
   const [chat] = (await session.conversation()).chats;
   await runChatTurn({ session, chat, text: 'phone q', complete: scripted([{ content: 'phone a' }]), tools: [], approve: async () => true, today: 't', device });
-  const journal = JSON.parse(fake.read('.opalatex/session/devices/dev-1.json', root));
+  const journal = JSON.parse(fake.read('.gilzabots/session/devices/dev-1.json', root));
   // The desktop merges the journal and republishes the union.
   const folded = exportDoc();
   folded.messages.push(...journal.messages.map((m) => ({ ...m, deleted_at: '', superseded_by: '' })));
   folded.activity.push(...journal.activity.map((a) => ({ ...a, deleted_at: '' })));
-  fake.write('.opalatex/session/chats.json', JSON.stringify(folded), root);
+  fake.write('.gilzabots/session/chats.json', JSON.stringify(folded), root);
 
   const { chats } = await session.pull();
   assert.deepEqual(chats[0].messages.map((m) => m.content), ['desktop question', 'desktop answer', 'phone q', 'phone a']);
   await session.push();
-  const after = JSON.parse(fake.read('.opalatex/session/devices/dev-1.json', root));
+  const after = JSON.parse(fake.read('.gilzabots/session/devices/dev-1.json', root));
   assert.deepEqual(after.messages, []);
   assert.deepEqual(after.activity, []);
 });
@@ -126,18 +126,18 @@ test('offline, the turn is kept and uploaded on the next push', async () => {
   fake.failures.length = 0;
   await session.push();
   assert.equal(await session.pendingUpload(), false);
-  const journal = JSON.parse(fake.read('.opalatex/session/devices/dev-1.json', root));
+  const journal = JSON.parse(fake.read('.gilzabots/session/devices/dev-1.json', root));
   assert.deepEqual(journal.messages.map((m) => m.content), ['offline q', 'offline a']);
 });
 
 test('other devices\' journals are shown, a foreign file is not', async () => {
   const { fake, root, session } = setup();
-  fake.write('.opalatex/session/devices/tablet.json', JSON.stringify({
-    kind: 'opalatex.device-journal', version: 1, device: { id: 'tablet' }, chats: [],
+  fake.write('.gilzabots/session/devices/tablet.json', JSON.stringify({
+    kind: 'gilzabots.device-journal', version: 1, device: { id: 'tablet' }, chats: [],
     messages: [{ chat_id: 'main_thesis_db', timestamp: '2026-10-19T10:00:03.000000+00:00', role: 'user', content: 'from the tablet', client_message_id: 't1', attachments: '[]' }],
     activity: [],
   }), root);
-  fake.write('.opalatex/session/devices/notes.json', JSON.stringify({ hello: 1 }), root);
+  fake.write('.gilzabots/session/devices/notes.json', JSON.stringify({ hello: 1 }), root);
   const { chats } = await session.pull();
   assert.deepEqual(chats[0].messages.map((m) => [m.content, m.origin]).at(-1), ['from the tablet', 'other-device']);
 });
@@ -221,7 +221,7 @@ test('a failed turn can be tried again without asking the question twice', async
   assert.deepEqual(requests[0].slice(1), [
     ['user', 'desktop question'], ['assistant', 'desktop answer'], ['user', 'phone q'],
   ]);
-  const journal = JSON.parse(fake.read('.opalatex/session/devices/dev-1.json', root));
+  const journal = JSON.parse(fake.read('.gilzabots/session/devices/dev-1.json', root));
   assert.deepEqual(journal.messages.map((m) => [m.role, m.content]), [['user', 'phone q'], ['assistant', 'phone a']]);
 });
 
@@ -257,7 +257,7 @@ test('a branch copies the conversation into a new chat and leaves the source alo
   assert.deepEqual(original.messages.map((m) => m.content), ['desktop question', 'desktop answer', 'phone q', 'a wrong answer']);
   assert.equal(original.messages.at(-1).thoughts, 'weigh it');
 
-  const journal = JSON.parse(fake.read('.opalatex/session/devices/dev-1.json', root));
+  const journal = JSON.parse(fake.read('.gilzabots/session/devices/dev-1.json', root));
   assert.deepEqual(journal.chats.map((c) => c.name), ['Main Chat (branch)']);
   const copies = journal.messages.filter((m) => m.chat_id === branch.id);
   assert.deepEqual(copies.slice(0, 3).map((m) => m.timestamp), source.messages.slice(0, 3).map((m) => m.timestamp));

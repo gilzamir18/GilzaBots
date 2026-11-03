@@ -1,4 +1,5 @@
-/* VSCode Color Palette & Design System */
+/* GilzaBots design system: indigo-violet palette on VS Code token names.
+   Dark is :root, light is .light-theme; every text pair is AA (>= 4.5:1). */
 :root {
   /* Tells the native webview renderer (WebKitGTK/QtWebEngine) which palette
      to use for unstyled native chrome (checkboxes, scrollbars, form-control
@@ -25,44 +26,44 @@
   --space-5: 20px;
   --space-6: 24px;
   --space-8: 32px;
-  --radius-sm: 3px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
   /* One gutter shared by a dialog's title bar, tab strip, body and footer, so
      every band lines up on the same vertical rule instead of each drifting to
      whatever its own markup happened to set. */
   --modal-gutter: 20px;
   --modal-band-padding: 14px;
   --modal-body-padding: 20px;
-  --vscode-bg: #1e1e1e;
-  --vscode-sidebar-bg: #252526;
-  --vscode-activitybar-bg: #333333;
-  --vscode-editor-bg: #1e1e1e;
-  --vscode-panel-bg: #1e1e1e;
+  --vscode-bg: #0f1117;
+  --vscode-sidebar-bg: #151821;
+  --vscode-activitybar-bg: #0c0e13;
+  --vscode-editor-bg: #11141b;
+  --vscode-panel-bg: #11141b;
   /* Backdrop behind the rendered PDF pages. Kept separate from
      --vscode-editor-bg so the (always white) pages stay visually
      detached from the canvas in both themes. */
-  --pdf-viewer-bg: #1e1e1e;
-  --vscode-statusbar-bg: #007acc;
+  --pdf-viewer-bg: #0b0d12;
+  --vscode-statusbar-bg: #5847d6;
   --vscode-statusbar-fg: #ffffff;
-  --vscode-text-fg: #cccccc;
-  --vscode-text-light: #ffffff;
-  --vscode-descriptionForeground: #858585;
-  --vscode-border: #3c3c3c;
-  --vscode-active-item: #37373d;
-  --vscode-hover-item: #2a2d2e;
+  --vscode-text-fg: #dcdfe8;
+  --vscode-text-light: #f5f6fa;
+  --vscode-descriptionForeground: #8b90a0;
+  --vscode-border: #262b38;
+  --vscode-active-item: #262a3b;
+  --vscode-hover-item: #1c202b;
   --vscode-list-hoverBg: rgba(255, 255, 255, 0.04);
-  --vscode-active-border: #007acc;
-  --vscode-input-bg: #2d2d2d;
-  --vscode-input-fg: #cccccc;
-  --vscode-input-border: #3c3c3c;
-  --vscode-button-bg: #0e639c;
-  --vscode-button-hover: #1177bb;
-  --vscode-tab-active-bg: #1e1e1e;
-  --vscode-tab-inactive-bg: #2d2d2d;
-  --vscode-terminal-bg: #1e1e1e;
-  --vscode-accent: #007acc;
-  --vscode-list-activeSelectionBg: #094771;
+  --vscode-active-border: #8b7cf6;
+  --vscode-input-bg: #191c26;
+  --vscode-input-fg: #dcdfe8;
+  --vscode-input-border: #2c3140;
+  --vscode-button-bg: #6656e0;
+  --vscode-button-hover: #7565ec;
+  --vscode-tab-active-bg: #11141b;
+  --vscode-tab-inactive-bg: #151821;
+  --vscode-terminal-bg: #11141b;
+  --vscode-accent: #8b7cf6;
+  --vscode-list-activeSelectionBg: #2f2a66;
   --vscode-list-activeSelectionFg: #ffffff;
   /* Secondary text (paths, hints) drawn on top of an active selection, and
      the hairline between rows in a dropdown. Both used to be hardcoded white
@@ -70,18 +71,18 @@
      selection band. */
   --vscode-list-activeSelectionDescriptionFg: rgba(255, 255, 255, 0.7);
   --vscode-list-separator: rgba(255, 255, 255, 0.03);
-  --vscode-errorForeground: #f48771;
-  --vscode-errorBackground: rgba(244, 135, 113, 0.08);
+  --vscode-errorForeground: #f87171;
+  --vscode-errorBackground: rgba(248, 113, 113, 0.08);
   --vscode-editorOverlay: rgba(0, 0, 0, 0.5);
   
   /* Markdown blocks */
-  --editor-bg: #1e1e1e;
-  --titlebar-bg: #1a1a1a;
-  --border-color: #3c3c3c;
-  --vscode-textPreformat-foreground: #d7ba7d;
-  --vscode-widget-border: #3c3c3c;
-  --chat-text: #cccccc;
-  --chat-muted: #8a8a8a;
+  --editor-bg: #11141b;
+  --titlebar-bg: #0c0e13;
+  --border-color: #262b38;
+  --vscode-textPreformat-foreground: #e5c07b;
+  --vscode-widget-border: #262b38;
+  --chat-text: #dcdfe8;
+  --chat-muted: #8b90a0;
   
   /* Battery colors */
   --battery-good: #4ade80;
@@ -93,16 +94,16 @@
   --diff-bg-added: rgba(115, 201, 145, 0.12);
   --diff-text-removed: #f48771;
   --diff-bg-removed: rgba(244, 135, 113, 0.12);
-  --diff-text-meta: #9cdcfe;
+  --diff-text-meta: #a5b4fc;
   --diff-text-header: #808080;
-  --diff-text-default: #cccccc;
+  --diff-text-default: #dcdfe8;
 
   /* Text selection (native ::selection highlight) */
-  --vscode-selection-bg: #264f78;
+  --vscode-selection-bg: #3a3480;
   --vscode-selection-fg: #ffffff;
   /* PDF text-layer selection: translucent, so the rendered page glyphs
      underneath the invisible text layer stay readable while selected. */
-  --pdf-selection-bg: rgba(64, 132, 204, 0.30);
+  --pdf-selection-bg: rgba(139, 124, 246, 0.30);
 
   /* ── Semantic foreground accents ─────────────────────────────────────────
      The dark values are the literals components used to hardcode inline. Each
@@ -111,10 +112,10 @@
      land between 1.5:1 and 2.9:1 there, which is why hardcoding them made
      text vanish in the light theme.
      ─────────────────────────────────────────────────────────────────────── */
-  --vscode-text-subtle: #a0a0a0;
-  --vscode-text-muted: #808080;
-  --vscode-fg-info: #9cdcfe;
-  --vscode-fg-link: #4daafc;
+  --vscode-text-subtle: #a3a8b8;
+  --vscode-text-muted: #858a9a;
+  --vscode-fg-info: #a5b4fc;
+  --vscode-fg-link: #a99dfb;
   --vscode-fg-success: #4ade80;
   --vscode-fg-warning: #facc15;
   --vscode-fg-gold: #e2b52b;
@@ -166,63 +167,62 @@
 }
 
 /* ─── Light Theme ──────────────────────────────────────────────────────────
-   Palette inspired by VS Code Light+ with improved contrast throughout.
+   GilzaBots indigo-violet palette, light counterpart of the dark tokens.
    Main surfaces:
-     page bg        #f5f5f5
-     sidebar        #ebebeb
+     page bg        #f7f8fb
+     sidebar        #eef0f6
      editor         #ffffff
-     panel          #f5f5f5
+     panel          #f3f4f8
    Text:
-     primary        #1e1e1e   (near-black, high contrast)
-     secondary      #555555
-     muted          #767676   (AA-compliant on white)
+     primary        #171a23   (17.4:1 on white)
+     secondary      #5d6375   (6.0:1 on white, 5.3:1 on the sidebar)
    Accent:
-     blue           #005fb8   (primary interactive)
-     blue-hover     #0047a0
+     violet         #5847d6   (primary interactive, 6.4:1 on white)
+     violet-hover   #4636c4
    ─────────────────────────────────────────────────────────────────────── */
 .light-theme {
   color-scheme: light;
-  --vscode-bg: #f5f5f5;
-  --vscode-sidebar-bg: #ebebeb;
-  --vscode-activitybar-bg: #e8e8e8;
+  --vscode-bg: #f7f8fb;
+  --vscode-sidebar-bg: #eef0f6;
+  --vscode-activitybar-bg: #e7e9f1;
   --vscode-editor-bg: #ffffff;
-  --vscode-panel-bg: #f0f0f0;
-  --pdf-viewer-bg: #e6e6e9;
-  --vscode-statusbar-bg: #005fb8;
+  --vscode-panel-bg: #f3f4f8;
+  --pdf-viewer-bg: #e4e6ee;
+  --vscode-statusbar-bg: #5847d6;
   --vscode-statusbar-fg: #ffffff;
-  --vscode-text-fg: #1e1e1e;
-  --vscode-text-light: #1e1e1e;
-  --vscode-descriptionForeground: #666666;
-  --vscode-border: #c8c8c8;
-  --vscode-active-item: #d4e4f7;
-  --vscode-hover-item: #e3ecf7;
-  --vscode-list-hoverBg: #e3ecf7;
-  --vscode-active-border: #005fb8;
+  --vscode-text-fg: #171a23;
+  --vscode-text-light: #171a23;
+  --vscode-descriptionForeground: #5d6375;
+  --vscode-border: #dde1ea;
+  --vscode-active-item: #e6e2fd;
+  --vscode-hover-item: #f0eefe;
+  --vscode-list-hoverBg: #f0eefe;
+  --vscode-active-border: #5847d6;
   --vscode-input-bg: #ffffff;
-  --vscode-input-fg: #1e1e1e;
-  --vscode-input-border: #b8b8b8;
-  --vscode-button-bg: #005fb8;
-  --vscode-button-hover: #0047a0;
+  --vscode-input-fg: #171a23;
+  --vscode-input-border: #c9cedb;
+  --vscode-button-bg: #5847d6;
+  --vscode-button-hover: #4636c4;
   --vscode-tab-active-bg: #ffffff;
-  --vscode-tab-inactive-bg: #ebebeb;
+  --vscode-tab-inactive-bg: #eef0f6;
   --vscode-terminal-bg: #ffffff;
-  --vscode-accent: #005fb8;
-  --vscode-list-activeSelectionBg: #cce4f7;
-  --vscode-list-activeSelectionFg: #003a80;
-  --vscode-list-activeSelectionDescriptionFg: rgba(0, 58, 128, 0.82);
+  --vscode-accent: #5847d6;
+  --vscode-list-activeSelectionBg: #e6e2fd;
+  --vscode-list-activeSelectionFg: #2e2391;
+  --vscode-list-activeSelectionDescriptionFg: rgba(46, 35, 145, 0.82);
   --vscode-list-separator: rgba(0, 0, 0, 0.06);
   --vscode-errorForeground: #b42318;
   --vscode-errorBackground: rgba(180, 35, 24, 0.07);
   --vscode-editorOverlay: rgba(255, 255, 255, 0.72);
 
   /* Markdown blocks */
-  --editor-bg: #f5f5f5;
-  --titlebar-bg: #e0e0e0;
-  --border-color: #c8c8c8;
-  --vscode-textPreformat-foreground: #1a3a6b;
-  --vscode-widget-border: #c8c8c8;
-  --chat-text: #1e1e1e;
-  --chat-muted: #555555;
+  --editor-bg: #f7f8fb;
+  --titlebar-bg: #e9ebf2;
+  --border-color: #dde1ea;
+  --vscode-textPreformat-foreground: #3b2f9e;
+  --vscode-widget-border: #dde1ea;
+  --chat-text: #171a23;
+  --chat-muted: #5d6375;
 
   /* Battery colors */
   --battery-good: #059669;
@@ -234,21 +234,21 @@
   --diff-bg-added: rgba(46, 160, 67, 0.12);
   --diff-text-removed: #d1242f;
   --diff-bg-removed: rgba(248, 81, 73, 0.12);
-  --diff-text-meta: #005fb8;
+  --diff-text-meta: #5847d6;
   --diff-text-header: #6a737d;
-  --diff-text-default: #1e1e1e;
+  --diff-text-default: #171a23;
 
   /* Text selection (native ::selection highlight) */
-  --vscode-selection-bg: #add6ff;
-  --vscode-selection-fg: #1e1e1e;
-  --pdf-selection-bg: rgba(0, 95, 184, 0.26);
+  --vscode-selection-bg: #d9d3fc;
+  --vscode-selection-fg: #171a23;
+  --pdf-selection-bg: rgba(88, 71, 214, 0.24);
 
   /* Semantic foreground accents — darkened counterparts of the dark-theme
      hues, all at or above 4.5:1 on #ffffff and 3:1 on #ebebeb. */
-  --vscode-text-subtle: #5f6570;
-  --vscode-text-muted: #6a6a6a;
+  --vscode-text-subtle: #5a6070;
+  --vscode-text-muted: #636979;
   --vscode-fg-info: #0a5aa0;
-  --vscode-fg-link: #005fb8;
+  --vscode-fg-link: #5847d6;
   --vscode-fg-success: #137a3c;
   --vscode-fg-warning: #8a6100;
   --vscode-fg-gold: #8a6100;
@@ -323,7 +323,7 @@
 
 /* Tree nodes */
 .light-theme .vscode-tree-node {
-  color: #2d2d2d;
+  color: var(--vscode-text-fg);
 }
 .light-theme .vscode-tree-node:hover {
   background-color: var(--vscode-hover-item);
@@ -341,14 +341,14 @@
   color: #555555 !important;
 }
 .light-theme .vscode-tab.active span {
-  color: #1e1e1e !important;
+  color: var(--vscode-text-fg) !important;
 }
 .light-theme .vscode-tab-close-btn {
   color: #666666;
 }
 .light-theme .vscode-tab-close-btn:hover {
-  background-color: #c8c8c8;
-  color: #1e1e1e;
+  background-color: var(--vscode-border);
+  color: var(--vscode-text-fg);
 }
 
 /* Sidebar title / section labels */
@@ -361,7 +361,7 @@
 
 /* Project items */
 .light-theme .vscode-project-item {
-  color: #2d2d2d;
+  color: var(--vscode-text-fg);
 }
 .light-theme .vscode-project-item:hover {
   background-color: var(--vscode-hover-item);
@@ -377,29 +377,29 @@
   color: #555555;
 }
 .light-theme .vscode-bottom-tab.active {
-  color: #1e1e1e;
+  color: var(--vscode-text-fg);
   border-bottom-color: var(--vscode-active-border);
 }
 
 /* Bottom panel logs */
 .light-theme .vscode-logs {
   background-color: #ffffff;
-  color: #1e1e1e;
+  color: var(--vscode-text-fg);
 }
 
 /* Chat panel */
 .light-theme .vscode-chat {
   background-color: #f0f0f0;
-  border-left-color: #c8c8c8;
+  border-left-color: var(--vscode-border);
 }
 .light-theme .vscode-chat-header {
-  background-color: #ebebeb;
+  background-color: var(--vscode-sidebar-bg);
 }
 .light-theme .vscode-chat-history {
-  background-color: #f5f5f5;
+  background-color: var(--vscode-bg);
 }
 .light-theme .vscode-chat-msg-content {
-  color: #1e1e1e;
+  color: var(--vscode-text-fg);
   border-left-color: #b0b8c8;
 }
 
@@ -410,7 +410,7 @@
 
 /* Chat themed text utility classes — light overrides */
 .light-theme .chat-text-primary {
-  color: #1e1e1e !important;
+  color: var(--vscode-text-fg) !important;
 }
 .light-theme .chat-text-secondary {
   color: #444444 !important;
@@ -421,18 +421,18 @@
 }
 /* Chat header color classes — light overrides */
 .light-theme .chat-header-user {
-  color: #0047a0 !important;
+  color: var(--vscode-button-hover) !important;
 }
 .light-theme .chat-header-agent {
   color: #6f3fa8 !important;
 }
 .light-theme .vscode-chat-form {
-  background-color: #ebebeb;
-  border-top-color: #c8c8c8;
+  background-color: var(--vscode-sidebar-bg);
+  border-top-color: var(--vscode-border);
 }
 .light-theme .vscode-chat-toolbar {
-  background-color: #f5f5f5;
-  border-bottom-color: #c8c8c8;
+  background-color: var(--vscode-bg);
+  border-bottom-color: var(--vscode-border);
 }
 .light-theme .vscode-chat-tool-btn {
   color: #444444;
@@ -449,10 +449,10 @@
   box-shadow: 0 4px 16px rgba(0,0,0,0.18);
 }
 .light-theme .vscode-context-menu-item {
-  color: #1e1e1e;
+  color: var(--vscode-text-fg);
 }
 .light-theme .vscode-context-menu-item:hover {
-  background-color: #005fb8;
+  background-color: var(--vscode-accent);
   color: #ffffff;
 }
 
@@ -476,7 +476,7 @@
   color: #444444;
 }
 .light-theme .vscode-bottom-panel-clear-btn:hover {
-  background-color: rgba(0, 95, 184, 0.1);
+  background-color: rgba(88, 71, 214, 0.1);
   color: #003a80;
 }
 
@@ -486,7 +486,7 @@
 }
 .light-theme .vscode-activitybar-btn.active,
 .light-theme .vscode-activitybar-btn:hover {
-  color: #1e1e1e;
+  color: var(--vscode-text-fg);
 }
 
 /* Input/select inside light theme */
@@ -495,12 +495,12 @@
 .light-theme textarea {
   background-color: #ffffff;
   border-color: #bdbdbd;
-  color: #1e1e1e;
+  color: var(--vscode-text-fg);
 }
 .light-theme input:focus,
 .light-theme select:focus,
 .light-theme textarea:focus {
-  border-color: #005fb8;
+  border-color: var(--vscode-accent);
 }
 
 /* Source control */
@@ -1016,7 +1016,7 @@ input:focus, select:focus, textarea:focus {
   gap: 6px;
   padding: 4px 8px;
   cursor: pointer;
-  color: #cccccc;
+  color: var(--vscode-text-fg);
   font-size: 13px;
 }
 
@@ -1054,7 +1054,7 @@ input:focus, select:focus, textarea:focus {
 .vscode-tabs {
   height: 35px;
   background-color: var(--vscode-tab-inactive-bg);
-  border-bottom: 1px solid #252526;
+  border-bottom: 1px solid var(--vscode-border);
   display: flex;
   align-items: center;
   min-width: 0;
@@ -1081,7 +1081,7 @@ input:focus, select:focus, textarea:focus {
   display: flex;
   align-items: center;
   gap: 8px;
-  border-right: 1px solid #252526;
+  border-right: 1px solid var(--vscode-border);
   min-width: 0;
 }
 
@@ -1105,7 +1105,7 @@ input:focus, select:focus, textarea:focus {
   gap: 3px;
   height: 100%;
   padding: 0 5px;
-  border-left: 1px solid #252526;
+  border-left: 1px solid var(--vscode-border);
   background-color: var(--vscode-tab-inactive-bg);
   white-space: nowrap;
 }
@@ -1168,7 +1168,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .vscode-tab-close-btn:hover {
-  background-color: #3c3c3c;
+  background-color: var(--vscode-active-item);
   color: #ffffff;
   border-radius: 50%;
 }
@@ -1727,13 +1727,13 @@ input:focus, select:focus, textarea:focus {
 
 /* ── Chat themed text utility classes (used by formatMessage.jsx) ──────── */
 .chat-text-primary {
-  color: #cccccc;   /* dark theme default */
+  color: var(--vscode-text-fg);   /* dark theme default */
 }
 .chat-text-secondary {
-  color: #cccccc;
+  color: var(--vscode-text-fg);
 }
 .chat-inline-code {
-  background: #2d2d2d;
+  background: var(--vscode-input-bg);
   color: #f8f8f2;
 }
 
@@ -2399,7 +2399,7 @@ input:focus, select:focus, textarea:focus {
 /* Resizer split drag lines */
 .vscode-resizer-horizontal {
   width: 4px;
-  background-color: #252526;
+  background-color: var(--vscode-sidebar-bg);
   cursor: col-resize;
   flex-shrink: 0;
   transition: background-color 0.2s ease;
@@ -2417,7 +2417,7 @@ input:focus, select:focus, textarea:focus {
 
 .vscode-resizer-vertical {
   height: 4px;
-  background-color: #252526;
+  background-color: var(--vscode-sidebar-bg);
   cursor: row-resize;
   flex-shrink: 0;
   transition: background-color 0.2s ease;
@@ -2451,13 +2451,13 @@ input:focus, select:focus, textarea:focus {
   gap: 8px;
   padding: 6px 12px;
   font-size: 12px;
-  color: #cccccc;
+  color: var(--vscode-text-fg);
   cursor: pointer;
   user-select: none;
 }
 
 .vscode-context-menu-item:hover {
-  background-color: #007acc;
+  background-color: var(--vscode-button-bg);
   color: #ffffff;
 }
 
@@ -3018,7 +3018,7 @@ input:focus, select:focus, textarea:focus {
 }
 
 .speech-voice-row:last-child { border-bottom: none; }
-.speech-voice-row.is-selected { background-color: var(--vscode-list-active-bg, rgba(0, 122, 204, 0.18)); }
+.speech-voice-row.is-selected { background-color: var(--vscode-list-active-bg, rgba(124, 108, 242, 0.18)); }
 
 .speech-voice-label {
   display: flex;
@@ -3777,7 +3777,7 @@ input:focus, select:focus, textarea:focus {
   white-space: nowrap;
 }
 
-/* On the light canvas --vscode-border (#c8c8c8) nearly vanishes, so the
+/* On the light canvas --vscode-border (var(--vscode-border)) nearly vanishes, so the
    divider rules and label get their own higher-contrast light values. */
 .light-theme .pdf-page-divider {
   color: #5a5a60;
@@ -3797,7 +3797,7 @@ input:focus, select:focus, textarea:focus {
   justify-content: center;
   padding: 24px;
   background:
-    linear-gradient(135deg, rgba(0, 122, 204, 0.16), rgba(0, 0, 0, 0.12)),
+    linear-gradient(135deg, rgba(124, 108, 242, 0.16), rgba(0, 0, 0, 0.12)),
     var(--vscode-editorOverlay);
   backdrop-filter: blur(2px);
   pointer-events: none;
@@ -4118,14 +4118,14 @@ select {
   position: fixed;
   z-index: 10000;
   min-width: 200px;
-  background: #252526;
-  border: 1px solid #454545;
+  background: var(--vscode-sidebar-bg);
+  border: 1px solid var(--vscode-border);
   border-radius: 5px;
   padding: 4px 0;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 13px;
-  color: #cccccc;
+  color: var(--vscode-text-fg);
 }
 
 .editor-ctx-item {
@@ -4136,7 +4136,7 @@ select {
   padding: 4px 24px;
   border: none;
   background: transparent;
-  color: #cccccc;
+  color: var(--vscode-text-fg);
   cursor: pointer;
   text-align: left;
   font-size: 13px;
@@ -4171,21 +4171,21 @@ select {
 .editor-ctx-separator {
   height: 1px;
   margin: 4px 8px;
-  background: #454545;
+  background: var(--vscode-border);
 }
 
 /* Light theme overrides */
 [data-theme="light"] .editor-ctx-menu,
 .light-theme .editor-ctx-menu {
-  background: #f3f3f3;
-  border-color: #c8c8c8;
+  background: var(--vscode-panel-bg);
+  border-color: var(--vscode-border);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16);
-  color: #1e1e1e;
+  color: var(--vscode-text-fg);
 }
 
 [data-theme="light"] .editor-ctx-item,
 .light-theme .editor-ctx-item {
-  color: #1e1e1e;
+  color: var(--vscode-text-fg);
 }
 
 [data-theme="light"] .editor-ctx-item:hover:not(:disabled),
@@ -4201,7 +4201,7 @@ select {
 
 [data-theme="light"] .editor-ctx-separator,
 .light-theme .editor-ctx-separator {
-  background: #c8c8c8;
+  background: var(--vscode-border);
 }
 
 /* ── react-pdf annotation layer fixes ───────────────────────────────────────
@@ -4319,8 +4319,8 @@ select {
 
 .chat-msg-badge-step-running {
   color: var(--vscode-textLink-foreground, #3794ff);
-  background-color: rgba(0, 122, 204, 0.15);
-  border-color: rgba(0, 122, 204, 0.35);
+  background-color: rgba(124, 108, 242, 0.15);
+  border-color: rgba(124, 108, 242, 0.35);
   font-weight: 500;
 }
 
@@ -4388,9 +4388,9 @@ select {
 }
 
 .light-theme .chat-msg-badge-step-running {
-  color: #005fb8;
-  background-color: rgba(0, 102, 204, 0.12);
-  border-color: rgba(0, 102, 204, 0.35);
+  color: var(--vscode-accent);
+  background-color: rgba(88, 71, 214, 0.12);
+  border-color: rgba(88, 71, 214, 0.35);
 }
 
 .light-theme .chat-queue-strip {

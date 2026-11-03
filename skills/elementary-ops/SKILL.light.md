@@ -13,8 +13,8 @@ BLOCKED` naming it, never guess. Question not checkable → `ask_question` once.
 1. Rewrite the request as one yes/no or list question.
 2. Plan: operations from the catalog only, at most 12 steps named `s1`, `s2`...,
    ending with at least one `check`.
-3. `write_file` the plan to `.opalatex/ops/<short-name>.plan`.
-4. `run_python_script("<skill_dir>/scripts/ops.py", 'run ".opalatex/ops/<short-name>.plan"')`.
+3. `write_file` the plan to `.gilzabots/ops/<short-name>.plan`.
+4. `run_python_script("<skill_dir>/scripts/ops.py", 'run ".gilzabots/ops/<short-name>.plan"')`.
    `PLAN ERROR` → fix the named line; at most 2 corrections, then `BLOCKED`.
 5. Read `CHECKS` and `VERDICT`. For detail use the `show` command or the
    `diff_files` call printed after `DETAIL:`.

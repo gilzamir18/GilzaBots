@@ -1,6 +1,6 @@
-# OpalaTex Mobile (Android)
+# GilzaBots Mobile (Android)
 
-A companion app for OpalaTex: open the projects your desktop mirrors to Google
+A companion app for GilzaBots: open the projects your desktop mirrors to Google
 Drive, read their files, and continue their conversations — with an agent that
 can read, search and, after you approve each change, edit the project's files.
 What you do on the phone reaches the desktop through the same Drive folder.
@@ -14,13 +14,13 @@ architecture: §2.21 of [PROJECT_DESIGN.md](../PROJECT_DESIGN.md).
 The app has no client id in its code. Google recognises it by package name and
 signing certificate, so register an **Android** OAuth client **in the same
 Google Cloud project as the desktop's bundled client** (the one whose id the
-release pipeline injects as `OPALATEX_GDRIVE_CLIENT_ID`). `drive.file` access
-belongs to the Cloud project: a client in any other project sees no OpalaTex
+release pipeline injects as `GILZABOTS_GDRIVE_CLIENT_ID`). `drive.file` access
+belongs to the Cloud project: a client in any other project sees no GilzaBots
 folders at all.
 
 1. Google Cloud console → the desktop's project → APIs & Services → Credentials
    → Create credentials → OAuth client ID → **Android**.
-2. Package name: `com.opalacoder.opalatex`.
+2. Package name: `io.github.gilzamir18.gilzabots`.
 3. SHA-1 of the signing certificate. One client per certificate:
    - debug builds: `keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android`
    - releases: the SHA-1 of the release keystore held in the CI secrets.
@@ -45,8 +45,8 @@ Install the debug APK with `adb install -r android/app/build/outputs/apk/debug/a
 or copy it to the phone and open it (allow installs from that source).
 
 A release (`npm run android:release`) is signed only when
-`OPALATEX_ANDROID_KEYSTORE`, `OPALATEX_ANDROID_KEYSTORE_PASSWORD`,
-`OPALATEX_ANDROID_KEY_ALIAS` and `OPALATEX_ANDROID_KEY_PASSWORD` are set;
+`GILZABOTS_ANDROID_KEYSTORE`, `GILZABOTS_ANDROID_KEYSTORE_PASSWORD`,
+`GILZABOTS_ANDROID_KEY_ALIAS` and `GILZABOTS_ANDROID_KEY_PASSWORD` are set;
 otherwise Gradle produces `app-release-unsigned.apk`. CI
 (`.github/workflows/android.yml`) builds every change under `mobile/` and
 publishes a signed APK and AAB for tags `mobile-v*`.
@@ -90,6 +90,6 @@ src/drive/      Drive REST client, token handling
 src/project/    journal + export formats, row keys, sessions, turns, workspace cache
 src/platform/   native plugin bridge, transport, IndexedDB cache
 src/ui/         screens
-android/        Capacitor project; OpalaNativePlugin.java is the app's own plugin
+android/        Capacitor project; GilzaNativePlugin.java is the app's own plugin
 test/browser/   end-to-end check
 ```

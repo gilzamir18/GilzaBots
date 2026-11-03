@@ -1,28 +1,30 @@
-name: opalatex
-title: OpalaTex
+name: gilzabots
+title: GilzaBots
 version: "0.2.31"
-summary: AI-assisted LaTeX editor and project IDE
+summary: Free, open-source AI agent for your projects
 description: |
-  OpalaTex is a project-centric, AI-assisted LaTeX editor with a local
-  Python backend, a React desktop interface, Git integration, and document
-  export tools.
+  GilzaBots is a free AI agent that works inside your projects: it reads and
+  edits files, runs commands, searches the web, writes code and documents, and
+  keeps watch with background monitors. It ships with a desktop workspace
+  (editor, terminal, Git, Markdown/PDF/LaTeX tools) and a command-line
+  interface that runs the same agent.
 
-  OpalaTex is free and open source. AI features run through local Ollama
+  GilzaBots is free and open source. AI features run through local Ollama
   models or through third-party providers configured with your own API key.
 
 base: core24
 grade: stable
 confinement: strict
 license: MIT
-icon: AppIcons/OpalaTexArt1024.png
+icon: AppIcons/GilzaBotsArt1024.png
 website:
-  - https://www.opalacoder.com
+  - https://github.com/gilzamir18/GilzaBots
 source-code:
-  - https://github.com/opalacoderdev/OpalaTex
+  - https://github.com/gilzamir18/GilzaBots
 issues:
-  - https://github.com/opalacoderdev/OpalaTex/issues
+  - https://github.com/gilzamir18/GilzaBots/issues
 contact:
-  - dev@opalacoder.com
+  - https://github.com/gilzamir18/GilzaBots/issues
 compression: lzo
 
 lint:
@@ -57,10 +59,10 @@ layout:
     bind: $SNAP/usr/share/python-wheels
 
 apps:
-  opalatex:
-    command: bin/opalatex-launch
-    desktop: usr/share/applications/opalatex.desktop
-    common-id: com.opalacoder.OpalaTex
+  gilzabots:
+    command: bin/gilzabots-launch
+    desktop: usr/share/applications/gilzabots.desktop
+    common-id: io.github.gilzamir18.GilzaBots
     extensions:
       - gnome
     environment:
@@ -80,16 +82,16 @@ apps:
       - network
       - network-bind
       - removable-media
-  # The monitor daemon (opalatex/monitors/, PROJECT_DESIGN 2.24). A confined
+  # The monitor daemon (gilzabots/monitors/, PROJECT_DESIGN 2.24). A confined
   # snap can neither write ~/.config/systemd nor run systemctl, so the login
-  # start is snapd's own: the app writes opalatex-monitors.desktop into
+  # start is snapd's own: the app writes gilzabots-monitors.desktop into
   # $SNAP_USER_DATA/.config/autostart when "Start at login" is on, and the
   # session agent starts this app at the next login. Notifications go through
   # org.freedesktop.Notifications (the gnome extension's desktop plug) with
   # gdbus, staged from libglib2.0-bin below.
   monitors:
-    command: bin/opalatex-launch monitors daemon
-    autostart: opalatex-monitors.desktop
+    command: bin/gilzabots-launch monitors daemon
+    autostart: gilzabots-monitors.desktop
     extensions:
       - gnome
     environment:
@@ -103,7 +105,7 @@ apps:
       - removable-media
 
 parts:
-  opalatex:
+  gilzabots:
     plugin: nil
     source: .
     build-snaps:
@@ -147,7 +149,7 @@ parts:
       - libgl1
       - libgl1-mesa-dri
       - libglx0
-      # gdbus: desktop notifications and their click actions (opalatex/monitors/notify.py).
+      # gdbus: desktop notifications and their click actions (gilzabots/monitors/notify.py).
       - libglib2.0-bin
       - libgtk-3-0t64
       - libice6
@@ -209,7 +211,7 @@ parts:
       npm run build
       cd ..
 
-      test -f opalatex/gui/index.html
+      test -f gilzabots/gui/index.html
 
       python3 -m venv --copies "$CRAFT_PART_INSTALL"
       "$CRAFT_PART_INSTALL/bin/python" -m pip install --upgrade pip setuptools wheel
@@ -217,14 +219,14 @@ parts:
       # The snap ships whatever Qt pip resolved here; refuse one below the
       # verified floor or mixing Qt releases, as the release builds do.
       "$CRAFT_PART_INSTALL/bin/python" scripts/check_qt_runtime.py
-      "$CRAFT_PART_INSTALL/bin/python" -c "from opalatex.assetstore import list_assets; assets = list_assets('template'); assert len(assets) > 0, 'No templates found in assetstore'"
+      "$CRAFT_PART_INSTALL/bin/python" -c "from gilzabots.assetstore import list_assets; assets = list_assets('template'); assert len(assets) > 0, 'No templates found in assetstore'"
 
       # The Google OAuth client is .gitignore'd, so a packaging rule that drops
       # VCS-ignored files removes it without a word and the snap ships with Cloud
       # sync unable to connect at all. If the source tree has one, the installed
       # package must have it too.
-      if [ -f opalatex/cloud/providers/bundled_google_client.json ]; then
-        "$CRAFT_PART_INSTALL/bin/python" -c "import os, opalatex.cloud.providers as p; f = os.path.join(os.path.dirname(p.__file__), 'bundled_google_client.json'); assert os.path.isfile(f), 'The build dropped bundled_google_client.json: Cloud sync would ship unable to connect'"
+      if [ -f gilzabots/cloud/providers/bundled_google_client.json ]; then
+        "$CRAFT_PART_INSTALL/bin/python" -c "import os, gilzabots.cloud.providers as p; f = os.path.join(os.path.dirname(p.__file__), 'bundled_google_client.json'); assert os.path.isfile(f), 'The build dropped bundled_google_client.json: Cloud sync would ship unable to connect'"
       else
         echo "WARNING: no bundled_google_client.json in the source tree; this snap ships without a Google OAuth client and Cloud sync will not connect."
       fi
@@ -250,8 +252,8 @@ parts:
       rm docker.tgz
       chmod +x "$CRAFT_PART_INSTALL/bin/docker"
 
-      install -Dm755 snap/local/opalatex-launch "$CRAFT_PART_INSTALL/bin/opalatex-launch"
-      install -Dm644 snap/gui/opalatex.desktop "$CRAFT_PART_INSTALL/usr/share/applications/opalatex.desktop"
+      install -Dm755 snap/local/gilzabots-launch "$CRAFT_PART_INSTALL/bin/gilzabots-launch"
+      install -Dm644 snap/gui/gilzabots.desktop "$CRAFT_PART_INSTALL/usr/share/applications/gilzabots.desktop"
     override-prime: |
       set -eu
       craftctl default

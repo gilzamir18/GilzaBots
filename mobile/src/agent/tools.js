@@ -3,7 +3,7 @@
  *
  * Reading is free; anything that changes a file in Drive needs the user's
  * approval, shown with the exact change, the same contract the desktop applies
- * to its write tools. Nothing writes under `.opalatex/`, which holds the
+ * to its write tools. Nothing writes under `.gilzabots/`, which holds the
  * desktops' sync state and the conversation files.
  *
  * `workspace` is the project as files: see project/workspace.js.
@@ -23,8 +23,8 @@ export function normalizeProjectPath(path) {
 
 function assertWritable(path) {
   if (!path) throw new ToolInputError('A file path is required.');
-  if (path === '.opalatex' || path.startsWith('.opalatex/')) {
-    throw new ToolInputError('Files under .opalatex/ belong to OpalaTex itself and cannot be written.');
+  if (path === '.gilzabots' || path.startsWith('.gilzabots/')) {
+    throw new ToolInputError('Files under .gilzabots/ belong to GilzaBots itself and cannot be written.');
   }
 }
 

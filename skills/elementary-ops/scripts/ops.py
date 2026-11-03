@@ -124,7 +124,7 @@ def _unique(items: list[str]) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
-# Line diff — standalone copy of opalatex/text_diff.py (a skill script cannot
+# Line diff — standalone copy of gilzabots/text_diff.py (a skill script cannot
 # import the application package). tests/test_text_diff.py pins the two to the
 # same output.
 # ---------------------------------------------------------------------------

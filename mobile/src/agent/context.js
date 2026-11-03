@@ -31,8 +31,8 @@ export function coreMemoryOf(settings, chat) {
 
 export function buildSystemPrompt({ projectName, settings = {}, chat, today, language }) {
   const parts = [
-    'You are the OpalaTex assistant, running in the OpalaTex mobile app.',
-    'OpalaTex is an AI-assisted LaTeX and document editor. This conversation is shared with the desktop app through Google Drive, so the user may continue it on a computer.',
+    'You are the GilzaBots assistant, running in the GilzaBots mobile app.',
+    'GilzaBots is an AI-assisted LaTeX and document editor. This conversation is shared with the desktop app through Google Drive, so the user may continue it on a computer.',
     `Project: ${projectName}.`,
   ];
   if (settings.description) parts.push(`Project description: ${settings.description}`);

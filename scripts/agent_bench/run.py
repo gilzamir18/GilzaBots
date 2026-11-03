@@ -17,7 +17,7 @@ sessions database of its own (the user's sessions.db is never touched), sets
 it to `auto` mode, sends the prompt through the command-line front-end
 (`main.py -p`), and runs verify.py, which lives outside the copy so the agent
 cannot read or change it. The model catalog and API keys come from the user's
-normal OpalaTex home, so any registered model can be measured.
+normal GilzaBots home, so any registered model can be measured.
 
 Besides pass/fail it reports what the turn did, read from that database: tool
 calls and tool errors per tool. `--self-check` needs no model: it proves every
@@ -90,7 +90,7 @@ def fresh_copy(task: dict, base: str, with_solution: bool = False) -> str:
 
 def self_check(tasks: list[dict]) -> int:
     failures = 0
-    with tempfile.TemporaryDirectory(prefix="opalatex-bench-check-") as base:
+    with tempfile.TemporaryDirectory(prefix="gilzabots-bench-check-") as base:
         for task in tasks:
             missing = missing_requirements(task)
             if missing:
@@ -131,7 +131,7 @@ def turn_metrics(db_path: str) -> dict:
 
 def run_task(task: dict, model: str, base: str, timeout_override: int | None) -> dict:
     sys.path.insert(0, ROOT)
-    from opalatex.project import ProjectStore
+    from gilzabots.project import ProjectStore
 
     workdir = fresh_copy(task, base)
     db_path = os.path.join(base, task["id"], "sessions.db")
@@ -178,7 +178,7 @@ def main() -> int:
     if not args.model:
         parser.error("--model is required (or pass --self-check)")
 
-    base = tempfile.mkdtemp(prefix="opalatex-bench-")
+    base = tempfile.mkdtemp(prefix="gilzabots-bench-")
     results = []
     try:
         for task in tasks:

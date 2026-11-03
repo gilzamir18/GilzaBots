@@ -1,4 +1,4 @@
-from opalatex.latex_compiler import clean_latex_artifacts
+from gilzabots.latex_compiler import clean_latex_artifacts
 
 
 def test_clean_latex_artifacts_removes_generated_files_only(tmp_path):
@@ -6,7 +6,7 @@ def test_clean_latex_artifacts_removes_generated_files_only(tmp_path):
         "main.tex",
         "refs.bib",
         "figure.png",
-        ".opalatex/state.aux",
+        ".gilzabots/state.aux",
     ]
     remove_files = [
         "main.aux",
@@ -34,11 +34,11 @@ def test_clean_latex_artifacts_removes_generated_files_only(tmp_path):
 
 def test_clean_latex_artifacts_removes_partial_preview_files(tmp_path):
     partial_files = [
-        "opalatex_partial_ch1.tex",
-        "opalatex_partial_ch1.pdf",
-        "opalatex_partial_ch1.aux",
-        "opalatex_partial_ch1.bbl",
-        "opalatex_partial_ch1.synctex.gz",
+        "gilzabots_partial_ch1.tex",
+        "gilzabots_partial_ch1.pdf",
+        "gilzabots_partial_ch1.aux",
+        "gilzabots_partial_ch1.bbl",
+        "gilzabots_partial_ch1.synctex.gz",
     ]
     for rel_path in partial_files:
         (tmp_path / rel_path).write_text("generated", encoding="utf-8")

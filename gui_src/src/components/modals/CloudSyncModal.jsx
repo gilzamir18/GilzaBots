@@ -426,7 +426,7 @@ export default function CloudSyncModal({ activeProject, onClose, onWorkspaceChan
                     type="text"
                     className="vscode-settings-input"
                     value={settings.provider_config?.base_dir || ''}
-                    placeholder={t('cloudSync.baseDirPlaceholder', '/home/you/Drive/OpalaTex')}
+                    placeholder={t('cloudSync.baseDirPlaceholder', '/home/you/Drive/GilzaBots')}
                     onChange={(e) => setSettings({
                       ...settings,
                       provider_config: { ...settings.provider_config, base_dir: e.target.value },
@@ -547,7 +547,7 @@ export default function CloudSyncModal({ activeProject, onClose, onWorkspaceChan
             <>
               <Toggle
                 label={t('cloudSync.includeChats', 'Conversations and history')}
-                hint={t('cloudSync.includeChatsHint', 'Exported to .opalatex/session/chats.json and merged back on other machines.')}
+                hint={t('cloudSync.includeChatsHint', 'Exported to .gilzabots/session/chats.json and merged back on other machines.')}
                 checked={settings.include_chats}
                 onChange={(value) => saveSettings({ include_chats: value })}
               />
@@ -608,9 +608,9 @@ export default function CloudSyncModal({ activeProject, onClose, onWorkspaceChan
                       ? ''
                       : googleClient.configured
                       ? t('cloudSync.googleConnectHelp',
-                        'Connecting opens Google in your browser. OpalaTex only ever sees the folder it creates for your projects — it cannot read the rest of your Drive.')
+                        'Connecting opens Google in your browser. GilzaBots only ever sees the folder it creates for your projects — it cannot read the rest of your Drive.')
                       : t('cloudSync.googleClientHelp',
-                        'This build of OpalaTex ships no Google OAuth client, so you have to register one: create a "Desktop app" client in the Google Cloud console, enable the Google Drive API, and paste the credentials below.')}
+                        'This build of GilzaBots ships no Google OAuth client, so you have to register one: create a "Desktop app" client in the Google Cloud console, enable the Google Drive API, and paste the credentials below.')}
                   </p>
 
                   <button
@@ -637,7 +637,7 @@ export default function CloudSyncModal({ activeProject, onClose, onWorkspaceChan
                   {googleClient?.source === 'environment' && (
                     <span style={{ fontSize: '11px', color: 'var(--vscode-text-subtle)' }}>
                       {t('cloudSync.usingEnvClient',
-                        'Using the OAuth client from OPALATEX_GDRIVE_CLIENT_ID; it overrides anything set here.')}
+                        'Using the OAuth client from GILZABOTS_GDRIVE_CLIENT_ID; it overrides anything set here.')}
                     </span>
                   )}
 
@@ -686,7 +686,7 @@ export default function CloudSyncModal({ activeProject, onClose, onWorkspaceChan
                             onClick={useBundledClient}
                             disabled={busy === 'client'}
                           >
-                            {t('cloudSync.useBundledClient', 'Use the OpalaTex client')}
+                            {t('cloudSync.useBundledClient', 'Use the GilzaBots client')}
                           </button>
                         )}
                       </div>

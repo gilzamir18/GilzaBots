@@ -1,7 +1,7 @@
 // Carrying out the commands an agent sends to the IDE window.
 //
-// The backend publishes an `ide_command` event (opalatex/ide_control.py) and
-// waits for this window's answer, posted to /api/opalatex/ide_command_result.
+// The backend publishes an `ide_command` event (gilzabots/ide_control.py) and
+// waits for this window's answer, posted to /api/gilzabots/ide_command_result.
 // A command is performed with the same handlers a click uses, and the answer
 // carries the resulting tabs so the agent's view of the window stays true.
 //

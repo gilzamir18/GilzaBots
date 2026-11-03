@@ -1,6 +1,6 @@
 # Diagrama de Testes de Regressão
 
-Este documento ilustra a cobertura necessária de testes de regressão para garantir a estabilidade e integridade dos módulos e comunicações entre o **OpalaTex** (cliente) e o **OpalaWebPage** (servidor).
+Este documento ilustra a cobertura necessária de testes de regressão para garantir a estabilidade e integridade dos módulos e comunicações entre o **GilzaBots** (cliente) e o **OpalaWebPage** (servidor).
 
 > [!NOTE]
 > O diagrama foi expandido e atualizado a partir da análise da base de código atual, englobando não só a documentação inicial, mas todos os módulos presentes no projeto (VCS, Indexação, Ollama, Terminal, Plugins, etc). Ele serve como guia sobre quais fluxos validar após realizar modificações no código.
@@ -13,7 +13,7 @@ graph TD
     classDef client fill:#c4e3f3,stroke:#333,stroke-width:2px,color:black;
     classDef server fill:#d4f3c4,stroke:#333,stroke-width:2px,color:black;
 
-    subgraph OpalaTex [OpalaTex Client - Testes Locais]
+    subgraph GilzaBots [GilzaBots Client - Testes Locais]
         %% Core e UX
         C1[Servidor HTTP/WS, IDE & Onboarding]:::client
         C4[Motor LaTeX, Synctex e Gráficos]:::client
@@ -67,7 +67,7 @@ graph TD
 
 ## Detalhamento por Área para Regressão
 
-### 1. OpalaTex Client (Desktop)
+### 1. GilzaBots Client (Desktop)
 * **Core, UI e Projetos (`C1`, `C4`)**: Testar inicialização do servidor HTTP, endpoints da API, fluxos de onboarding. Garantir a estabilidade da compilação LaTeX, limpeza de arquivos gerados e sync entre editor/PDF.
 * **Agentes, Skills e Indexação (`C2`, `C7`)**: Verificar despachos de eventos no `AgenticBlocks.IO`, bridge de IPC, execução de skills (inclusive `web_search_config.py`). Validar consistência do `vector_index` e `code_index` ao modificar ou buscar código e arquivos.
 * **Modelos LLM e Hardware (`C3`, `C8`)**: Testar regressões no fluxo de IA, tanto apontando para o proxy na nuvem (LiteLLM) quanto o gerenciamento de modelos abertos localmente (`ollama_manager.py`). O `hardware_detect` deve instanciar perfis corretamente para não travar máquinas limitadas.

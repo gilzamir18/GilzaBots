@@ -1,6 +1,6 @@
 // The reasoning effort one chat asks for in place of its model's catalog value.
 //
-// The levels mirror CHAT_REASONING_EFFORTS in opalatex/project.py, which is
+// The levels mirror CHAT_REASONING_EFFORTS in gilzabots/project.py, which is
 // where a value is validated and stored. The empty string is the absence of an
 // override: the chat follows the model's catalog entry.
 

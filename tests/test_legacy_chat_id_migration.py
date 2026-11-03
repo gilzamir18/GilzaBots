@@ -11,7 +11,7 @@ import sqlite3
 
 import pytest
 
-from opalatex.project import (
+from gilzabots.project import (
     LEGACY_MAIN_CHAT_ID,
     LEGACY_MAIN_CHAT_NAME,
     ProjectStore,

@@ -1,7 +1,7 @@
-"""Tests for image generation: the AgenticBlocks block and the OpalaTex tool.
+"""Tests for image generation: the AgenticBlocks block and the GilzaBots tool.
 
 Nothing here reaches a provider. The framework tests register a fake adapter and
-fake LiteLLM entry points; the OpalaTex tests replace the block with a stub. What
+fake LiteLLM entry points; the GilzaBots tests replace the block with a stub. What
 is being pinned down is the contract every provider must be normalised into --
 one file on disk, a project-relative path in the result, and a classified error
 when generation cannot happen.
@@ -245,10 +245,10 @@ def test_chat_multimodal_adapter_reads_images_from_the_message(monkeypatch):
     assert artifacts[0].mime == "image/png"
 
 
-# ─── OpalaTex: configuration ─────────────────────────────────────────────────
+# ─── GilzaBots: configuration ─────────────────────────────────────────────────
 
 def test_image_config_round_trip_and_output_dir_containment(tmp_path, monkeypatch):
-    from opalatex import image_gen_config
+    from gilzabots import image_gen_config
 
     monkeypatch.setattr(image_gen_config, "_CONFIG_PATH", tmp_path / "image_gen.json")
 
@@ -267,7 +267,7 @@ def test_image_config_round_trip_and_output_dir_containment(tmp_path, monkeypatc
 
 
 def test_configuration_problem_reports_disabled_and_unset_model(tmp_path, monkeypatch):
-    from opalatex import image_gen_config
+    from gilzabots import image_gen_config
 
     cfg_path = tmp_path / "image_gen.json"
     monkeypatch.setattr(image_gen_config, "_CONFIG_PATH", cfg_path)
@@ -283,10 +283,10 @@ def test_configuration_problem_reports_disabled_and_unset_model(tmp_path, monkey
 
 
 def test_transport_kwargs_drops_chat_parameters(monkeypatch):
-    from opalatex import image_gen_config
+    from gilzabots import image_gen_config
 
     monkeypatch.setattr(
-        "opalatex.config.get_agent_llm_kwargs",
+        "gilzabots.config.get_agent_llm_kwargs",
         lambda name, model_override=None: {
             "api_key": "k",
             "api_base": "http://localhost:12434/engines/diffusers/v1",
@@ -303,12 +303,12 @@ def test_transport_kwargs_drops_chat_parameters(monkeypatch):
 
 
 def test_route_resolution_prefers_override_then_catalog(monkeypatch, tmp_path):
-    from opalatex import image_gen_config
+    from gilzabots import image_gen_config
 
     cfg_path = tmp_path / "image_gen.json"
     monkeypatch.setattr(image_gen_config, "_CONFIG_PATH", cfg_path)
     monkeypatch.setattr(
-        "opalatex.models_store.get_model",
+        "gilzabots.models_store.get_model",
         lambda model_id: {"id": model_id, "image_route": "chat_multimodal"},
     )
 
@@ -320,7 +320,7 @@ def test_route_resolution_prefers_override_then_catalog(monkeypatch, tmp_path):
 
 
 def test_models_store_normalises_image_capability():
-    from opalatex.models_store import normalize_model_entry
+    from gilzabots.models_store import normalize_model_entry
 
     entry = normalize_model_entry(
         {"id": "openai/sd", "provider": "openai", "name": "sd", "supports_image_generation": True, "image_route": "IMAGES_API"}
@@ -332,7 +332,7 @@ def test_models_store_normalises_image_capability():
     assert normalize_model_entry({"id": "a", "image_route": "bogus"})["image_route"] == ""
 
 
-# ─── OpalaTex: the generate_image tool ───────────────────────────────────────
+# ─── GilzaBots: the generate_image tool ───────────────────────────────────────
 
 def _stub_block(monkeypatch, artifact=None, error=None):
     from agenticblocks.blocks.image import ImageGenerationOutput
@@ -349,12 +349,12 @@ def _stub_block(monkeypatch, artifact=None, error=None):
                 route="images_api",
             )
 
-    monkeypatch.setattr("opalatex.image_gen_config.build_block", lambda *a, **k: _Block())
+    monkeypatch.setattr("gilzabots.image_gen_config.build_block", lambda *a, **k: _Block())
 
 
 def _configure(tmp_path, monkeypatch, **overrides):
-    from opalatex import image_gen_config
-    from opalatex.tools import set_project_context
+    from gilzabots import image_gen_config
+    from gilzabots.tools import set_project_context
 
     cfg_path = tmp_path / "image_gen.json"
     cfg_path.write_text(
@@ -366,7 +366,7 @@ def _configure(tmp_path, monkeypatch, **overrides):
 
 
 def _run_tool(**kwargs):
-    from opalatex.tools import generate_image
+    from gilzabots.tools import generate_image
 
     raw = getattr(generate_image, "_func", None) or generate_image
     return asyncio.run(raw(**kwargs))
@@ -418,7 +418,7 @@ def test_generate_image_uses_configured_output_dir_and_size(tmp_path, monkeypatc
                 images=[ImageArtifact(data_b64=_png_b64(), mime="image/png")], model=self.model
             )
 
-    monkeypatch.setattr("opalatex.image_gen_config.build_block", lambda *a, **k: _Block())
+    monkeypatch.setattr("gilzabots.image_gen_config.build_block", lambda *a, **k: _Block())
 
     result = _run_tool(prompt="x", filename="fig", seed=42)
 
@@ -434,7 +434,7 @@ def test_generate_image_reports_configuration_problem_without_calling_provider(t
     def _explode(*a, **k):
         raise AssertionError("the provider must not be called when unconfigured")
 
-    monkeypatch.setattr("opalatex.image_gen_config.build_block", _explode)
+    monkeypatch.setattr("gilzabots.image_gen_config.build_block", _explode)
 
     result = _run_tool(prompt="x")
     assert result.startswith("CRITICAL ERROR")
@@ -456,11 +456,11 @@ def test_generate_image_rejects_empty_prompt(tmp_path, monkeypatch):
     assert _run_tool(prompt="   ").startswith("CRITICAL ERROR")
 
 
-# ─── OpalaTex: registration ──────────────────────────────────────────────────
+# ─── GilzaBots: registration ──────────────────────────────────────────────────
 
 def test_generate_image_is_registered_for_the_main_agent_not_helpers(monkeypatch):
-    from opalatex.agent_stdin import ALL_TOOLS_MAP
-    from opalatex.tools import get_helper_tools, get_workspace_action_tools
+    from gilzabots.agent_stdin import ALL_TOOLS_MAP
+    from gilzabots.tools import get_helper_tools, get_workspace_action_tools
 
     assert "generate_image" in ALL_TOOLS_MAP
     assert any(getattr(t, "name", "") == "generate_image" for t in get_workspace_action_tools())
@@ -469,7 +469,7 @@ def test_generate_image_is_registered_for_the_main_agent_not_helpers(monkeypatch
 
 
 def test_generate_image_is_not_safe_in_plan_mode(monkeypatch):
-    import opalatex.tools as tools
+    import gilzabots.tools as tools
 
     monkeypatch.setattr(tools, "_PROJECT_SESSION", SimpleNamespace(mode="plan", results={}))
     raw = getattr(tools.generate_image, "_func", None) or tools.generate_image

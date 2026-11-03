@@ -6,7 +6,7 @@ test('session setup uses cookies and verifies them before mounting the app', asy
   const calls = [];
   await establishLocalSession(async (url, options) => { calls.push({ url, options }); return { ok: true }; });
   assert.equal(calls.length, 2);
-  assert.equal(calls[0].options.headers['X-OpalaTex-Bootstrap'], '1');
+  assert.equal(calls[0].options.headers['X-GilzaBots-Bootstrap'], '1');
   assert.ok(calls.every(call => call.options.credentials === 'same-origin'));
 });
 

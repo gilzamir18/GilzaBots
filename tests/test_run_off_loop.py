@@ -15,7 +15,7 @@ import threading
 
 import pytest
 
-from opalatex.agent_stdin import _run_off_loop
+from gilzabots.agent_stdin import _run_off_loop
 
 
 @pytest.mark.asyncio

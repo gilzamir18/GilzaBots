@@ -12,10 +12,10 @@ import asyncio
 
 import pytest
 
-from opalatex import models_store
-from opalatex.cli_catalog import ArgumentError, parse_pairs, _CONNECTION_FIELDS, _CONNECTION_ALIASES, _MODEL_FIELDS, _MODEL_ALIASES
-from opalatex.cli_commands import REPLState, _registry
-from opalatex.project import ProjectStore
+from gilzabots import models_store
+from gilzabots.cli_catalog import ArgumentError, parse_pairs, _CONNECTION_FIELDS, _CONNECTION_ALIASES, _MODEL_FIELDS, _MODEL_ALIASES
+from gilzabots.cli_commands import REPLState, _registry
+from gilzabots.project import ProjectStore
 
 
 @pytest.fixture
@@ -227,7 +227,7 @@ def test_the_registered_model_resolves_to_real_run_kwargs(catalog, state, monkey
     Without a catalog entry this returns no api_base and no key, and the run
     reaches the provider unauthenticated.
     """
-    from opalatex import config as config_mod
+    from gilzabots import config as config_mod
 
     run(state, '/providers add id=c label="L" provider=ollama api_base=http://h/v1 api_key=K')
     run(state, "/models add name=gemma4 connection=c supports_thinking=true temperature=0.35")
@@ -301,7 +301,7 @@ def test_a_slash_command_works_as_a_one_shot_run(catalog, tmp_path, monkeypatch)
     """
     import types
 
-    from opalatex import cli
+    from gilzabots import cli
 
     store = ProjectStore(db_path=str(tmp_path / "s.db"))
     project = store.create(
@@ -324,7 +324,7 @@ def test_a_slash_command_works_as_a_one_shot_run(catalog, tmp_path, monkeypatch)
 def test_an_unknown_one_shot_command_fails_loudly(tmp_path):
     import types
 
-    from opalatex import cli
+    from gilzabots import cli
 
     store = ProjectStore(db_path=str(tmp_path / "s.db"))
     project = store.create(

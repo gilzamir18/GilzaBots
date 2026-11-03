@@ -7,8 +7,8 @@ import sys
 
 import pytest
 
-from opalatex.assetstore import list_assets
-from opalatex.skills import discover_skills, parse_skill_md
+from gilzabots.assetstore import list_assets
+from gilzabots.skills import discover_skills, parse_skill_md
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _SKILL_DIR = os.path.join(_REPO_ROOT, "skills", "staged-reader")
@@ -345,7 +345,7 @@ def _cursor_from_tool_result(result: str, requested_start: int, requested_end: i
 def paging(monkeypatch):
     """Drive tools.read_content_pos with a controlled context window."""
     import asyncio
-    from opalatex import token_usage, tools
+    from gilzabots import token_usage, tools
 
     token_usage.set_usage_listener(None)
     token_usage.set_context_scope("reset")

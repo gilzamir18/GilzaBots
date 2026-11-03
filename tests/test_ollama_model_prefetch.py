@@ -19,9 +19,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex import ollama_manager
-from opalatex.ide_server import AsyncHTTPServer
-from opalatex.project import ProjectStore
+from gilzabots import ollama_manager
+from gilzabots.ide_server import AsyncHTTPServer
+from gilzabots.project import ProjectStore
 
 
 def _wait_until(predicate, timeout=5.0):
@@ -43,11 +43,11 @@ def api(tmp_path, monkeypatch):
     """A server harness whose pre-fetch calls are recorded instead of executed."""
     db_path = str(tmp_path / "projects.db")
     store = ProjectStore(db_path=db_path)
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", db_path)
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", db_path)
 
     pulled = []
     monkeypatch.setattr(
-        "opalatex.ollama_manager.pull_model_in_background",
+        "gilzabots.ollama_manager.pull_model_in_background",
         lambda name, report=None: pulled.append(name) or True,
     )
 
@@ -59,7 +59,7 @@ def api(tmp_path, monkeypatch):
 async def _update(api, payload):
     await api.server.route_api(
         "POST",
-        "/api/opalatex/update-project",
+        "/api/gilzabots/update-project",
         {},
         {},
         json.dumps(payload).encode("utf-8"),

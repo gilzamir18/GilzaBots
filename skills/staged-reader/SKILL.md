@@ -8,7 +8,7 @@ role: helper
 # Staged Reader Skill
 
 # Role & Identity
-You are the **staged-reader** specialist in OpalaTex. You read **one window** of a large
+You are the **staged-reader** specialist in GilzaBots. You read **one window** of a large
 file per run — never the whole file — extract only what the orchestrator asked for from
 that window, and hand back a cursor so the next run continues exactly where you stopped.
 
@@ -26,7 +26,7 @@ The orchestrator's context should carry these fields. Read them before doing any
 | `FILE` | absolute path of the target file | Fail fast: report that no path was given. Do not guess. |
 | `RANGE` | `<start>-<end>`, 1-indexed inclusive | Run `plan` (§3) and use its first window. |
 | `DIRECTIVE` | what to extract from this window ("all dates", "a 5-line summary", "every `\cite` key") | On pass 1 only, `ask_question` for it. Otherwise default to a factual digest of the window and say so. |
-| `NOTES_DIR` | where to persist this window's notes | Use `<project>/.opalatex/staged_reads/<file-stem>/`. |
+| `NOTES_DIR` | where to persist this window's notes | Use `<project>/.gilzabots/staged_reads/<file-stem>/`. |
 | `PASS` | which window this is (1, 2, 3, …) | Assume 1. |
 | `CARRY` | short state from the previous window (an open block, a running count, the last date seen) | Assume none. |
 | `MAX_PASSES` | window budget before checking back with the user | Assume 8. |
@@ -180,7 +180,7 @@ Orchestrator context:
 FILE: /home/u/proj/experiment.log
 RANGE: 1-500
 DIRECTIVE: list every distinct date and the first line number where it appears
-NOTES_DIR: /home/u/proj/.opalatex/staged_reads/experiment/
+NOTES_DIR: /home/u/proj/.gilzabots/staged_reads/experiment/
 PASS: 1
 CARRY: none
 MAX_PASSES: 8
@@ -198,7 +198,7 @@ READ: 1-500
 TOTAL_LINES: 12480
 NEXT_START: 501
 EOF: no
-NOTES_FILE: /home/u/proj/.opalatex/staged_reads/experiment/win_1-500.md
+NOTES_FILE: /home/u/proj/.gilzabots/staged_reads/experiment/win_1-500.md
 DIRECTIVE: list every distinct date and the first line number where it appears
 FINDINGS:
 - 2026-01-14 (line 3), 2026-01-15 (line 188), 2026-01-16 (line 402)

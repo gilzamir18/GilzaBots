@@ -51,7 +51,7 @@ def _worker(**kwargs):
 @pytest.mark.parametrize("text", [
     LLAMA_SERVER_REJECTION,
     "Ollama_chatException - error parsing tool call: invalid character ',' in string escape code",
-    "OPALATEX_OLLAMA_TOOL_CALL_JSON_ESCAPE: Ollama rejected a model tool-call argument",
+    "GILZABOTS_OLLAMA_TOOL_CALL_JSON_ESCAPE: Ollama rejected a model tool-call argument",
 ])
 def test_every_known_ollama_wording_is_recognized(text):
     assert is_ollama_tool_call_json_error(Exception(text))

@@ -10,11 +10,11 @@ import os
 
 import pytest
 
-from opalatex.cloud import chats, service
-from opalatex.cloud.providers.local_folder import LocalFolderProvider
-from opalatex.cloud.registry import get_cloud_provider, list_providers, register_provider
-from opalatex.cloud.state import CloudSettings, load_state, save_settings
-from opalatex.project import ProjectStore
+from gilzabots.cloud import chats, service
+from gilzabots.cloud.providers.local_folder import LocalFolderProvider
+from gilzabots.cloud.registry import get_cloud_provider, list_providers, register_provider
+from gilzabots.cloud.state import CloudSettings, load_state, save_settings
+from gilzabots.project import ProjectStore
 
 
 @pytest.fixture
@@ -197,7 +197,7 @@ def test_conversations_stay_home_when_the_option_is_off(tmp_path, shared_remote,
 
     assert "main.tex" in outcome.report.uploaded
     assert not os.path.exists(chats.export_path(machine["path"]))
-    assert not any(p.startswith(".opalatex/session/") for p in outcome.report.uploaded)
+    assert not any(p.startswith(".gilzabots/session/") for p in outcome.report.uploaded)
 
 
 # ─── Status and settings plumbing ─────────────────────────────────────────────
@@ -242,7 +242,7 @@ def test_switching_provider_drops_the_stale_baseline(tmp_path, shared_remote):
     state = load_state(machine["path"])
     state.record("main.tex", hash_="h", size=1, mtime=1.0, remote_rev="r")
     state.root = "old-root"
-    from opalatex.cloud.state import save_state
+    from gilzabots.cloud.state import save_state
     save_state(machine["path"], state)
 
     service.update_settings(machine["path"], {"provider": "google_drive"})
@@ -297,7 +297,7 @@ def test_google_drive_is_listed_as_available_without_extra_dependencies():
 
 
 def test_google_drive_reports_it_needs_a_client_when_none_is_set(monkeypatch):
-    from opalatex.cloud.providers import google_drive
+    from gilzabots.cloud.providers import google_drive
 
     monkeypatch.setattr(google_drive, "load_client_config", lambda: {"client_id": "", "client_secret": ""})
     monkeypatch.setattr(google_drive, "_load_token", lambda: google_drive._Token())

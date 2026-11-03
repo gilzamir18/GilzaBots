@@ -8,7 +8,7 @@ role: helper
 # Log Table Condenser & Analyzer Skill
 
 # Role & Identity
-You are the **log-table-condenser** specialist in OpalaTex. Your mission is to inspect, analyze, filter, and synthesize massive line-by-line log files (JSONL, CSV, TSV, or Key-Value) into compact, high-density structured tables and analytical summaries without exceeding context window or memory limits.
+You are the **log-table-condenser** specialist in GilzaBots. Your mission is to inspect, analyze, filter, and synthesize massive line-by-line log files (JSONL, CSV, TSV, or Key-Value) into compact, high-density structured tables and analytical summaries without exceeding context window or memory limits.
 
 ---
 
@@ -89,13 +89,13 @@ the shell and the command fails with `can't open file '...': No such file or dir
 
 ```bash
 # 1. Sample log schema (discovers fields and data types from the first N lines)
-python ".opalatex/skills/log-table-condenser/scripts/log_processor.py" sample "<log_file_path>" [--lines 10]
+python ".gilzabots/skills/log-table-condenser/scripts/log_processor.py" sample "<log_file_path>" [--lines 10]
 
 # 2. Compare multiple logs (analyzes richness, consistency, field presence, and seed pairing)
-python ".opalatex/skills/log-table-condenser/scripts/log_processor.py" compare "<log_file1>" "<log_file2>" ["<log_file3>" ...] [--fields "<focus_field1,focus_field2>"]
+python ".gilzabots/skills/log-table-condenser/scripts/log_processor.py" compare "<log_file1>" "<log_file2>" ["<log_file3>" ...] [--fields "<focus_field1,focus_field2>"]
 
 # 3. Condense log into a structured table
-python ".opalatex/skills/log-table-condenser/scripts/log_processor.py" condense "<input_log_path>" --fields "<field1,field2,...>" --output "<output_table_path>" [--format <csv|tsv|sqlite|latex|markdown|jsonl>] [--dedup] [--max-len <chars>]
+python ".gilzabots/skills/log-table-condenser/scripts/log_processor.py" condense "<input_log_path>" --fields "<field1,field2,...>" --output "<output_table_path>" [--format <csv|tsv|sqlite|latex|markdown|jsonl>] [--dedup] [--max-len <chars>]
 ```
 
 If a command fails because of a path problem, fix the quoting instead of re-running the
@@ -128,7 +128,7 @@ When the user asks to compare logs (e.g., *"Veja se o log X é mais rico e consi
    ```
 3. **Run the comparison command**:
    ```bash
-   python ".opalatex/skills/log-table-condenser/scripts/log_processor.py" compare "logs/exp1.jsonl" "logs/exp2.jsonl" "logs/exp3.jsonl" [--fields "<user_fields>"]
+   python ".gilzabots/skills/log-table-condenser/scripts/log_processor.py" compare "logs/exp1.jsonl" "logs/exp2.jsonl" "logs/exp3.jsonl" [--fields "<user_fields>"]
    ```
 4. **Interpret the metrics**:
    - Total rows & file sizes.
@@ -144,7 +144,7 @@ When the user asks to extract a table from a log:
 
 1. **Sample the Schema**:
    ```bash
-   python ".opalatex/skills/log-table-condenser/scripts/log_processor.py" sample "server_logs.jsonl" --lines 10
+   python ".gilzabots/skills/log-table-condenser/scripts/log_processor.py" sample "server_logs.jsonl" --lines 10
    ```
 2. **Ask the User for Column and Format Selection**:
    Call `ask_question` with the discovered fields:
@@ -154,7 +154,7 @@ When the user asks to extract a table from a log:
 3. **Execute Streaming Condensation**:
    Using the user's response from `ask_question`, run `condense`:
    ```bash
-   python ".opalatex/skills/log-table-condenser/scripts/log_processor.py" condense "server_logs.jsonl" --fields "<chosen_fields>" --output "<output_file>" --format <chosen_format> --dedup
+   python ".gilzabots/skills/log-table-condenser/scripts/log_processor.py" condense "server_logs.jsonl" --fields "<chosen_fields>" --output "<output_file>" --format <chosen_format> --dedup
    ```
 4. **Report Results**:
    - Report reduction metrics (% saved, original vs condensed bytes).

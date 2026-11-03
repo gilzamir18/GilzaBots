@@ -8,8 +8,8 @@ import sys
 
 import pytest
 
-from opalatex import terminal_manager
-from opalatex.terminal_manager import TerminalSession
+from gilzabots import terminal_manager
+from gilzabots.terminal_manager import TerminalSession
 
 
 @pytest.fixture
@@ -121,13 +121,13 @@ def test_real_session_buffers_shell_output(tmp_path, high_descriptor):
                 os.close(term.master_fd)
                 term.master_fd = descriptor
             term.start_reading(asyncio.get_running_loop())
-            term.write("echo opalatex-scrollback-marker\n")
+            term.write("echo gilzabots-scrollback-marker\n")
             for _ in range(50):
                 await asyncio.sleep(0.1)
-                if b"opalatex-scrollback-marker" in bytes(term.buffer):
+                if b"gilzabots-scrollback-marker" in bytes(term.buffer):
                     break
             backlog, offset = term.backlog_since(None)
-            assert b"opalatex-scrollback-marker" in backlog
+            assert b"gilzabots-scrollback-marker" in backlog
             assert offset == len(backlog)
         finally:
             term.close()

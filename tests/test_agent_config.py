@@ -9,7 +9,7 @@ Covers:
 """
 
 import pytest
-from opalatex.config import get_agent_llm_kwargs
+from gilzabots.config import get_agent_llm_kwargs
 
 
 # Agents whose tool_calls field must be populated.
@@ -34,9 +34,9 @@ from unittest.mock import patch
 @pytest.mark.parametrize("agent", PLANNING_AGENTS + ["memgpt"])
 def test_orchestrator_agents_enable_thinking_when_model_supports_it(agent):
     """Orchestrator and memgpt may think, but only for models that declare support."""
-    with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-        with patch("opalatex.tools._PROJECT_SESSION", None):
-            with patch("opalatex.models_store.get_model", return_value={"supports_thinking": True}):
+    with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+        with patch("gilzabots.tools._PROJECT_SESSION", None):
+            with patch("gilzabots.models_store.get_model", return_value={"supports_thinking": True}):
                 kwargs = get_agent_llm_kwargs(agent)
             assert kwargs.get("think") is True
 
@@ -44,9 +44,9 @@ def test_orchestrator_agents_enable_thinking_when_model_supports_it(agent):
 @pytest.mark.parametrize("agent", PLANNING_AGENTS + ["memgpt"])
 def test_orchestrator_agents_do_not_send_think_without_model_support(agent):
     """Thinking defaults off at the model capability layer unless explicitly enabled."""
-    with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-        with patch("opalatex.tools._PROJECT_SESSION", None):
-            with patch("opalatex.models_store.get_model", return_value={"supports_thinking": False}):
+    with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+        with patch("gilzabots.tools._PROJECT_SESSION", None):
+            with patch("gilzabots.models_store.get_model", return_value={"supports_thinking": False}):
                 kwargs = get_agent_llm_kwargs(agent)
             assert "think" not in kwargs
 
@@ -59,11 +59,11 @@ def test_subagents_follow_the_model_capability_like_every_other_role(agent):
     `supports_thinking`, so a role-level value was configuration that no call site
     could act on. One capability, one answer, for workers and orchestrators alike.
     """
-    with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-        with patch("opalatex.tools._PROJECT_SESSION", None):
-            with patch("opalatex.models_store.get_model", return_value={"supports_thinking": False}):
+    with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+        with patch("gilzabots.tools._PROJECT_SESSION", None):
+            with patch("gilzabots.models_store.get_model", return_value={"supports_thinking": False}):
                 assert "think" not in get_agent_llm_kwargs(agent)
-            with patch("opalatex.models_store.get_model", return_value={"supports_thinking": True}):
+            with patch("gilzabots.models_store.get_model", return_value={"supports_thinking": True}):
                 assert get_agent_llm_kwargs(agent).get("think") is True
 
 
@@ -75,14 +75,14 @@ def test_a_role_default_cannot_override_the_model_capability(agent):
     default that survived here would silently send `think` to a model whose
     catalog entry says it cannot parse it.
     """
-    with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-        with patch("opalatex.tools._PROJECT_SESSION", None):
+    with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+        with patch("gilzabots.tools._PROJECT_SESSION", None):
             with patch(
-                "opalatex.config._get_agent_overrides",
+                "gilzabots.config._get_agent_overrides",
                 return_value={agent: {"think": True}},
             ):
                 with patch(
-                    "opalatex.models_store.get_model",
+                    "gilzabots.models_store.get_model",
                     return_value={"supports_thinking": False},
                 ):
                     assert "think" not in get_agent_llm_kwargs(agent)
@@ -91,8 +91,8 @@ def test_a_role_default_cannot_override_the_model_capability(agent):
 def test_orchestrator_has_large_num_ctx():
     """Orchestrator accumulates long tool-call histories — needs at least 16k context."""
     from unittest.mock import patch
-    with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-        with patch("opalatex.tools._PROJECT_SESSION", None):
+    with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+        with patch("gilzabots.tools._PROJECT_SESSION", None):
             kwargs = get_agent_llm_kwargs("orchestrator")
     assert kwargs.get("num_ctx", 0) >= 16384
 
@@ -101,8 +101,8 @@ def test_memgpt_has_large_num_ctx():
     """The MemGPT chat-orchestrator runs multi-turn sessions with skill calls —
     it needs a generous context window so turns are not cut off."""
     from unittest.mock import patch
-    with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-        with patch("opalatex.tools._PROJECT_SESSION", None):
+    with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+        with patch("gilzabots.tools._PROJECT_SESSION", None):
             kwargs = get_agent_llm_kwargs("memgpt")
     assert kwargs.get("num_ctx", 0) >= 16384
 
@@ -111,8 +111,8 @@ def test_orchestrator_has_no_restrictive_max_tokens():
     """Orchestrator must not be limited to a small max_tokens — it produces
     long reasoning chains and final reports."""
     from unittest.mock import patch
-    with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-        with patch("opalatex.tools._PROJECT_SESSION", None):
+    with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+        with patch("gilzabots.tools._PROJECT_SESSION", None):
             kwargs = get_agent_llm_kwargs("orchestrator")
     max_tok = kwargs.get("max_tokens", None)
     assert max_tok is None or max_tok >= 1024
@@ -126,8 +126,8 @@ def test_catalog_extra_model_params_reach_model_kwargs_and_override_role_default
             "provider_extension": {"mode": "strict"},
         },
     }
-    with patch("opalatex.tools._PROJECT_SESSION", None):
-        with patch("opalatex.models_store.get_model", return_value=catalog_model):
+    with patch("gilzabots.tools._PROJECT_SESSION", None):
+        with patch("gilzabots.models_store.get_model", return_value=catalog_model):
             with patch("litellm.get_supported_openai_params", return_value=["temperature"]):
                 kwargs = get_agent_llm_kwargs("memgpt", "openai/example-model")
 
@@ -146,8 +146,8 @@ def test_catalog_model_inference_params_take_precedence_over_legacy_project_para
         "supports_thinking": False,
         "temperature": 0.25,
     }
-    with patch("opalatex.tools._PROJECT_SESSION", FakeSession()):
-        with patch("opalatex.models_store.get_model", return_value=catalog_model):
+    with patch("gilzabots.tools._PROJECT_SESSION", FakeSession()):
+        with patch("gilzabots.models_store.get_model", return_value=catalog_model):
             with patch("litellm.get_supported_openai_params", return_value=["temperature"]):
                 kwargs = get_agent_llm_kwargs("memgpt")
 
@@ -170,9 +170,9 @@ def test_worker_role_resolves_inference_params_from_worker_catalog_model():
             return {"temperature": 0.2, "max_tokens": 8192}
         return None
 
-    with patch("opalatex.tools._PROJECT_SESSION", FakeSession()):
-        with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-            with patch("opalatex.models_store.get_model", side_effect=fake_get_model):
+    with patch("gilzabots.tools._PROJECT_SESSION", FakeSession()):
+        with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+            with patch("gilzabots.models_store.get_model", side_effect=fake_get_model):
                 orchestrator_kwargs = get_agent_llm_kwargs("chat_orchestrator")
                 worker_kwargs = get_agent_llm_kwargs("worker")
 
@@ -183,10 +183,10 @@ def test_worker_role_resolves_inference_params_from_worker_catalog_model():
 
 
 def test_repeated_provider_sanitization_preserves_catalog_extra_param():
-    from opalatex.config import sanitize_litellm_kwargs_for_model
+    from gilzabots.config import sanitize_litellm_kwargs_for_model
 
     catalog_model = {"extra_model_params": {"provider_extension": True}}
-    with patch("opalatex.models_store.get_model_by_runtime_id", return_value=catalog_model):
+    with patch("gilzabots.models_store.get_model_by_runtime_id", return_value=catalog_model):
         with patch("litellm.get_supported_openai_params", return_value=["temperature"]):
             cleaned = sanitize_litellm_kwargs_for_model(
                 "openai/example-model",
@@ -198,7 +198,7 @@ def test_repeated_provider_sanitization_preserves_catalog_extra_param():
 
 def test_ollama_cloud_model_uses_remote_api_base_by_default(monkeypatch):
     """Ollama cloud-tagged models must not silently fall back to localhost."""
-    from opalatex.config import get_agent_llm_kwargs
+    from gilzabots.config import get_agent_llm_kwargs
     from unittest.mock import patch
 
     class FakeSession:
@@ -210,9 +210,9 @@ def test_ollama_cloud_model_uses_remote_api_base_by_default(monkeypatch):
 
     monkeypatch.setenv("OLLAMA_API_KEY", "ollama-test-key")
 
-    with patch("opalatex.tools._PROJECT_SESSION", FakeSession()):
-        with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-            with patch("opalatex.models_store.get_model", return_value=None):
+    with patch("gilzabots.tools._PROJECT_SESSION", FakeSession()):
+        with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+            with patch("gilzabots.models_store.get_model", return_value=None):
                 kwargs = get_agent_llm_kwargs("custom_agent")
 
     assert kwargs["api_base"] == "https://ollama.com"
@@ -222,7 +222,7 @@ def test_ollama_cloud_model_uses_remote_api_base_by_default(monkeypatch):
 
 
 def test_normalize_ollama_api_base_for_litellm_strips_v1_suffix():
-    from opalatex.config import normalize_ollama_api_base_for_litellm
+    from gilzabots.config import normalize_ollama_api_base_for_litellm
 
     assert normalize_ollama_api_base_for_litellm(
         "ollama/gpt-oss:20b",
@@ -240,17 +240,17 @@ def test_normalize_ollama_api_base_for_litellm_strips_v1_suffix():
 
 def test_resolve_model_route_requires_model_capability():
     """Thinking kwargs are dropped for a model that does not declare support."""
-    from opalatex.config import resolve_model_route
+    from gilzabots.config import resolve_model_route
     from unittest.mock import patch
 
     kwargs = {"think": True}
-    with patch("opalatex.models_store.get_model", return_value={"supports_thinking": False}):
+    with patch("gilzabots.models_store.get_model", return_value={"supports_thinking": False}):
         model = resolve_model_route("ollama/mistral-large-3:675b-cloud", kwargs)
 
     assert "think" not in kwargs
 
     supported_kwargs = {"think": True}
-    with patch("opalatex.models_store.get_model", return_value={"supports_thinking": True}):
+    with patch("gilzabots.models_store.get_model", return_value={"supports_thinking": True}):
         supported_model = resolve_model_route("ollama/gemma4:12b", supported_kwargs)
 
     assert supported_model == "ollama_chat/gemma4:12b"
@@ -263,7 +263,7 @@ def test_the_repetition_penalty_owns_ollamas_repeat_penalty():
     So the setting did nothing, while the value that actually took effect came
     from LiteLLM mapping `frequency_penalty` onto the same wire field.
     """
-    from opalatex.config import sanitize_litellm_kwargs_for_model
+    from gilzabots.config import sanitize_litellm_kwargs_for_model
 
     cleaned = sanitize_litellm_kwargs_for_model(
         "ollama_chat/glm-5.3:cloud",
@@ -276,7 +276,7 @@ def test_the_repetition_penalty_owns_ollamas_repeat_penalty():
 
 def test_a_frequency_penalty_on_its_own_is_left_alone():
     """Nothing claims the key, so LiteLLM's own mapping keeps working."""
-    from opalatex.config import sanitize_litellm_kwargs_for_model
+    from gilzabots.config import sanitize_litellm_kwargs_for_model
 
     cleaned = sanitize_litellm_kwargs_for_model(
         "ollama_chat/glm-5.3:cloud", {"frequency_penalty": 0.5}
@@ -288,8 +288,8 @@ def test_a_frequency_penalty_on_its_own_is_left_alone():
 
 def test_the_losing_penalty_is_named_rather_than_dropped_in_silence(capsys):
     """Both map to one wire field; a setting that quietly does nothing is the bug."""
-    import opalatex.config as config_mod
-    from opalatex.config import sanitize_litellm_kwargs_for_model
+    import gilzabots.config as config_mod
+    from gilzabots.config import sanitize_litellm_kwargs_for_model
 
     config_mod._reported_penalty_conflicts.clear()
     cleaned = sanitize_litellm_kwargs_for_model(
@@ -310,7 +310,7 @@ def test_the_losing_penalty_is_named_rather_than_dropped_in_silence(capsys):
 
 
 def test_ollamas_own_penalty_name_never_reaches_an_openai_endpoint():
-    from opalatex.config import sanitize_litellm_kwargs_for_model
+    from gilzabots.config import sanitize_litellm_kwargs_for_model
 
     cleaned = sanitize_litellm_kwargs_for_model(
         "openai/openai/gpt-5.6-luna", {"repeat_penalty": 1.2, "temperature": 0.2}
@@ -328,11 +328,11 @@ def test_ollama_reaches_the_native_route_even_with_thinking_off():
     (observed with `ollama/glm-5.2:cloud`) printed `{"name": ..., "arguments": ...}`
     as text instead of issuing a tool call, so nothing ran.
     """
-    from opalatex.config import resolve_model_route
+    from gilzabots.config import resolve_model_route
     from unittest.mock import patch
 
     for kwargs in ({}, {"think": False}, {"think": False, "reasoning_effort": None}):
-        with patch("opalatex.models_store.get_model", return_value={"supports_thinking": True}):
+        with patch("gilzabots.models_store.get_model", return_value={"supports_thinking": True}):
             assert resolve_model_route("ollama/glm-5.2:cloud", dict(kwargs)) == (
                 "ollama_chat/glm-5.2:cloud"
             ), f"thinking-off kwargs {kwargs} must still use the native route"
@@ -340,11 +340,11 @@ def test_ollama_reaches_the_native_route_even_with_thinking_off():
 
 def test_a_model_without_thinking_support_still_uses_the_native_route():
     """The transport is not a reward for declaring thinking support."""
-    from opalatex.config import resolve_model_route
+    from gilzabots.config import resolve_model_route
     from unittest.mock import patch
 
     kwargs = {"think": True}
-    with patch("opalatex.models_store.get_model", return_value={"supports_thinking": False}):
+    with patch("gilzabots.models_store.get_model", return_value={"supports_thinking": False}):
         model = resolve_model_route("ollama/plain:latest", kwargs)
 
     assert model == "ollama_chat/plain:latest"
@@ -352,17 +352,17 @@ def test_a_model_without_thinking_support_still_uses_the_native_route():
 
 
 def test_non_ollama_providers_are_never_rewritten():
-    from opalatex.config import resolve_model_route
+    from gilzabots.config import resolve_model_route
     from unittest.mock import patch
 
-    with patch("opalatex.models_store.get_model", return_value={"supports_thinking": True}):
+    with patch("gilzabots.models_store.get_model", return_value={"supports_thinking": True}):
         assert resolve_model_route("gemini/gemini-3.7-flash", {}) == "gemini/gemini-3.7-flash"
         assert resolve_model_route("ollama_chat/gemma4:26b", {}) == "ollama_chat/gemma4:26b"
 
 
 def test_internal_attachment_flags_are_not_sent_to_litellm():
     """Internal attachment flags must not leak into provider request kwargs."""
-    from opalatex.config import get_agent_llm_kwargs
+    from gilzabots.config import get_agent_llm_kwargs
     from unittest.mock import patch
 
     class FakeSession:
@@ -375,9 +375,9 @@ def test_internal_attachment_flags_are_not_sent_to_litellm():
         }
         project_path = "/fake/path"
 
-    with patch("opalatex.tools._PROJECT_SESSION", FakeSession()):
-        with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-            with patch("opalatex.models_store.get_model", return_value={"supports_thinking": False}):
+    with patch("gilzabots.tools._PROJECT_SESSION", FakeSession()):
+        with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+            with patch("gilzabots.models_store.get_model", return_value={"supports_thinking": False}):
                 kwargs = get_agent_llm_kwargs("custom_agent")
 
     assert "temperature" not in kwargs
@@ -389,7 +389,7 @@ def test_internal_attachment_flags_are_not_sent_to_litellm():
 
 def test_openai_models_do_not_receive_local_only_litellm_kwargs():
     """OpenAI endpoints must only receive provider-supported request kwargs."""
-    from opalatex.config import get_agent_llm_kwargs
+    from gilzabots.config import get_agent_llm_kwargs
     from unittest.mock import patch
 
     class FakeSession:
@@ -408,9 +408,9 @@ def test_openai_models_do_not_receive_local_only_litellm_kwargs():
         }
         project_path = "/fake/path"
 
-    with patch("opalatex.tools._PROJECT_SESSION", FakeSession()):
-        with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-            with patch("opalatex.models_store.get_model", return_value={"supports_thinking": False}):
+    with patch("gilzabots.tools._PROJECT_SESSION", FakeSession()):
+        with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+            with patch("gilzabots.models_store.get_model", return_value={"supports_thinking": False}):
                 kwargs = get_agent_llm_kwargs("custom_agent")
 
     assert "temperature" not in kwargs
@@ -433,7 +433,7 @@ def test_openai_gpt55_chat_model_strips_reasoning_effort_to_avoid_responses_brid
     must not carry reasoning_effort. The explicit openai/responses/* model id is
     still allowed to opt into Responses behavior.
     """
-    from opalatex.config import sanitize_litellm_kwargs_for_model
+    from gilzabots.config import sanitize_litellm_kwargs_for_model
 
     chat_kwargs = sanitize_litellm_kwargs_for_model(
         "openai/gpt-5.5",
@@ -450,7 +450,7 @@ def test_openai_gpt55_chat_model_strips_reasoning_effort_to_avoid_responses_brid
 
 def test_openai_gpt55_chat_model_strips_default_only_sampling_params():
     """GPT-5 chat models reject non-default sampling values such as temperature=0.7."""
-    from opalatex.config import sanitize_litellm_kwargs_for_model
+    from gilzabots.config import sanitize_litellm_kwargs_for_model
 
     kwargs = sanitize_litellm_kwargs_for_model(
         "openai/gpt-5.5",
@@ -473,7 +473,7 @@ def test_openai_gpt55_chat_model_strips_default_only_sampling_params():
 
 def test_gemini_models_drop_unknown_params_and_deprecated_sampling():
     """Gemini 3 direct calls drop deprecated sampling params and unknown fields."""
-    from opalatex.config import get_agent_llm_kwargs
+    from gilzabots.config import get_agent_llm_kwargs
     from unittest.mock import patch
 
     class FakeSession:
@@ -493,9 +493,9 @@ def test_gemini_models_drop_unknown_params_and_deprecated_sampling():
         "top_k": 40,
     }
 
-    with patch("opalatex.tools._PROJECT_SESSION", FakeSession()):
-        with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-            with patch("opalatex.models_store.get_model", return_value=catalog_model):
+    with patch("gilzabots.tools._PROJECT_SESSION", FakeSession()):
+        with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+            with patch("gilzabots.models_store.get_model", return_value=catalog_model):
                 kwargs = get_agent_llm_kwargs("custom_agent")
 
     assert "temperature" not in kwargs
@@ -511,7 +511,7 @@ def test_gemini_models_drop_unknown_params_and_deprecated_sampling():
 
 def test_ollama_models_keep_local_only_litellm_kwargs_except_unsupported_think():
     """Ollama keeps local tuning params, but think is capability-gated."""
-    from opalatex.config import get_agent_llm_kwargs
+    from gilzabots.config import get_agent_llm_kwargs
     from unittest.mock import patch
 
     class FakeSession:
@@ -530,9 +530,9 @@ def test_ollama_models_keep_local_only_litellm_kwargs_except_unsupported_think()
         "repetition_penalty": 1.1,
     }
 
-    with patch("opalatex.tools._PROJECT_SESSION", FakeSession()):
-        with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-            with patch("opalatex.models_store.get_model", return_value=catalog_model):
+    with patch("gilzabots.tools._PROJECT_SESSION", FakeSession()):
+        with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+            with patch("gilzabots.models_store.get_model", return_value=catalog_model):
                 kwargs = get_agent_llm_kwargs("custom_agent")
 
     assert kwargs["temperature"] == 0.2
@@ -548,7 +548,7 @@ def test_ollama_models_keep_local_only_litellm_kwargs_except_unsupported_think()
     assert "unknown_param" not in kwargs
 
 def test_project_ollama_api_base_is_used_when_model_store_has_no_entry():
-    from opalatex.config import get_agent_llm_kwargs
+    from gilzabots.config import get_agent_llm_kwargs
     from unittest.mock import patch
 
     class FakeSession:
@@ -558,9 +558,9 @@ def test_project_ollama_api_base_is_used_when_model_store_has_no_entry():
         api_base = "http://100.85.255.111:11434/v1"
         api_key = "remote-key"
 
-    with patch("opalatex.tools._PROJECT_SESSION", FakeSession()):
-        with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-            with patch("opalatex.models_store.get_model", return_value=None):
+    with patch("gilzabots.tools._PROJECT_SESSION", FakeSession()):
+        with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+            with patch("gilzabots.models_store.get_model", return_value=None):
                 kwargs = get_agent_llm_kwargs("custom_agent")
 
     assert kwargs["api_base"] == "http://100.85.255.111:11434"
@@ -568,7 +568,7 @@ def test_project_ollama_api_base_is_used_when_model_store_has_no_entry():
 
 
 def test_worker_ollama_api_base_uses_worker_setting_first():
-    from opalatex.config import get_agent_llm_kwargs
+    from gilzabots.config import get_agent_llm_kwargs
     from unittest.mock import patch
 
     class FakeSession:
@@ -582,9 +582,9 @@ def test_worker_ollama_api_base_uses_worker_setting_first():
         worker_api_base = "http://worker-host:11434/v1"
         worker_api_key = "worker-key"
 
-    with patch("opalatex.tools._PROJECT_SESSION", FakeSession()):
-        with patch("opalatex.ui_settings.load_ui_settings", return_value={}):
-            with patch("opalatex.models_store.get_model", return_value=None):
+    with patch("gilzabots.tools._PROJECT_SESSION", FakeSession()):
+        with patch("gilzabots.ui_settings.load_ui_settings", return_value={}):
+            with patch("gilzabots.models_store.get_model", return_value=None):
                 kwargs = get_agent_llm_kwargs("worker")
 
     assert kwargs["api_base"] == "http://worker-host:11434"

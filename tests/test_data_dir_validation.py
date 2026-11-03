@@ -1,8 +1,8 @@
-"""Tests for validating the configurable global data directory (OPALATEX_HOME).
+"""Tests for validating the configurable global data directory (GILZABOTS_HOME).
 
-A directory that `os.path.isdir` accepts is not necessarily one OpalaTex can
+A directory that `os.path.isdir` accepts is not necessarily one GilzaBots can
 write to: under snap strict confinement the `home` interface lets the sandbox
-stat a hidden top-level directory of the real home (e.g. ~/.opalatex) while
+stat a hidden top-level directory of the real home (e.g. ~/.gilzabots) while
 denying every open() beneath it. Accepting such a path surfaced much later as
 `sqlite3.OperationalError: unable to open database file` on the next launch.
 """
@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex import config, ide_server, project
+from gilzabots import config, ide_server, project
 
 
 @pytest.fixture(autouse=True)
@@ -61,7 +61,7 @@ def test_a_path_that_is_a_file_is_rejected(tmp_path):
 
 def test_a_directory_that_only_looks_valid_is_rejected(tmp_path, monkeypatch):
     """The snap case: isdir() succeeds, opening a file in it does not."""
-    target = tmp_path / ".opalatex"
+    target = tmp_path / ".gilzabots"
     target.mkdir()
     _deny_writes(monkeypatch, target)
 
@@ -72,21 +72,21 @@ def test_a_directory_that_only_looks_valid_is_rejected(tmp_path, monkeypatch):
 
 
 def test_snap_hint_names_the_confinement_rule_for_hidden_home_directories(monkeypatch):
-    monkeypatch.setenv("SNAP_NAME", "opalatex")
+    monkeypatch.setenv("SNAP_NAME", "gilzabots")
     monkeypatch.setenv("SNAP_REAL_HOME", "/home/user")
 
-    hint = config.snap_confinement_hint("/home/user/.opalatex")
+    hint = config.snap_confinement_hint("/home/user/.gilzabots")
 
     assert "hidden top-level" in hint
-    assert "/home/user/OpalaTex" in hint
+    assert "/home/user/GilzaBots" in hint
 
 
 @pytest.mark.parametrize(
     "path",
-    ["/home/user/OpalaTex", "/home/user/Docs/.opalatex", "/srv/.opalatex"],
+    ["/home/user/GilzaBots", "/home/user/Docs/.gilzabots", "/srv/.gilzabots"],
 )
 def test_snap_hint_stays_quiet_for_paths_the_home_interface_allows(monkeypatch, path):
-    monkeypatch.setenv("SNAP_NAME", "opalatex")
+    monkeypatch.setenv("SNAP_NAME", "gilzabots")
     monkeypatch.setenv("SNAP_REAL_HOME", "/home/user")
 
     assert config.snap_confinement_hint(path) == ""
@@ -96,33 +96,33 @@ def test_snap_hint_stays_quiet_outside_a_snap(monkeypatch):
     monkeypatch.delenv("SNAP_NAME", raising=False)
     monkeypatch.delenv("SNAP_REAL_HOME", raising=False)
 
-    assert config.snap_confinement_hint("/home/user/.opalatex") == ""
+    assert config.snap_confinement_hint("/home/user/.gilzabots") == ""
 
 
 def test_unusable_configured_home_falls_back_and_warns(tmp_path, monkeypatch, capsys):
-    monkeypatch.delenv("OPALATEX_HOME", raising=False)
+    monkeypatch.delenv("GILZABOTS_HOME", raising=False)
     monkeypatch.setattr(pathlib.Path, "home", classmethod(lambda cls: tmp_path))
     broken = tmp_path / "broken"
     broken.mkdir()
-    (tmp_path / ".opalatexhome").write_text(str(broken), encoding="utf-8")
+    (tmp_path / ".gilzabotshome").write_text(str(broken), encoding="utf-8")
     _deny_writes(monkeypatch, broken)
 
-    assert config.get_opalatex_home() == str(tmp_path / ".opalatex")
+    assert config.get_gilzabots_home() == str(tmp_path / ".gilzabots")
     assert "not writable" in capsys.readouterr().err
 
     # The warning is printed once per path, not on every lookup.
-    config.get_opalatex_home()
+    config.get_gilzabots_home()
     assert capsys.readouterr().err == ""
 
 
 def test_a_usable_configured_home_is_honoured(tmp_path, monkeypatch):
-    monkeypatch.delenv("OPALATEX_HOME", raising=False)
+    monkeypatch.delenv("GILZABOTS_HOME", raising=False)
     monkeypatch.setattr(pathlib.Path, "home", classmethod(lambda cls: tmp_path))
     target = tmp_path / "data"
-    (tmp_path / ".opalatexhome").write_text(str(target), encoding="utf-8")
+    (tmp_path / ".gilzabotshome").write_text(str(target), encoding="utf-8")
 
-    assert config.get_opalatex_home() == str(target)
-    assert config.configured_opalatex_home() == str(target)
+    assert config.get_gilzabots_home() == str(target)
+    assert config.configured_gilzabots_home() == str(target)
 
 
 def _server_with_capture():
@@ -138,7 +138,7 @@ def _server_with_capture():
 
 @pytest.mark.asyncio
 async def test_saving_an_unusable_directory_is_rejected_without_storing_it(tmp_path, monkeypatch):
-    monkeypatch.delenv("OPALATEX_HOME", raising=False)
+    monkeypatch.delenv("GILZABOTS_HOME", raising=False)
     monkeypatch.setattr(pathlib.Path, "home", classmethod(lambda cls: tmp_path))
     broken = tmp_path / "broken"
     broken.mkdir()
@@ -147,7 +147,7 @@ async def test_saving_an_unusable_directory_is_rejected_without_storing_it(tmp_p
     server, responses = _server_with_capture()
     await server.route_api(
         "POST",
-        "/api/settings/opalatexhome",
+        "/api/settings/gilzabotshome",
         {},
         {},
         json.dumps({"path": str(broken)}).encode("utf-8"),
@@ -157,25 +157,25 @@ async def test_saving_an_unusable_directory_is_rejected_without_storing_it(tmp_p
     status, body, _ = responses[-1]
     assert status == 400
     assert "not writable" in body["error"]
-    assert not (tmp_path / ".opalatexhome").exists()
+    assert not (tmp_path / ".gilzabotshome").exists()
 
 
 @pytest.mark.asyncio
 async def test_reading_the_setting_reports_a_broken_configured_directory(tmp_path, monkeypatch):
-    monkeypatch.delenv("OPALATEX_HOME", raising=False)
+    monkeypatch.delenv("GILZABOTS_HOME", raising=False)
     monkeypatch.setattr(pathlib.Path, "home", classmethod(lambda cls: tmp_path))
     broken = tmp_path / "broken"
     broken.mkdir()
-    (tmp_path / ".opalatexhome").write_text(str(broken), encoding="utf-8")
+    (tmp_path / ".gilzabotshome").write_text(str(broken), encoding="utf-8")
     _deny_writes(monkeypatch, broken)
 
     server, responses = _server_with_capture()
-    await server.route_api("GET", "/api/settings/opalatexhome", {}, {}, b"", AsyncMock())
+    await server.route_api("GET", "/api/settings/gilzabotshome", {}, {}, b"", AsyncMock())
 
     _, body, _ = responses[-1]
     assert body["configured_path"] == str(broken)
     assert "not writable" in body["error"]
-    assert body["path"] == str(tmp_path / ".opalatex")
+    assert body["path"] == str(tmp_path / ".gilzabots")
 
 
 def test_database_open_failure_names_the_directory(tmp_path, monkeypatch):

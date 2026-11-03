@@ -10,7 +10,7 @@ import asyncio
 import pytest
 
 from agenticblocks.runtime.state import TokenUsage
-from opalatex import token_usage
+from gilzabots import token_usage
 
 
 def usage(block_name="chat_orchestrator", prompt=0, completion=0, total=0):
@@ -245,7 +245,7 @@ def test_attach_usage_tracking_is_idempotent():
 
 
 def test_resolve_context_window_prefers_the_agent_declared_window():
-    from opalatex.agent_stdin import _resolve_context_window
+    from gilzabots.agent_stdin import _resolve_context_window
 
     class FakeAgent:
         max_context_tokens = 32000
@@ -255,7 +255,7 @@ def test_resolve_context_window_prefers_the_agent_declared_window():
 
 
 def test_resolve_context_window_falls_back_to_model_params():
-    from opalatex.agent_stdin import _resolve_context_window
+    from gilzabots.agent_stdin import _resolve_context_window
 
     class FakeAgent:
         model_kwargs = {}
@@ -266,7 +266,7 @@ def test_resolve_context_window_falls_back_to_model_params():
 def test_resolve_context_window_reports_unknown_when_nothing_declares_one():
     # A window nobody declared is unknown (0), never a guessed size: the panel
     # would otherwise draw a battery for a window that does not exist.
-    from opalatex.agent_stdin import _resolve_context_window
+    from gilzabots.agent_stdin import _resolve_context_window
 
     class FakeAgent:
         pass
@@ -275,7 +275,7 @@ def test_resolve_context_window_reports_unknown_when_nothing_declares_one():
 
 
 def test_resolve_context_window_ignores_unusable_values():
-    from opalatex.agent_stdin import _resolve_context_window
+    from gilzabots.agent_stdin import _resolve_context_window
 
     class FakeAgent:
         max_context_tokens = None

@@ -1,4 +1,4 @@
-"""Tests for the native-crash record OpalaTex keeps about itself.
+"""Tests for the native-crash record GilzaBots keeps about itself.
 
 The case that motivates this module cannot be reproduced with an exception: the
 process dies inside a DLL. So the end-to-end tests kill a real child process
@@ -12,7 +12,7 @@ import sys
 import textwrap
 from pathlib import Path
 
-from opalatex import crash_report
+from gilzabots import crash_report
 
 
 def _run_child(home: Path, body: str) -> subprocess.CompletedProcess:
@@ -21,7 +21,7 @@ def _run_child(home: Path, body: str) -> subprocess.CompletedProcess:
         f"""
         import sys
         sys.path.insert(0, {str(Path(crash_report.__file__).resolve().parent.parent)!r})
-        from opalatex import crash_report
+        from gilzabots import crash_report
         crash_report.install(home={str(home)!r}, details={{"webengine_gpu": "auto"}})
         {textwrap.indent(textwrap.dedent(body), "        ").strip()}
         """
@@ -38,7 +38,7 @@ def test_install_writes_a_marker_and_a_session_banner(tmp_path):
     assert result.returncode == 0, result.stderr
 
     log = crash_report.crash_log_path(tmp_path).read_text(encoding="utf-8")
-    assert "=== OpalaTex session pid=" in log
+    assert "=== GilzaBots session pid=" in log
     assert "webengine_gpu: auto" in log
 
     # The child exited normally, so atexit retired its marker.
@@ -68,7 +68,7 @@ def test_a_native_fault_is_reported_with_its_log(tmp_path):
     assert failure["native_fault"] is True
     assert failure["webengine_gpu"] == "auto"
     assert "most recent call first" in failure["excerpt"]
-    assert crash_report.describe_failure(failure).startswith("[OpalaTex] The previous run")
+    assert crash_report.describe_failure(failure).startswith("[GilzaBots] The previous run")
 
 
 def test_context_recorded_after_installation_reaches_the_marker(tmp_path):
@@ -99,7 +99,7 @@ def test_consume_archives_the_marker_so_it_is_reported_once(tmp_path):
 
 
 def test_a_second_live_instance_is_not_a_crash(tmp_path):
-    """OpalaTex allows two windows; neither may be reported as the other's crash."""
+    """GilzaBots allows two windows; neither may be reported as the other's crash."""
     marker_dir = crash_report.runs_dir(tmp_path)
     marker_dir.mkdir(parents=True, exist_ok=True)
     (marker_dir / "4242-live.json").write_text(
@@ -145,8 +145,8 @@ def test_excerpt_returns_only_the_requested_run(tmp_path):
     log = crash_report.crash_log_path(tmp_path)
     log.parent.mkdir(parents=True, exist_ok=True)
     log.write_text(
-        "=== OpalaTex session pid=1 started=a ===\n  first run\n"
-        "=== OpalaTex session pid=2 started=b ===\n  second run\n",
+        "=== GilzaBots session pid=1 started=a ===\n  first run\n"
+        "=== GilzaBots session pid=2 started=b ===\n  second run\n",
         encoding="utf-8",
     )
 
@@ -191,7 +191,7 @@ def test_a_long_dump_is_still_classified_and_keeps_what_happened(tmp_path):
     log = crash_report.crash_log_path(tmp_path)
     log.parent.mkdir(parents=True, exist_ok=True)
     log.write_text(
-        "=== OpalaTex session pid=9 started=2026-09-16T00:00:00+00:00 ===\n"
+        "=== GilzaBots session pid=9 started=2026-09-16T00:00:00+00:00 ===\n"
         "  webengine_gpu: auto\n"
         "Windows fatal exception: access violation\n\n"
         "Current thread 0x00004a6c (most recent call first):\n"

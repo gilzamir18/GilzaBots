@@ -1,6 +1,6 @@
 """Tests for the graphics mode handed to the embedded QtWebEngine window."""
 
-from opalatex.webengine_env import (
+from gilzabots.webengine_env import (
     CHROMIUM_FLAGS_VAR,
     DISABLE_GPU_FLAG,
     DISABLE_GPU_VAR,

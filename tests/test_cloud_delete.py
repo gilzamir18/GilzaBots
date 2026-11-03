@@ -15,20 +15,20 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.cloud import service
-from opalatex.cloud.base import CloudError, CloudNotFound, CloudRootMissing, CloudTransientError
-from opalatex.cloud.engine import SyncEngine
-from opalatex.cloud.providers import google_drive
-from opalatex.cloud.providers.local_folder import LocalFolderProvider
-from opalatex.cloud.state import (
+from gilzabots.cloud import service
+from gilzabots.cloud.base import CloudError, CloudNotFound, CloudRootMissing, CloudTransientError
+from gilzabots.cloud.engine import SyncEngine
+from gilzabots.cloud.providers import google_drive
+from gilzabots.cloud.providers.local_folder import LocalFolderProvider
+from gilzabots.cloud.state import (
     CloudSettings,
     CloudState,
     load_state,
     reset_baseline,
     save_settings,
 )
-from opalatex.ide_server import AsyncHTTPServer
-from opalatex.project import ProjectStore
+from gilzabots.ide_server import AsyncHTTPServer
+from gilzabots.project import ProjectStore
 
 
 # ─── Fixtures & helpers ───────────────────────────────────────────────────────
@@ -79,7 +79,7 @@ def clone_to(tmp_path, remote_base, machine="machine-b"):
 def files_in(root):
     found = set()
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d != ".opalatex"]
+        dirnames[:] = [d for d in dirnames if d != ".gilzabots"]
         for name in filenames:
             found.add(os.path.relpath(os.path.join(dirpath, name), root).replace(os.sep, "/"))
     return found
@@ -307,7 +307,7 @@ def make_server():
 def registered(tmp_path, remote_base, monkeypatch):
     project = mirrored_project(tmp_path, remote_base)
     db_path = str(tmp_path / "sessions.db")
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", db_path)
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", db_path)
     store = ProjectStore(db_path)
     store.create("thesis", "plan", "openai/gpt-4o-mini", project_name="thesis", project_path=project)
     store.close_activity_connection()
@@ -331,7 +331,7 @@ async def test_deleting_a_project_can_delete_its_cloud_copy(tmp_path, remote_bas
     project, db_path = registered(tmp_path, remote_base, monkeypatch)
     server, responses = make_server()
 
-    await server.route_api("POST", "/api/opalatex/delete", {}, {}, json.dumps({
+    await server.route_api("POST", "/api/gilzabots/delete", {}, {}, json.dumps({
         "project_name": "thesis", "delete_dir": False, "delete_cloud": True,
     }).encode("utf-8"), AsyncMock())
 
@@ -349,7 +349,7 @@ async def test_deleting_a_project_leaves_the_cloud_copy_unless_asked(tmp_path, r
     registered(tmp_path, remote_base, monkeypatch)
     server, responses = make_server()
 
-    await server.route_api("POST", "/api/opalatex/delete", {}, {}, json.dumps({
+    await server.route_api("POST", "/api/gilzabots/delete", {}, {}, json.dumps({
         "project_name": "thesis", "delete_dir": False,
     }).encode("utf-8"), AsyncMock())
 
@@ -369,7 +369,7 @@ async def test_a_failed_cloud_deletion_removes_nothing(tmp_path, remote_base, mo
     monkeypatch.setattr(LocalFolderProvider, "delete_root", refuse)
     server, responses = make_server()
 
-    await server.route_api("POST", "/api/opalatex/delete", {}, {}, json.dumps({
+    await server.route_api("POST", "/api/gilzabots/delete", {}, {}, json.dumps({
         "project_name": "thesis", "delete_dir": True, "delete_cloud": True,
     }).encode("utf-8"), AsyncMock())
 

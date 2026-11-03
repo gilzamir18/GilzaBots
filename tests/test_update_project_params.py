@@ -1,9 +1,9 @@
 """Manual integration test: verify that saving project settings via
-/api/opalatex/update-project correctly persists and applies all model_params.
+/api/gilzabots/update-project correctly persists and applies all model_params.
 
 This test:
 1. Creates a temporary project in an isolated DB.
-2. POSTs to /api/opalatex/update-project with every known parameter.
+2. POSTs to /api/gilzabots/update-project with every known parameter.
 3. Reloads the project from the DB and asserts each value was persisted.
 4. Asserts that get_agent_llm_kwargs() and get_project_agent_params() reflect
    the saved values (i.e., they are picked up by the runtime).
@@ -18,9 +18,9 @@ import tempfile
 import asyncio
 import pytest
 
-from opalatex.project import ProjectStore, ProjectData
-from opalatex.config import get_agent_llm_kwargs, get_project_agent_params
-from opalatex import tools as _tools
+from gilzabots.project import ProjectStore, ProjectData
+from gilzabots.config import get_agent_llm_kwargs, get_project_agent_params
+from gilzabots import tools as _tools
 
 
 # ---------------------------------------------------------------------------
@@ -53,11 +53,11 @@ ALL_PARAMS = {**PROJECT_MODEL_PARAMS, **AGENT_PARAMS}
 def _reset_project_session(monkeypatch):
     """Restore shared runtime state and avoid leaking real UI settings into tests."""
     monkeypatch.setattr(
-        "opalatex.ui_settings.load_ui_settings",
+        "gilzabots.ui_settings.load_ui_settings",
         lambda: {},
     )
     yield
-    import opalatex.tools as _t
+    import gilzabots.tools as _t
     _t._PROJECT_SESSION = None
 
 
@@ -79,7 +79,7 @@ def tmp_store(tmp_path):
 
 
 def _apply_update(store: ProjectStore, project: ProjectData, params: dict) -> ProjectData:
-    """Simulate what /api/opalatex/update-project does."""
+    """Simulate what /api/gilzabots/update-project does."""
     import re
     validated = {}
     for k, v in params.items():
@@ -233,7 +233,7 @@ class TestUpdateProjectPersistence:
         reloaded = _reload(store, project.name)
         _inject_session(reloaded, store)
 
-        from opalatex.memgpt_runtime import build_chat_orchestrator
+        from gilzabots.memgpt_runtime import build_chat_orchestrator
         memgpt = build_chat_orchestrator(reloaded, store)
 
         for key, expected in RUNTIME_LITELLM_PARAMS.items():
@@ -245,7 +245,7 @@ class TestUpdateProjectPersistence:
 
     def test_sanitize_and_clamp_model_params(self):
         """Verify that sanitize_model_params correctly handles string numbers with commas, and clamps out of bounds values."""
-        from opalatex.config import sanitize_model_params
+        from gilzabots.config import sanitize_model_params
         
         raw_params = {
             "max_heartbeats": "25",  # string int

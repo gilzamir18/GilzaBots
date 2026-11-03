@@ -1,6 +1,6 @@
 import os
 
-path = 'opalatex/tools.py'
+path = 'gilzabots/tools.py'
 with open(path, 'r', encoding='utf-8') as f:
     content = f.read()
 
@@ -17,7 +17,7 @@ SAFE_SHELL_COMMANDS = {
     "dir", "type", "findstr", "Get-ChildItem", "Get-Location", "Get-Content", "Select-String", "tasklist"
 }
 
-def opalatex_tool(name: str, description: str, is_safe: bool = False):
+def gilzabots_tool(name: str, description: str, is_safe: bool = False):
     """
     Decorator that wraps the agenticblocks tool.
     Enforces 'plan', 'edit', and 'auto' mode safety rules.
@@ -96,28 +96,28 @@ content = content.replace('# ─── Tools ───────────�
 
 # 3. Replacements for single line decorators
 replacements = {
-    '@as_tool(name="read_file",': '@opalatex_tool(name="read_file", is_safe=True,',
-    '@as_tool(name="write_file",': '@opalatex_tool(name="write_file", is_safe=False,',
-    '@as_tool(name="run_command",': '@opalatex_tool(name="run_command", is_safe=False,',
-    '@as_tool(name="run_background_command",': '@opalatex_tool(name="run_background_command", is_safe=False,',
-    '@as_tool(name="run_python_script",': '@opalatex_tool(name="run_python_script", is_safe=False,',
-    '@as_tool(name="run_interactive_command",': '@opalatex_tool(name="run_interactive_command", is_safe=False,',
-    '@as_tool(name="search_code",': '@opalatex_tool(name="search_code", is_safe=True,',
-    '@as_tool(name="read_core_memory",': '@opalatex_tool(name="read_core_memory", is_safe=True,',
-    '@as_tool(name="append_core_memory",': '@opalatex_tool(name="append_core_memory", is_safe=False,',
-    '@as_tool(name="search_conversation_history",': '@opalatex_tool(name="search_conversation_history", is_safe=True,'
+    '@as_tool(name="read_file",': '@gilzabots_tool(name="read_file", is_safe=True,',
+    '@as_tool(name="write_file",': '@gilzabots_tool(name="write_file", is_safe=False,',
+    '@as_tool(name="run_command",': '@gilzabots_tool(name="run_command", is_safe=False,',
+    '@as_tool(name="run_background_command",': '@gilzabots_tool(name="run_background_command", is_safe=False,',
+    '@as_tool(name="run_python_script",': '@gilzabots_tool(name="run_python_script", is_safe=False,',
+    '@as_tool(name="run_interactive_command",': '@gilzabots_tool(name="run_interactive_command", is_safe=False,',
+    '@as_tool(name="search_code",': '@gilzabots_tool(name="search_code", is_safe=True,',
+    '@as_tool(name="read_core_memory",': '@gilzabots_tool(name="read_core_memory", is_safe=True,',
+    '@as_tool(name="append_core_memory",': '@gilzabots_tool(name="append_core_memory", is_safe=False,',
+    '@as_tool(name="search_conversation_history",': '@gilzabots_tool(name="search_conversation_history", is_safe=True,'
 }
 for old, new in replacements.items():
     content = content.replace(old, new)
 
 # 4. Replacements for multiline decorators
 multiline_replacements = {
-    '@as_tool(\\n    name="ask_human",': '@opalatex_tool(\\n    name="ask_human",\\n    is_safe=True,',
-    '@as_tool(\\n    name="get_project_overview",': '@opalatex_tool(\\n    name="get_project_overview",\\n    is_safe=True,',
-    '@as_tool(\\n    name="write_content_pos",': '@opalatex_tool(\\n    name="write_content_pos",\\n    is_safe=False,',
-    '@as_tool(\\n    name="read_content_pos",': '@opalatex_tool(\\n    name="read_content_pos",\\n    is_safe=True,',
-    '@as_tool(\\n    name="update_achievements_memory",': '@opalatex_tool(\\n    name="update_achievements_memory",\\n    is_safe=True,',
-    '@as_tool(\\n    name="web_search",': '@opalatex_tool(\\n    name="web_search",\\n    is_safe=True,'
+    '@as_tool(\\n    name="ask_human",': '@gilzabots_tool(\\n    name="ask_human",\\n    is_safe=True,',
+    '@as_tool(\\n    name="get_project_overview",': '@gilzabots_tool(\\n    name="get_project_overview",\\n    is_safe=True,',
+    '@as_tool(\\n    name="write_content_pos",': '@gilzabots_tool(\\n    name="write_content_pos",\\n    is_safe=False,',
+    '@as_tool(\\n    name="read_content_pos",': '@gilzabots_tool(\\n    name="read_content_pos",\\n    is_safe=True,',
+    '@as_tool(\\n    name="update_achievements_memory",': '@gilzabots_tool(\\n    name="update_achievements_memory",\\n    is_safe=True,',
+    '@as_tool(\\n    name="web_search",': '@gilzabots_tool(\\n    name="web_search",\\n    is_safe=True,'
 }
 for old, new in multiline_replacements.items():
     content = content.replace(old, new)

@@ -20,12 +20,12 @@ export const clampTerminalFontSize = (value) => {
 
 const LIGHT_TERMINAL_THEME = {
   background: '#ffffff',
-  foreground: '#1e1e1e',
-  cursor: '#1e1e1e',
+  foreground: '#171a23',
+  cursor: '#5847d6',
   // xterm defaults to a white 30% selection layer, which is invisible over the
   // white light-theme background, so both themes set it explicitly.
-  selectionBackground: '#add6ff',
-  selectionInactiveBackground: '#dcdcdc',
+  selectionBackground: '#d9d3fc',
+  selectionInactiveBackground: '#e6e8ef',
   black: '#000000',
   red: '#a1260d',
   green: '#008000',
@@ -41,14 +41,15 @@ const LIGHT_TERMINAL_THEME = {
   brightBlue: '#0451a5',
   brightMagenta: '#811f7c',
   brightCyan: '#007acc',
-  brightWhite: '#1e1e1e'
+  brightWhite: '#171a23'
 };
 
 const DARK_TERMINAL_THEME = {
-  background: '#1e1e1e',
-  foreground: '#cccccc',
-  selectionBackground: '#264f78',
-  selectionInactiveBackground: '#3a3d41',
+  background: '#11141b',
+  foreground: '#dcdfe8',
+  cursor: '#8b7cf6',
+  selectionBackground: '#3a3480',
+  selectionInactiveBackground: '#262a3b',
 };
 
 // Hook that initialises an xterm.js terminal and connects it to the backend SSE stream.
@@ -213,7 +214,7 @@ export function useTerminal({ activeProject, terminalRef, terminalInstanceRef, f
     };
 
     evs.onerror = () => {
-      term.write(`\r\n\x1b[31m[OpalaTex] ${tRef.current('bottomPanel.terminalConnectionLost', 'Terminal connection lost. Reconnecting...')}\x1b[0m\r\n`);
+      term.write(`\r\n\x1b[31m[GilzaBots] ${tRef.current('bottomPanel.terminalConnectionLost', 'Terminal connection lost. Reconnecting...')}\x1b[0m\r\n`);
     };
 
     // Forward keystrokes to the backend.

@@ -10,8 +10,8 @@ import sqlite3
 
 import pytest
 
-from opalatex.cloud import chats
-from opalatex.project import ProjectStore
+from gilzabots.cloud import chats
+from gilzabots.project import ProjectStore
 
 
 @pytest.fixture

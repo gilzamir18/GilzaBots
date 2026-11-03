@@ -15,12 +15,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.cloud import chats, service
-from opalatex.cloud.base import Capabilities, CloudError
-from opalatex.cloud.providers.local_folder import LocalFolderProvider
-from opalatex.cloud.state import CloudSettings, load_state, save_settings
-from opalatex.ide_server import AsyncHTTPServer
-from opalatex.project import ProjectStore
+from gilzabots.cloud import chats, service
+from gilzabots.cloud.base import Capabilities, CloudError
+from gilzabots.cloud.providers.local_folder import LocalFolderProvider
+from gilzabots.cloud.state import CloudSettings, load_state, save_settings
+from gilzabots.ide_server import AsyncHTTPServer
+from gilzabots.project import ProjectStore
 
 
 # ─── Fixtures & helpers ───────────────────────────────────────────────────────
@@ -288,7 +288,7 @@ def source_machine(tmp_path, remote_base, monkeypatch, name="thesis"):
 @pytest.mark.asyncio
 async def test_the_endpoint_lists_what_is_in_the_account(tmp_path, remote_base, monkeypatch):
     source_machine(tmp_path, remote_base, monkeypatch)
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", str(tmp_path / "machine-b.db"))
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", str(tmp_path / "machine-b.db"))
     server, responses = make_server()
 
     await call(server, "/api/cloud/remote-projects", {
@@ -308,7 +308,7 @@ async def test_the_endpoint_marks_a_project_this_machine_already_has(
     tmp_path, remote_base, monkeypatch
 ):
     source = source_machine(tmp_path, remote_base, monkeypatch)
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", source["db"])
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", source["db"])
     server, responses = make_server()
 
     await call(server, "/api/cloud/remote-projects", {
@@ -332,7 +332,7 @@ async def test_the_endpoint_downloads_registers_and_carries_the_conversations(
     # Machine B: a different database, nothing in it.
     db_path = str(tmp_path / "machine-b" / "sessions.db")
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", db_path)
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", db_path)
     monkeypatch.setattr(chats, "_default_db_path", lambda: db_path)
     parent = tmp_path / "machine-b" / "projects"
     parent.mkdir(parents=True)
@@ -378,7 +378,7 @@ async def test_the_downloaded_project_keeps_its_own_skill_set(
 
     db_path = str(tmp_path / "machine-b" / "sessions.db")
     os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", db_path)
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", db_path)
     monkeypatch.setattr(chats, "_default_db_path", lambda: db_path)
     parent = tmp_path / "machine-b" / "projects"
     parent.mkdir(parents=True)
@@ -405,7 +405,7 @@ async def test_the_endpoint_refuses_a_folder_that_already_holds_a_project(
     tmp_path, remote_base, monkeypatch
 ):
     source = source_machine(tmp_path, remote_base, monkeypatch)
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", source["db"])
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", source["db"])
     server, responses = make_server()
 
     await call(server, "/api/cloud/clone", {
@@ -426,7 +426,7 @@ async def test_the_endpoint_refuses_a_folder_name_that_is_a_path(
     tmp_path, remote_base, monkeypatch
 ):
     source_machine(tmp_path, remote_base, monkeypatch)
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", str(tmp_path / "machine-b.db"))
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", str(tmp_path / "machine-b.db"))
     server, responses = make_server()
 
     await call(server, "/api/cloud/clone", {

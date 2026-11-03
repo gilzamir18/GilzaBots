@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import pytest
 
 from agenticblocks.blocks.llm.response_wait import ResponseWait
-from opalatex import cli_render
+from gilzabots import cli_render
 
 
 def _wait(waiting, phase="first_response", elapsed=60.04):
@@ -28,7 +28,7 @@ def _wait(waiting, phase="first_response", elapsed=60.04):
 
 
 def test_the_payload_names_the_agent_and_rounds_the_elapsed_time():
-    from opalatex.agent_stdin import _provider_wait_payload
+    from gilzabots.agent_stdin import _provider_wait_payload
 
     assert _provider_wait_payload(_wait(True), "chat_orchestrator") == {
         "agent": "chat_orchestrator",
@@ -41,7 +41,7 @@ def test_the_payload_names_the_agent_and_rounds_the_elapsed_time():
 
 @pytest.mark.asyncio
 async def test_a_turn_binds_the_wait_callback_and_emits_the_event(monkeypatch, tmp_path):
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     events = []
 
@@ -119,7 +119,7 @@ class _Buffer:
 def _render(events):
     from rich.console import Console
 
-    import opalatex.terminal as T
+    import gilzabots.terminal as T
 
     renderer = cli_render.TerminalEventRenderer()
     console = Console(file=_Buffer(), width=400, no_color=True, highlight=False)
@@ -159,7 +159,7 @@ def test_a_stalled_stream_and_the_end_of_a_wait_have_their_own_lines(monkeypatch
 
 
 def test_the_catalogue_has_every_wait_message_in_both_languages():
-    from opalatex.i18n import _STRINGS
+    from gilzabots.i18n import _STRINGS
 
     for language in ("en", "pt"):
         for key in ("cli_provider_wait", "cli_provider_wait_stream", "cli_provider_wait_over"):

@@ -18,8 +18,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from opalatex.memgpt_runtime import build_chat_orchestrator
-from opalatex.project import ProjectData
+from gilzabots.memgpt_runtime import build_chat_orchestrator
+from gilzabots.project import ProjectData
 
 
 def _project(tmp_path, mode):
@@ -56,7 +56,7 @@ def test_withholding_it_leaves_the_rest_of_the_toolset_alone(tmp_path):
 # ── An approved plan is conversation, not a dialog that closed ───────────────
 
 def test_an_approved_plan_is_persisted_as_conversation(monkeypatch):
-    import opalatex.tools as tools_mod
+    import gilzabots.tools as tools_mod
 
     saved = []
 
@@ -73,7 +73,7 @@ def test_an_approved_plan_is_persisted_as_conversation(monkeypatch):
 
 
 def test_an_empty_plan_is_not_persisted(monkeypatch):
-    import opalatex.tools as tools_mod
+    import gilzabots.tools as tools_mod
 
     saved = []
 
@@ -91,7 +91,7 @@ def test_an_empty_plan_is_not_persisted(monkeypatch):
 
 def test_persisting_never_raises_on_a_plan_the_user_already_approved(monkeypatch):
     """A store failure here would surface as a tool error on an approved plan."""
-    import opalatex.tools as tools_mod
+    import gilzabots.tools as tools_mod
 
     class ExplodingStore:
         def append_message(self, *_a, **_kw):
@@ -107,7 +107,7 @@ def test_the_agent_already_gets_the_plan_back_in_the_tool_result():
     """The gap was never the agent's copy: it is handed the whole plan verbatim."""
     import inspect
 
-    source = inspect.getsource(sys.modules["opalatex.tools"])
+    source = inspect.getsource(sys.modules["gilzabots.tools"])
     assert 'Proceed to execute the plan.\\n\\nPlan Content:\\n{edited_plan}' in source
 
 
@@ -117,7 +117,7 @@ def test_create_plan_refuses_once_the_turn_has_moved_to_execution(monkeypatch):
     """Approving a plan flips the session to auto; the built list still has the tool."""
     import asyncio
 
-    import opalatex.tools as tools_mod
+    import gilzabots.tools as tools_mod
 
     monkeypatch.setattr(tools_mod, "_PROJECT_SESSION", SimpleNamespace(mode="auto"))
 
@@ -130,8 +130,8 @@ def test_create_plan_refuses_once_the_turn_has_moved_to_execution(monkeypatch):
 
 def test_a_failed_plan_save_is_reported_not_swallowed(monkeypatch):
     """Silence here puts the plan back in a channel that does not survive."""
-    import opalatex.agent_stdin as stdin_mod
-    import opalatex.tools as tools_mod
+    import gilzabots.agent_stdin as stdin_mod
+    import gilzabots.tools as tools_mod
 
     events = []
 

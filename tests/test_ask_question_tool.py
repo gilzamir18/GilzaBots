@@ -4,24 +4,24 @@ import asyncio
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from opalatex.tools import ask_question, ask_human, get_helper_tools
-from opalatex.agent_stdin import ALL_TOOLS_MAP
-from opalatex.memgpt_runtime import build_chat_orchestrator
-from opalatex.project import ProjectData
-from opalatex.skills import parse_skill_md, find_skill_dir
+from gilzabots.tools import ask_question, ask_human, get_helper_tools
+from gilzabots.agent_stdin import ALL_TOOLS_MAP
+from gilzabots.memgpt_runtime import build_chat_orchestrator
+from gilzabots.project import ProjectData
+from gilzabots.skills import parse_skill_md, find_skill_dir
 
 
 @pytest.mark.asyncio
 async def test_ask_question_tool_execution():
     """Test ask_question async invocation and return string format with options."""
     raw = getattr(ask_question, "_func", None) or ask_question
-    with patch("opalatex.terminal.aask", new=AsyncMock(return_value="timestamp, level, service")) as mock_aask:
+    with patch("gilzabots.terminal.aask", new=AsyncMock(return_value="timestamp, level, service")) as mock_aask:
         res = await raw("Which fields to extract?", options=["Option 1", "Option 2"])
         assert res == "User response: timestamp, level, service"
         mock_aask.assert_called_once_with("Which fields to extract?", options=["Option 1", "Option 2"], is_multi_select=False)
 
     # Test empty / cancelled response
-    with patch("opalatex.terminal.aask", new=AsyncMock(return_value="")):
+    with patch("gilzabots.terminal.aask", new=AsyncMock(return_value="")):
         res = await raw("Which fields to extract?")
         assert "did not provide an answer or cancelled" in res
 
@@ -30,7 +30,7 @@ async def test_ask_question_tool_execution():
 async def test_ask_question_forwards_multi_select_and_returns_json_array():
     raw = getattr(ask_question, "_func", None) or ask_question
     response = '["Title", "Author"]'
-    with patch("opalatex.terminal.aask", new=AsyncMock(return_value=response)) as mock_aask:
+    with patch("gilzabots.terminal.aask", new=AsyncMock(return_value=response)) as mock_aask:
         result = await raw(
             "Which fields should be included?",
             options=["Title", "Date", "Author"],

@@ -157,15 +157,15 @@ export default function EditorContextMenuOverlay({ menu, onClose, setInlinePromp
       {hasSelection && (
         <>
           <button className="editor-ctx-item" onClick={handleRefine}>
-            <span className="editor-ctx-label">{t('editorPanel.refineSelection', 'Refine Selection (OpalaTex)')}</span>
+            <span className="editor-ctx-label">{t('editorPanel.refineSelection', 'Refine Selection (GilzaBots)')}</span>
           </button>
           <button className="editor-ctx-item" onClick={handleCreateIllustration}>
-            <span className="editor-ctx-label">{t('editorPanel.createIllustration', 'Create Illustration (OpalaTex)')}</span>
+            <span className="editor-ctx-label">{t('editorPanel.createIllustration', 'Create Illustration (GilzaBots)')}</span>
           </button>
         </>
       )}
       <button className="editor-ctx-item" onClick={handleGenerate}>
-        <span className="editor-ctx-label">{t('editorPanel.generateCode', 'Generate Content (OpalaTex)')}</span>
+        <span className="editor-ctx-label">{t('editorPanel.generateCode', 'Generate Content (GilzaBots)')}</span>
       </button>
 
       <div className="editor-ctx-separator" />

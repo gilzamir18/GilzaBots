@@ -8,7 +8,7 @@ Covers:
 """
 
 import pytest
-from opalatex.i18n import _, set_lang, _STRINGS
+from gilzabots.i18n import _, set_lang, _STRINGS
 
 
 EN_KEYS = set(_STRINGS["en"].keys())

@@ -5,7 +5,7 @@
  * templates seed the opening tag at the end of the prompt, so the model only
  * ever generates the closing one and the reasoning reaches us as ordinary text
  * terminated by an orphan `</think>`. The backend classifies this before the
- * message is stored (see `opalatex/think_stream.py`); these helpers keep the UI
+ * message is stored (see `gilzabots/think_stream.py`); these helpers keep the UI
  * correct for history saved before that fix and for any residue.
  */
 

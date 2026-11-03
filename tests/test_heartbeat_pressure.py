@@ -184,7 +184,7 @@ def test_the_project_setting_survives_the_save_path():
     the keys that name agent constructor fields. A knob missing from either list
     is accepted by the dialog and silently ignored at runtime.
     """
-    from opalatex.config import _AGENT_PARAM_KEYS, sanitize_model_params
+    from gilzabots.config import _AGENT_PARAM_KEYS, sanitize_model_params
 
     assert sanitize_model_params({"heartbeat_pressure_threshold": 0.6}) == {
         "heartbeat_pressure_threshold": 0.6

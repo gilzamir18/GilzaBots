@@ -8,7 +8,7 @@ import pytest
 
 
 def test_write_content_pos_inserts_before_line(tmp_path):
-    from opalatex.tools import set_project_context, write_content_pos
+    from gilzabots.tools import set_project_context, write_content_pos
 
     target = tmp_path / "main.tex"
     target.write_text("line 1\nline 3\n", encoding="utf-8")
@@ -22,7 +22,7 @@ def test_write_content_pos_inserts_before_line(tmp_path):
 
 
 def test_replace_content_range_replaces_inclusive_lines(tmp_path):
-    from opalatex.tools import replace_content_range, set_project_context
+    from gilzabots.tools import replace_content_range, set_project_context
 
     target = tmp_path / "main.tex"
     target.write_text("a\nold 1\nold 2\nd\n", encoding="utf-8")
@@ -36,7 +36,7 @@ def test_replace_content_range_replaces_inclusive_lines(tmp_path):
 
 
 def test_replace_content_range_deletes_lines_with_empty_content(tmp_path):
-    from opalatex.tools import replace_content_range, set_project_context
+    from gilzabots.tools import replace_content_range, set_project_context
 
     target = tmp_path / "main.tex"
     target.write_text("keep\nremove 1\nremove 2\nkeep too\n", encoding="utf-8")
@@ -49,7 +49,7 @@ def test_replace_content_range_deletes_lines_with_empty_content(tmp_path):
 
 
 def test_mutating_tool_returns_blocked_result_in_plan_mode(tmp_path):
-    from opalatex.tools import set_project_context, write_file
+    from gilzabots.tools import set_project_context, write_file
 
     target = tmp_path / "main.tex"
     set_project_context(SimpleNamespace(project_path=str(tmp_path), mode="plan"))
@@ -62,7 +62,7 @@ def test_mutating_tool_returns_blocked_result_in_plan_mode(tmp_path):
 
 
 def test_read_file_falls_back_to_cp1252(tmp_path):
-    from opalatex.tools import read_file, set_project_context
+    from gilzabots.tools import read_file, set_project_context
 
     target = tmp_path / "latex_output.txt"
     target.write_bytes("Introdução\nConclusão\n".encode("cp1252"))
@@ -75,7 +75,7 @@ def test_read_file_falls_back_to_cp1252(tmp_path):
 
 
 def test_read_content_pos_falls_back_to_cp1252(tmp_path):
-    from opalatex.tools import read_content_pos, set_project_context
+    from gilzabots.tools import read_content_pos, set_project_context
 
     target = tmp_path / "latex_output.txt"
     target.write_bytes("Linha 1\nIntrodução\nConclusão\n".encode("cp1252"))
@@ -88,7 +88,7 @@ def test_read_content_pos_falls_back_to_cp1252(tmp_path):
 
 
 def test_read_content_pos_beyond_eof_returns_recoverable_diagnostic(tmp_path):
-    from opalatex.tools import read_content_pos, set_project_context
+    from gilzabots.tools import read_content_pos, set_project_context
 
     target = tmp_path / "main.tex"
     target.write_text("line 1\nline 2\n", encoding="utf-8")
@@ -103,7 +103,7 @@ def test_read_content_pos_beyond_eof_returns_recoverable_diagnostic(tmp_path):
 
 
 def test_read_content_pos_rejects_invalid_line_ranges(tmp_path):
-    from opalatex.tools import read_content_pos, set_project_context
+    from gilzabots.tools import read_content_pos, set_project_context
 
     target = tmp_path / "main.tex"
     target.write_text("line 1\nline 2\n", encoding="utf-8")
@@ -119,7 +119,7 @@ def test_read_content_pos_rejects_invalid_line_ranges(tmp_path):
 
 
 def test_search_code_finds_text_with_line_numbers(tmp_path):
-    from opalatex.tools import search_code, set_project_context
+    from gilzabots.tools import search_code, set_project_context
 
     target = tmp_path / "main.tex"
     target.write_text("Intro\n\\section{Metodologia}\nBody\n", encoding="utf-8")
@@ -132,7 +132,7 @@ def test_search_code_finds_text_with_line_numbers(tmp_path):
 
 
 def test_search_code_supports_regex_for_latex_sections(tmp_path):
-    from opalatex.tools import search_code, set_project_context
+    from gilzabots.tools import search_code, set_project_context
 
     target = tmp_path / "main.tex"
     target.write_text("\\section{Introdução}\nText\n\\section{Metodologia}\n", encoding="utf-8")
@@ -145,7 +145,7 @@ def test_search_code_supports_regex_for_latex_sections(tmp_path):
 
 
 def test_search_code_limits_results(tmp_path):
-    from opalatex.tools import search_code, set_project_context
+    from gilzabots.tools import search_code, set_project_context
 
     target = tmp_path / "main.tex"
     target.write_text("match\nmatch\nmatch\n", encoding="utf-8")
@@ -159,7 +159,7 @@ def test_search_code_limits_results(tmp_path):
 
 
 def test_search_code_filters_by_file_pattern(tmp_path):
-    from opalatex.tools import search_code, set_project_context
+    from gilzabots.tools import search_code, set_project_context
 
     (tmp_path / "main.tex").write_text("needle\n", encoding="utf-8")
     (tmp_path / "notes.txt").write_text("needle\n", encoding="utf-8")
@@ -173,7 +173,7 @@ def test_search_code_filters_by_file_pattern(tmp_path):
 
 
 def test_get_helper_tools_includes_search_code():
-    from opalatex.tools import get_helper_tools
+    from gilzabots.tools import get_helper_tools
 
     names = {getattr(tool, "name", None) for tool in get_helper_tools()}
 
@@ -182,7 +182,7 @@ def test_get_helper_tools_includes_search_code():
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 def test_mutating_tool_does_not_create_shadow_git_checkpoint(tmp_path):
-    from opalatex.tools import set_project_context, write_file
+    from gilzabots.tools import set_project_context, write_file
 
     set_project_context(SimpleNamespace(project_path=str(tmp_path), mode="auto"))
 
@@ -190,12 +190,12 @@ def test_mutating_tool_does_not_create_shadow_git_checkpoint(tmp_path):
     asyncio.run(raw("main.tex", "hello\n"))
 
     assert (tmp_path / "main.tex").read_text(encoding="utf-8") == "hello\n"
-    assert not (tmp_path / ".opalatex" / ".shadowgit").exists()
+    assert not (tmp_path / ".gilzabots" / ".shadowgit").exists()
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 def test_mutating_tool_preserves_preexisting_changes_without_checkpointing(tmp_path):
-    from opalatex.tools import set_project_context, write_file
+    from gilzabots.tools import set_project_context, write_file
 
     set_project_context(SimpleNamespace(project_path=str(tmp_path), mode="auto"))
     (tmp_path / "user.tex").write_text("user edit\n", encoding="utf-8")
@@ -205,12 +205,12 @@ def test_mutating_tool_preserves_preexisting_changes_without_checkpointing(tmp_p
 
     assert (tmp_path / "user.tex").read_text(encoding="utf-8") == "user edit\n"
     assert (tmp_path / "agent.tex").read_text(encoding="utf-8") == "agent edit\n"
-    assert not (tmp_path / ".opalatex" / ".shadowgit").exists()
+    assert not (tmp_path / ".gilzabots" / ".shadowgit").exists()
 
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 def test_agent_turn_cleanup_preserves_preexisting_uncommitted_changes(tmp_path):
-    from opalatex.vcs import begin_agent_turn_checkpoint, finalize_agent_turn_checkpoint
+    from gilzabots.vcs import begin_agent_turn_checkpoint, finalize_agent_turn_checkpoint
 
     target = tmp_path / "user.tex"
     target.write_text("user edit\n", encoding="utf-8")
@@ -222,7 +222,7 @@ def test_agent_turn_cleanup_preserves_preexisting_uncommitted_changes(tmp_path):
     log = subprocess.run(
         [
             "git",
-            f"--git-dir={tmp_path / '.opalatex' / '.shadowgit'}",
+            f"--git-dir={tmp_path / '.gilzabots' / '.shadowgit'}",
             f"--work-tree={tmp_path}",
             "log",
             "--format=%s",
@@ -236,7 +236,7 @@ def test_agent_turn_cleanup_preserves_preexisting_uncommitted_changes(tmp_path):
     status = subprocess.run(
         [
             "git",
-            f"--git-dir={tmp_path / '.opalatex' / '.shadowgit'}",
+            f"--git-dir={tmp_path / '.gilzabots' / '.shadowgit'}",
             f"--work-tree={tmp_path}",
             "status",
             "--porcelain",
@@ -254,7 +254,7 @@ def test_agent_turn_cleanup_preserves_preexisting_uncommitted_changes(tmp_path):
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 def test_agent_turn_finalize_without_start_does_not_create_orphan_checkpoint(tmp_path):
-    from opalatex.vcs import finalize_agent_turn_checkpoint
+    from gilzabots.vcs import finalize_agent_turn_checkpoint
 
     target = tmp_path / "agent.tex"
     target.write_text("agent edit\n", encoding="utf-8")
@@ -264,7 +264,7 @@ def test_agent_turn_finalize_without_start_does_not_create_orphan_checkpoint(tmp
     log = subprocess.run(
         [
             "git",
-            f"--git-dir={tmp_path / '.opalatex' / '.shadowgit'}",
+            f"--git-dir={tmp_path / '.gilzabots' / '.shadowgit'}",
             f"--work-tree={tmp_path}",
             "log",
             "--format=%s",
@@ -279,7 +279,7 @@ def test_agent_turn_finalize_without_start_does_not_create_orphan_checkpoint(tmp
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 def test_labeled_agent_turn_without_changes_removes_start_and_end(tmp_path):
-    from opalatex.vcs import begin_agent_turn_checkpoint, finalize_agent_turn_checkpoint
+    from gilzabots.vcs import begin_agent_turn_checkpoint, finalize_agent_turn_checkpoint
 
     start_checkpoint = begin_agent_turn_checkpoint(str(tmp_path), "worker:command-line")
     assert start_checkpoint
@@ -288,7 +288,7 @@ def test_labeled_agent_turn_without_changes_removes_start_and_end(tmp_path):
     log = subprocess.run(
         [
             "git",
-            f"--git-dir={tmp_path / '.opalatex' / '.shadowgit'}",
+            f"--git-dir={tmp_path / '.gilzabots' / '.shadowgit'}",
             f"--work-tree={tmp_path}",
             "log",
             "--format=%s",
@@ -306,7 +306,7 @@ def test_labeled_agent_turn_without_changes_removes_start_and_end(tmp_path):
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 @pytest.mark.asyncio
 async def test_agent_turn_cancelled_during_start_does_not_leave_orphan(monkeypatch, tmp_path):
-    import opalatex.vcs as vcs
+    import gilzabots.vcs as vcs
 
     start_committed = threading.Event()
     release_start = threading.Event()
@@ -332,7 +332,7 @@ async def test_agent_turn_cancelled_during_start_does_not_leave_orphan(monkeypat
     log = subprocess.run(
         [
             "git",
-            f"--git-dir={tmp_path / '.opalatex' / '.shadowgit'}",
+            f"--git-dir={tmp_path / '.gilzabots' / '.shadowgit'}",
             f"--work-tree={tmp_path}",
             "log",
             "--format=%s",
@@ -350,7 +350,7 @@ async def test_agent_turn_cancelled_during_start_does_not_leave_orphan(monkeypat
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 @pytest.mark.asyncio
 async def test_agent_turn_finalization_survives_repeated_cancellation(monkeypatch, tmp_path):
-    import opalatex.vcs as vcs
+    import gilzabots.vcs as vcs
 
     checkpoint = vcs.AsyncAgentTurnCheckpoint(str(tmp_path))
     assert await checkpoint.begin()
@@ -380,7 +380,7 @@ async def test_agent_turn_finalization_survives_repeated_cancellation(monkeypatc
     log = subprocess.run(
         [
             "git",
-            f"--git-dir={tmp_path / '.opalatex' / '.shadowgit'}",
+            f"--git-dir={tmp_path / '.gilzabots' / '.shadowgit'}",
             f"--work-tree={tmp_path}",
             "log",
             "--format=%s",
@@ -393,7 +393,7 @@ async def test_agent_turn_finalization_survives_repeated_cancellation(monkeypatc
     status = subprocess.run(
         [
             "git",
-            f"--git-dir={tmp_path / '.opalatex' / '.shadowgit'}",
+            f"--git-dir={tmp_path / '.gilzabots' / '.shadowgit'}",
             f"--work-tree={tmp_path}",
             "status",
             "--porcelain",
@@ -411,7 +411,7 @@ async def test_agent_turn_finalization_survives_repeated_cancellation(monkeypatc
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 def test_agent_turn_reports_the_files_it_changed(tmp_path):
-    from opalatex.vcs import begin_agent_turn_checkpoint, finalize_agent_turn_checkpoint_details
+    from gilzabots.vcs import begin_agent_turn_checkpoint, finalize_agent_turn_checkpoint_details
 
     (tmp_path / "edited.tex").write_text("before\n", encoding="utf-8")
     (tmp_path / "untouched.tex").write_text("same\n", encoding="utf-8")
@@ -435,7 +435,7 @@ def test_agent_turn_reports_the_files_it_changed(tmp_path):
 
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 def test_agent_turn_without_net_diff_reports_no_changed_files(tmp_path):
-    from opalatex.vcs import begin_agent_turn_checkpoint, finalize_agent_turn_checkpoint_details
+    from gilzabots.vcs import begin_agent_turn_checkpoint, finalize_agent_turn_checkpoint_details
 
     target = tmp_path / "main.tex"
     target.write_text("original\n", encoding="utf-8")
@@ -452,7 +452,7 @@ def test_agent_turn_without_net_diff_reports_no_changed_files(tmp_path):
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 @pytest.mark.asyncio
 async def test_async_agent_turn_checkpoint_exposes_changed_files(tmp_path):
-    import opalatex.vcs as vcs
+    import gilzabots.vcs as vcs
 
     checkpoint = vcs.AsyncAgentTurnCheckpoint(str(tmp_path))
     assert await checkpoint.begin()
@@ -469,7 +469,7 @@ def test_write_content_pos_on_missing_file_points_at_write_file(tmp_path):
     orchestrators retried the same call (or the same path with flipped
     separators) instead of switching to write_file.
     """
-    from opalatex.tools import set_project_context, write_content_pos
+    from gilzabots.tools import set_project_context, write_content_pos
 
     set_project_context(SimpleNamespace(project_path=str(tmp_path)))
     raw = getattr(write_content_pos, "_func", None) or write_content_pos
@@ -481,7 +481,7 @@ def test_write_content_pos_on_missing_file_points_at_write_file(tmp_path):
 
 
 def test_replace_content_range_on_missing_file_points_at_write_file(tmp_path):
-    from opalatex.tools import replace_content_range, set_project_context
+    from gilzabots.tools import replace_content_range, set_project_context
 
     set_project_context(SimpleNamespace(project_path=str(tmp_path)))
     raw = getattr(replace_content_range, "_func", None) or replace_content_range
@@ -491,7 +491,7 @@ def test_replace_content_range_on_missing_file_points_at_write_file(tmp_path):
 
 
 def test_write_content_pos_description_states_the_file_must_exist():
-    from opalatex.tools import write_content_pos
+    from gilzabots.tools import write_content_pos
 
     description = (write_content_pos.description or "").lower()
     assert "must already exist" in description
@@ -519,7 +519,7 @@ def _raw_tool(tool):
 
 @pytest.mark.parametrize("line", VERBATIM_LINES)
 def test_replace_content_range_writes_a_single_line_verbatim(tmp_path, line):
-    from opalatex.tools import replace_content_range, set_project_context
+    from gilzabots.tools import replace_content_range, set_project_context
 
     target = tmp_path / "main.tex"
     target.write_text("a\nold\nc\n", encoding="utf-8")
@@ -532,7 +532,7 @@ def test_replace_content_range_writes_a_single_line_verbatim(tmp_path, line):
 
 @pytest.mark.parametrize("line", VERBATIM_LINES)
 def test_write_content_pos_writes_a_single_line_verbatim(tmp_path, line):
-    from opalatex.tools import set_project_context, write_content_pos
+    from gilzabots.tools import set_project_context, write_content_pos
 
     target = tmp_path / "main.tex"
     target.write_text("a\nc\n", encoding="utf-8")
@@ -545,7 +545,7 @@ def test_write_content_pos_writes_a_single_line_verbatim(tmp_path, line):
 
 @pytest.mark.parametrize("line", VERBATIM_LINES)
 def test_write_file_writes_single_line_content_verbatim(tmp_path, line):
-    from opalatex.tools import set_project_context, write_file
+    from gilzabots.tools import set_project_context, write_file
 
     set_project_context(SimpleNamespace(project_path=str(tmp_path)))
 
@@ -556,7 +556,7 @@ def test_write_file_writes_single_line_content_verbatim(tmp_path, line):
 
 def test_create_docx_file_keeps_latex_in_a_single_line(tmp_path):
     docx = pytest.importorskip("docx")
-    from opalatex.tools import create_docx_file, set_project_context
+    from gilzabots.tools import create_docx_file, set_project_context
 
     set_project_context(SimpleNamespace(project_path=str(tmp_path)))
     text = r"A perda depende de $\theta$ e de \textbf{tudo}."
@@ -570,7 +570,7 @@ def test_create_docx_file_keeps_latex_in_a_single_line(tmp_path):
 # ── edit_file: a passage found by its text ───────────────────────────────────
 
 def _edit(tmp_path, *args, **kwargs):
-    from opalatex.tools import edit_file, set_project_context
+    from gilzabots.tools import edit_file, set_project_context
 
     set_project_context(SimpleNamespace(project_path=str(tmp_path)))
     return asyncio.run(_raw_tool(edit_file)(*args, **kwargs))
@@ -708,20 +708,20 @@ def test_edit_file_does_not_create_files_or_edit_binaries_or_packages(tmp_path):
 
 
 def test_edit_file_is_a_gated_workspace_write_tool():
-    from opalatex.tools import edit_file, get_workspace_action_tools
-    from opalatex.agent_stdin import ALL_TOOLS_MAP
+    from gilzabots.tools import edit_file, get_workspace_action_tools
+    from gilzabots.agent_stdin import ALL_TOOLS_MAP
 
     assert edit_file in get_workspace_action_tools()
     assert ALL_TOOLS_MAP["edit_file"] is edit_file
 
 
 def test_edit_file_is_blocked_in_plan_mode(tmp_path):
-    from opalatex.tools import set_project_context
+    from gilzabots.tools import set_project_context
 
     target = tmp_path / "main.tex"
     target.write_text("old\n", encoding="utf-8")
     set_project_context(SimpleNamespace(project_path=str(tmp_path), mode="plan"))
-    from opalatex.tools import edit_file
+    from gilzabots.tools import edit_file
 
     result = asyncio.run(_raw_tool(edit_file)("main.tex", "old", "new"))
 
@@ -750,7 +750,7 @@ def test_a_clean_edit_and_a_file_that_was_already_broken_report_nothing(tmp_path
 
 
 def test_line_tools_and_write_file_report_a_new_syntax_error(tmp_path):
-    from opalatex.tools import replace_content_range, set_project_context, write_content_pos, write_file
+    from gilzabots.tools import replace_content_range, set_project_context, write_content_pos, write_file
 
     set_project_context(SimpleNamespace(project_path=str(tmp_path)))
     (tmp_path / "data.json").write_text('{\n  "a": 1\n}\n', encoding="utf-8")
@@ -767,7 +767,7 @@ def test_line_tools_and_write_file_report_a_new_syntax_error(tmp_path):
 
 
 def test_formats_that_depend_on_project_setup_need_a_version_that_parsed(tmp_path):
-    from opalatex.tools import set_project_context, write_file
+    from gilzabots.tools import set_project_context, write_file
 
     set_project_context(SimpleNamespace(project_path=str(tmp_path)))
     # JSX in a .js file and YAML custom tags parse or not depending on the
@@ -806,7 +806,7 @@ def _bump(path, text):
 
 
 def test_a_line_edit_after_an_outside_change_is_refused(tmp_path):
-    from opalatex.tools import read_content_pos, replace_content_range, set_project_context
+    from gilzabots.tools import read_content_pos, replace_content_range, set_project_context
 
     target = tmp_path / "main.tex"
     target.write_text("a\nb\nc\n", encoding="utf-8")
@@ -828,7 +828,7 @@ def test_a_line_edit_after_an_outside_change_is_refused(tmp_path):
 
 
 def test_the_agents_own_writes_do_not_trip_the_check(tmp_path):
-    from opalatex.tools import (
+    from gilzabots.tools import (
         read_file, replace_content_range, set_project_context, write_content_pos,
     )
 
@@ -846,7 +846,7 @@ def test_the_agents_own_writes_do_not_trip_the_check(tmp_path):
 
 
 def test_search_results_count_as_a_read_and_unseen_files_are_not_checked(tmp_path):
-    from opalatex.tools import replace_content_range, search_code, set_project_context, write_content_pos
+    from gilzabots.tools import replace_content_range, search_code, set_project_context, write_content_pos
 
     target = tmp_path / "main.tex"
     target.write_text("x\nneedle\n", encoding="utf-8")
@@ -863,7 +863,7 @@ def test_search_results_count_as_a_read_and_unseen_files_are_not_checked(tmp_pat
 
 
 def test_edit_file_is_not_blocked_by_an_outside_change(tmp_path):
-    from opalatex.tools import read_file, set_project_context
+    from gilzabots.tools import read_file, set_project_context
 
     target = tmp_path / "main.tex"
     target.write_text("alpha\nbeta\n", encoding="utf-8")

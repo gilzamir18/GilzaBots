@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-30  
 **Status:** Resolved  
-**Affected components:** `opalatex/latex_compiler.py`, `opalatex/ide_server.py`
+**Affected components:** `gilzabots/latex_compiler.py`, `gilzabots/ide_server.py`
 
 ---
 
@@ -30,7 +30,7 @@ Three separate bugs were found, each responsible for one stage of the failure.
 
 ### Bug 1 — `determine_main_file_for_compilation` returned only the basename
 
-**File:** `opalatex/latex_compiler.py`
+**File:** `gilzabots/latex_compiler.py`
 
 The function was returning `os.path.basename(file_path)` (e.g., `"Aula02.tex"`) instead of the
 path relative to `project_dir`. This basename was later joined with `project_dir`:
@@ -53,7 +53,7 @@ abs_main_file = os.path.join(project_dir, file_rel_path)
 
 ### Bug 2 — `pdf_path` was computed at the project root instead of alongside the `.tex` file
 
-**File:** `opalatex/latex_compiler.py`, function `compile_latex`
+**File:** `gilzabots/latex_compiler.py`, function `compile_latex`
 
 After Tectonic ran, the code verified the PDF existence at the wrong path:
 
@@ -76,7 +76,7 @@ pdf_path = os.path.join(os.path.dirname(abs_main_file), f"{base_no_ext}.pdf")
 
 ### Bug 3 — New (unsaved) files were not written to disk before compilation
 
-**File:** `opalatex/latex_compiler.py`, function `compile_latex`
+**File:** `gilzabots/latex_compiler.py`, function `compile_latex`
 
 The original guard prevented saving a file that did not yet exist on disk:
 
@@ -113,11 +113,11 @@ if file_path:
 
 ## Files Changed
 
-- [`opalatex/latex_compiler.py`](file:///c:/Users/gilza/projetos/OpalaTex/opalatex/latex_compiler.py)
+- [`gilzabots/latex_compiler.py`](file:///c:/Users/gilza/projetos/GilzaBots/gilzabots/latex_compiler.py)
   - Added `is_independent()`, `get_includes()`, `is_recursively_included()`, `determine_main_file_for_compilation()`
   - Fixed `pdf_path` computation in `compile_latex()` to use `os.path.dirname(abs_main_file)`
   - Fixed file save guard in `compile_latex()` to write new files to disk before compilation
 
-- [`opalatex/ide_server.py`](file:///c:/Users/gilza/projetos/OpalaTex/opalatex/ide_server.py)
+- [`gilzabots/ide_server.py`](file:///c:/Users/gilza/projetos/GilzaBots/gilzabots/ide_server.py)
   - Replaced `guess_main_file` in `/api/latex/compile`, `/api/latex/check-pdf`, and `/api/latex/synctex`
     with `determine_main_file_for_compilation`

@@ -15,10 +15,10 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-import opalatex.agent_stdin as stdin_mod
-from opalatex import keep_awake
-from opalatex.ide_server import AsyncHTTPServer
-from opalatex.keep_awake import SleepInhibitor, backend_for_platform
+import gilzabots.agent_stdin as stdin_mod
+from gilzabots import keep_awake
+from gilzabots.ide_server import AsyncHTTPServer
+from gilzabots.keep_awake import SleepInhibitor, backend_for_platform
 
 
 class FakeBackend:
@@ -131,7 +131,7 @@ async def test_a_turn_holds_off_sleep_until_it_ends(monkeypatch):
         _reader, writer = await asyncio.open_connection("127.0.0.1", port)
         body = json.dumps({"agent": "chat_orchestrator", "prompt": "hi"}).encode("utf-8")
         writer.write(
-            b"POST /api/opalatex/run HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+            b"POST /api/gilzabots/run HTTP/1.1\r\nHost: 127.0.0.1\r\n"
             b"Content-Type: application/json\r\n"
             + f"Content-Length: {len(body)}\r\n\r\n".encode("utf-8") + body
         )
@@ -174,7 +174,7 @@ async def test_a_refused_turn_does_not_leak_a_hold(monkeypatch):
     server.active_agent_task = alive
     try:
         await server.route_api(
-            "POST", "/api/opalatex/run", {}, {},
+            "POST", "/api/gilzabots/run", {}, {},
             json.dumps({"agent": "chat_orchestrator", "prompt": "hi"}).encode("utf-8"),
             AsyncMock(),
         )

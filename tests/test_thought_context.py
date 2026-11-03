@@ -8,9 +8,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 from agenticblocks.blocks.llm.tokens import count_text_tokens
-from opalatex import thought_context as tc
-from opalatex.project import ProjectStore
-from opalatex.ui_settings import clamp_thought_context_tokens
+from gilzabots import thought_context as tc
+from gilzabots.project import ProjectStore
+from gilzabots.ui_settings import clamp_thought_context_tokens
 
 
 def test_text_tokens_are_counted_and_empty_text_is_zero():
@@ -120,8 +120,8 @@ async def test_a_summary_that_never_fits_fails_instead_of_being_cut(monkeypatch)
 
 @pytest.mark.asyncio
 async def test_thought_settings_endpoint_round_trips(monkeypatch, tmp_path):
-    import opalatex.ui_settings as ui
-    from opalatex.ide_server import AsyncHTTPServer
+    import gilzabots.ui_settings as ui
+    from gilzabots.ide_server import AsyncHTTPServer
 
     monkeypatch.setattr(ui, "_SETTINGS_PATH", tmp_path / "ui_settings.json")
     server = AsyncHTTPServer()
@@ -148,7 +148,7 @@ async def test_thought_settings_endpoint_round_trips(monkeypatch, tmp_path):
 
 
 def test_recorded_reasoning_is_never_discarded_and_carries_its_token_count(monkeypatch):
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     chunks = []
     events = []

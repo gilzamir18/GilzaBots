@@ -1,6 +1,6 @@
 """Tests for the in-app restart used after saving restart-only settings.
 
-The Settings modal asks the user whether to restart once OPALATEX_HOME changes;
+The Settings modal asks the user whether to restart once GILZABOTS_HOME changes;
 answering yes hits ``POST /api/app/restart``, which relaunches the process.
 """
 
@@ -14,8 +14,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex import ide_server
-from opalatex.ide_server import AsyncHTTPServer, build_relaunch_command, schedule_app_restart
+from gilzabots import ide_server
+from gilzabots.ide_server import AsyncHTTPServer, build_relaunch_command, schedule_app_restart
 
 
 @pytest.fixture(autouse=True)
@@ -32,7 +32,7 @@ def test_module_relaunch_preserves_package_imports_and_arguments(tmp_path):
     (package / "cli.py").write_text(
         "from . import VALUE\n"
         "import json, subprocess, sys\n"
-        "from opalatex.ide_server import build_relaunch_command\n"
+        "from gilzabots.ide_server import build_relaunch_command\n"
         "if sys.argv[-1] == 'child':\n"
         "    print(json.dumps([VALUE, sys.argv[1:]]))\n"
         "else:\n"
@@ -67,10 +67,10 @@ def _server_with_capture():
 
 def test_relaunch_command_runs_the_frozen_binary_directly(monkeypatch):
     monkeypatch.setattr(sys, "frozen", True, raising=False)
-    monkeypatch.setattr(sys, "executable", "/opt/OpalaTex/OpalaTex")
-    monkeypatch.setattr(sys, "argv", ["/opt/OpalaTex/OpalaTex", "--mode", "edit"])
+    monkeypatch.setattr(sys, "executable", "/opt/GilzaBots/GilzaBots")
+    monkeypatch.setattr(sys, "argv", ["/opt/GilzaBots/GilzaBots", "--mode", "edit"])
 
-    assert build_relaunch_command() == ["/opt/OpalaTex/OpalaTex", "--mode", "edit"]
+    assert build_relaunch_command() == ["/opt/GilzaBots/GilzaBots", "--mode", "edit"]
 
 
 def test_relaunch_command_reruns_the_entry_script_with_the_same_interpreter(monkeypatch, tmp_path):
@@ -92,7 +92,7 @@ def test_relaunch_command_falls_back_to_the_cli_entry_point(monkeypatch):
     assert build_relaunch_command() == [
         "/usr/bin/python3",
         "-c",
-        "from opalatex.cli import main; main()",
+        "from gilzabots.cli import main; main()",
     ]
 
 
@@ -116,7 +116,7 @@ def test_schedule_app_restart_spawns_a_replacement_then_exits(monkeypatch):
 
     # The run being replaced had acceleration turned off, so its own environment
     # carries the flags that decision produced.
-    from opalatex.webengine_env import (
+    from gilzabots.webengine_env import (
         CHROMIUM_FLAGS_VAR,
         QUICK_BACKEND_VAR,
         apply_webengine_environment,
@@ -193,8 +193,8 @@ async def test_restart_endpoint_returns_500_when_the_relaunch_cannot_be_schedule
 
 @pytest.mark.asyncio
 async def test_environment_endpoint_reports_snap_platform_and_version(monkeypatch):
-    monkeypatch.setenv("SNAP_NAME", "opalatex")
-    monkeypatch.setenv("SNAP", "/snap/opalatex/current")
+    monkeypatch.setenv("SNAP_NAME", "gilzabots")
+    monkeypatch.setenv("SNAP", "/snap/gilzabots/current")
     monkeypatch.setattr("platform.system", lambda: "Linux")
 
     server, responses = _server_with_capture()
@@ -219,7 +219,7 @@ async def test_saving_the_data_directory_only_requires_a_restart_when_it_changed
     async def post(path_value):
         await server.route_api(
             "POST",
-            "/api/settings/opalatexhome",
+            "/api/settings/gilzabotshome",
             {},
             {},
             json.dumps({"path": path_value}).encode("utf-8"),
@@ -228,11 +228,11 @@ async def test_saving_the_data_directory_only_requires_a_restart_when_it_changed
         return responses[-1]
 
     assert await post(str(target)) == (200, {"success": True, "requiresRestart": True}, "application/json")
-    assert (tmp_path / ".opalatexhome").read_text(encoding="utf-8") == str(target)
+    assert (tmp_path / ".gilzabotshome").read_text(encoding="utf-8") == str(target)
 
     assert (await post(str(target)))[1] == {"success": True, "requiresRestart": False}
 
     assert (await post(""))[1] == {"success": True, "requiresRestart": True}
-    assert not (tmp_path / ".opalatexhome").exists()
+    assert not (tmp_path / ".gilzabotshome").exists()
 
     assert (await post(""))[1] == {"success": True, "requiresRestart": False}

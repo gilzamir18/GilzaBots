@@ -13,11 +13,11 @@ import asyncio
 
 import pytest
 
-from opalatex import token_usage, tools
+from gilzabots import token_usage, tools
 
 
 def _read_content_pos(path, start_pos, end_pos):
-    """Call read_content_pos past the @opalatex_tool FunctionBlock/permission wrapper."""
+    """Call read_content_pos past the @gilzabots_tool FunctionBlock/permission wrapper."""
     return asyncio.run(tools.read_content_pos._func(path, start_pos, end_pos))
 
 

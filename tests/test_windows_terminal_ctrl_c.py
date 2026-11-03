@@ -4,14 +4,14 @@ ConPTY turns the ``\\x03`` xterm sends into a CTRL_C_EVENT, but PowerShell and
 every command it runs ignore that event when they inherit the "ignore Ctrl+C"
 console flag. Windows sets the flag on a process created with
 CREATE_NEW_PROCESS_GROUP, which is how the in-app restart used to relaunch
-OpalaTex, so after a restart Ctrl+C no longer stopped a running command.
+GilzaBots, so after a restart Ctrl+C no longer stopped a running command.
 """
 import subprocess
 import sys
 import types
 
-from opalatex import ide_server, terminal_manager
-from opalatex.terminal_manager import TerminalSession
+from gilzabots import ide_server, terminal_manager
+from gilzabots.terminal_manager import TerminalSession
 
 
 def test_the_restart_does_not_start_the_app_in_a_new_process_group(monkeypatch):
@@ -24,7 +24,7 @@ def test_the_restart_does_not_start_the_app_in_a_new_process_group(monkeypatch):
     monkeypatch.setattr(sys, "platform", "win32")
     monkeypatch.setattr(subprocess, "Popen", _FakePopen)
 
-    ide_server.spawn_detached(["opalatex"], cwd=".")
+    ide_server.spawn_detached(["gilzabots"], cwd=".")
 
     flags = captured["creationflags"]
     assert flags & 0x00000008, "DETACHED_PROCESS keeps the relaunched app alive"
@@ -40,13 +40,13 @@ def test_the_shell_is_spawned_with_ctrl_c_enabled(monkeypatch, tmp_path):
             order.append(("spawn", shell, env))
             return object()
 
-    managed_env = {"PATH": "C:\\OpalaTex\\bin"}
+    managed_env = {"PATH": "C:\\GilzaBots\\bin"}
     monkeypatch.setattr(sys, "platform", "win32")
     monkeypatch.setitem(sys.modules, "winpty", types.SimpleNamespace(PtyProcess=_FakePty))
     monkeypatch.setattr(
         terminal_manager, "enable_ctrl_c_for_children", lambda: order.append(("enable",))
     )
-    # The shell reaches the tools OpalaTex manages (tectonic, pandoc) by PATH.
+    # The shell reaches the tools GilzaBots manages (tectonic, pandoc) by PATH.
     monkeypatch.setattr(terminal_manager, "environment_with_managed_tools", lambda: managed_env)
 
     TerminalSession(str(tmp_path))

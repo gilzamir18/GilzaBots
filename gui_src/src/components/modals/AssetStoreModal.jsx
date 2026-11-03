@@ -543,7 +543,7 @@ export default function AssetStoreModal({
                         className="vscode-button skill-card-action"
                         disabled={refreshingName === skill.name}
                         onClick={() => handleRefreshLocal(skill, '/api/skills/restore-bundled')}
-                        title={t('assetStore.restoreBundledHint', 'Delete the local copy and go back to the version that ships with OpalaTex.')}
+                        title={t('assetStore.restoreBundledHint', 'Delete the local copy and go back to the version that ships with GilzaBots.')}
                       >
                         {refreshingName === skill.name ? (
                           t('assetStore.restoring', 'Restoring…')

@@ -2,7 +2,7 @@ import json
 from unittest.mock import AsyncMock
 import pytest
 
-from opalatex.ide_server import AsyncHTTPServer, clean_evolved_prompt
+from gilzabots.ide_server import AsyncHTTPServer, clean_evolved_prompt
 
 
 def test_clean_evolved_prompt():
@@ -52,7 +52,7 @@ def test_clean_evolved_prompt_separates_reasoning_markup():
 @pytest.mark.asyncio
 async def test_prompt_evolution_settings_endpoints(tmp_path, monkeypatch):
     settings_file = tmp_path / "ui_settings.json"
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", settings_file)
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", settings_file)
 
     server = AsyncHTTPServer()
     writer = AsyncMock()
@@ -97,7 +97,7 @@ async def test_prompt_evolution_settings_endpoints(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_evolve_prompt_endpoint(tmp_path, monkeypatch):
     settings_file = tmp_path / "ui_settings.json"
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", settings_file)
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", settings_file)
 
     server = AsyncHTTPServer()
     writer = AsyncMock()
@@ -127,7 +127,7 @@ async def test_evolve_prompt_endpoint(tmp_path, monkeypatch):
         endpoint_call["max_tokens"] = max_tokens
         return f"Evolved {iterations}x: {prompt}"
 
-    monkeypatch.setattr("opalatex.ide_server._execute_prompt_evolution", mock_execute)
+    monkeypatch.setattr("gilzabots.ide_server._execute_prompt_evolution", mock_execute)
 
     await server.route_api(
         "POST",
@@ -148,7 +148,7 @@ async def test_evolve_prompt_endpoint(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_execute_prompt_evolution_invokes_agent(monkeypatch):
-    from opalatex.ide_server import _execute_prompt_evolution
+    from gilzabots.ide_server import _execute_prompt_evolution
     from unittest.mock import MagicMock
 
     mock_agent_instance = MagicMock()
@@ -161,7 +161,7 @@ async def test_execute_prompt_evolution_invokes_agent(monkeypatch):
         return mock_agent_instance
 
     monkeypatch.setattr("agenticblocks.blocks.llm.agent.LLMAgentBlock", mock_agent_class)
-    monkeypatch.setattr("opalatex.litellm_compat.wrap_agent_litellm_compat", lambda a: a)
+    monkeypatch.setattr("gilzabots.litellm_compat.wrap_agent_litellm_compat", lambda a: a)
 
     selected_model = "test-provider/prompt-model"
     captured = {}
@@ -172,7 +172,7 @@ async def test_execute_prompt_evolution_invokes_agent(monkeypatch):
         captured["reasoning_effort_override"] = reasoning_effort_override
         return {"think": True}
 
-    monkeypatch.setattr("opalatex.config.get_agent_llm_kwargs", mock_get_llm_kwargs)
+    monkeypatch.setattr("gilzabots.config.get_agent_llm_kwargs", mock_get_llm_kwargs)
 
     result = await _execute_prompt_evolution(
         "Short prompt",
@@ -206,7 +206,7 @@ async def test_execute_prompt_evolution_invokes_agent(monkeypatch):
 async def test_cancel_evolve_prompt_endpoint(tmp_path, monkeypatch):
     import asyncio
     settings_file = tmp_path / "ui_settings.json"
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", settings_file)
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", settings_file)
 
     server = AsyncHTTPServer()
     writer = AsyncMock()
@@ -234,7 +234,7 @@ async def test_cancel_evolve_prompt_endpoint(tmp_path, monkeypatch):
             cancelled_observed = True
             raise
 
-    monkeypatch.setattr("opalatex.ide_server._execute_prompt_evolution", mock_slow_execute)
+    monkeypatch.setattr("gilzabots.ide_server._execute_prompt_evolution", mock_slow_execute)
 
     # Launch evolve-prompt in background task
     evolve_task = asyncio.create_task(
@@ -265,10 +265,10 @@ async def test_cancel_evolve_prompt_endpoint(tmp_path, monkeypatch):
 
 
 def _catalog(monkeypatch, entry):
-    import opalatex.models_store as store
+    import gilzabots.models_store as store
     monkeypatch.setattr(store, "get_model", lambda _id: dict(entry))
     monkeypatch.setattr(store, "get_model_by_runtime_id", lambda _id: dict(entry))
-    monkeypatch.setattr("opalatex.tools._PROJECT_SESSION", None, raising=False)
+    monkeypatch.setattr("gilzabots.tools._PROJECT_SESSION", None, raising=False)
 
 
 @pytest.mark.parametrize(
@@ -295,7 +295,7 @@ def _catalog(monkeypatch, entry):
     ],
 )
 def test_reasoning_effort_override_reaches_the_provider(monkeypatch, model, entry, expected):
-    from opalatex.config import get_agent_llm_kwargs
+    from gilzabots.config import get_agent_llm_kwargs
 
     _catalog(monkeypatch, entry)
     kwargs = get_agent_llm_kwargs(
@@ -308,7 +308,7 @@ def test_reasoning_effort_override_reaches_the_provider(monkeypatch, model, entr
 
 
 def test_reasoning_effort_override_skips_models_that_do_not_reason(monkeypatch):
-    from opalatex.config import get_agent_llm_kwargs
+    from gilzabots.config import get_agent_llm_kwargs
 
     _catalog(monkeypatch, {"supports_thinking": False, "api_base": "https://openrouter.ai/api/v1"})
     kwargs = get_agent_llm_kwargs(
@@ -321,7 +321,7 @@ def test_reasoning_effort_override_skips_models_that_do_not_reason(monkeypatch):
 
 
 def test_without_override_the_catalog_effort_still_applies(monkeypatch):
-    from opalatex.config import get_agent_llm_kwargs
+    from gilzabots.config import get_agent_llm_kwargs
 
     _catalog(monkeypatch, {"supports_thinking": True, "api_base": "https://ollama.com"})
     kwargs = get_agent_llm_kwargs("orchestrator", model_override="ollama/glm-5.3:cloud")

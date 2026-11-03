@@ -6,7 +6,7 @@ orchestrator still replays its history.
 """
 import pytest
 
-from opalatex import chat_ops, token_usage
+from gilzabots import chat_ops, token_usage
 
 
 class _FakeStore:

@@ -13,13 +13,13 @@ import asyncio
 
 import pytest
 
-from opalatex.memgpt_runtime import (
+from gilzabots.memgpt_runtime import (
     CHAT_ORCHESTRATOR_SKILL,
     build_run_skill_tool,
     chat_orchestrator_system_prompt,
 )
-from opalatex.project import ProjectData
-from opalatex.skills import active_skills, level1_metadata, MANDATORY_SKILLS
+from gilzabots.project import ProjectData
+from gilzabots.skills import active_skills, level1_metadata, MANDATORY_SKILLS
 
 
 _CATALOG_HEADINGS = (
@@ -105,7 +105,7 @@ def test_no_catalog_entry_is_left_with_an_empty_description():
 
 
 def test_every_listed_skill_is_one_run_skill_can_resolve(tmp_path):
-    from opalatex.skills import find_skill_dir
+    from gilzabots.skills import find_skill_dir
     for line in _catalog(str(tmp_path)).splitlines():
         name = line[2:].partition(":")[0].strip()
         assert find_skill_dir(name, str(tmp_path)) is not None, name

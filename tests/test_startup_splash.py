@@ -13,7 +13,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from opalatex.ide_server import load_splash_page
+from gilzabots.ide_server import load_splash_page
 
 ROOT = Path(__file__).resolve().parent.parent
 SPLASH_SOURCE = ROOT / "gui_src" / "public" / "splash.html"
@@ -29,12 +29,12 @@ def _run(probe: str, cwd: Path = ROOT) -> str:
 def test_the_path_to_the_window_does_not_import_litellm():
     """Everything imported before the window opens stays light.
 
-    `opalatex.config` used to import `opalatex.tools` at module load, and with
+    `gilzabots.config` used to import `gilzabots.tools` at module load, and with
     it agenticblocks and litellm, so the window could not appear before ~4 s.
     """
     probe = (
-        "import opalatex.cli, opalatex.ide_server, opalatex.ui_settings, "
-        "opalatex.webengine_env, opalatex.crash_report, sys;"
+        "import gilzabots.cli, gilzabots.ide_server, gilzabots.ui_settings, "
+        "gilzabots.webengine_env, gilzabots.crash_report, sys;"
         "print(sorted({m.split('.')[0] for m in sys.modules} & {'litellm', 'agenticblocks'}))"
     )
     assert _run(probe) == "[]"
@@ -47,14 +47,14 @@ def test_config_still_reads_the_working_directory_agents_yaml(tmp_path):
     get_project_path() would answer the working directory: that is where the
     local agents.yaml is still read from.
     """
-    (tmp_path / ".opalatex").mkdir()
-    (tmp_path / ".opalatex" / "agents.yaml").write_text("default: local/model-from-cwd\n", encoding="utf-8")
+    (tmp_path / ".gilzabots").mkdir()
+    (tmp_path / ".gilzabots" / "agents.yaml").write_text("default: local/model-from-cwd\n", encoding="utf-8")
     home = tmp_path / "home"
     home.mkdir()
     probe = (
-        "import os; os.environ['OPALATEX_HOME'] = %r;"
-        "import opalatex.config as c, sys;"
-        "print(c.DEFAULT_MODEL, 'opalatex.tools' in sys.modules)" % str(home)
+        "import os; os.environ['GILZABOTS_HOME'] = %r;"
+        "import gilzabots.config as c, sys;"
+        "print(c.DEFAULT_MODEL, 'gilzabots.tools' in sys.modules)" % str(home)
     )
     assert _run(probe, cwd=tmp_path) == "local/model-from-cwd False"
 
@@ -92,15 +92,15 @@ def test_splash_source_keeps_the_contract_its_readers_rely_on():
     # ide_server.py: placeholders it fills, and the API _boot calls.
     assert source.count('src="__SPLASH_ICON__"') == 1
     assert 'data-splash-lang=""' in source
-    assert "window.opalatexSplash" in source
+    assert "window.gilzabotsSplash" in source
     for phase in ("loading", "starting", "opening"):
         assert f"{phase}:" in source
     # vite.config.js inlineSplash: the pieces it copies into index.html.
-    assert '<style id="opalatex-splash-style">' in source
+    assert '<style id="gilzabots-splash-style">' in source
     assert source.count("<!-- splash:begin -->") == 1
     assert source.count("<!-- splash:end -->") == 1
     assert 'data-status="loading"' in source
     # The page starts in "loading" by itself; the window's background matches it.
-    from opalatex.ide_server import SPLASH_BACKGROUND
+    from gilzabots.ide_server import SPLASH_BACKGROUND
     assert f"background: {SPLASH_BACKGROUND}" in source
     assert (ROOT / "gui_src" / "public" / "splash-icon.png").is_file()

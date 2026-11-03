@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next';
  * be removed to get the disk back.
  *
  * The backend verifies each file's checksum and discards a corrupt download
- * (opalatex/voice_store.py), so anything listed as installed is known good.
+ * (gilzabots/voice_store.py), so anything listed as installed is known good.
  */
 
 const formatMb = (bytes) => `${Math.round((Number(bytes) || 0) / 1e6)} MB`;

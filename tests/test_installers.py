@@ -14,25 +14,25 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 def test_unix_uninstaller_removes_owned_files_and_preserves_user_data(tmp_path):
     home = tmp_path / "home"
-    install_dir = home / ".local" / "share" / "OpalaTex"
+    install_dir = home / ".local" / "share" / "GilzaBots"
     bin_dir = home / ".local" / "bin"
     applications = home / ".local" / "share" / "applications"
-    data_dir = home / ".opalatex"
+    data_dir = home / ".gilzabots"
     install_dir.mkdir(parents=True)
     bin_dir.mkdir(parents=True)
     applications.mkdir(parents=True)
     data_dir.mkdir()
-    (install_dir / "OpalaTex").write_text("binary", encoding="utf-8")
+    (install_dir / "GilzaBots").write_text("binary", encoding="utf-8")
     (install_dir / "uninstall.sh").write_text("script", encoding="utf-8")
     (data_dir / "sessions.db").write_text("chats", encoding="utf-8")
-    (bin_dir / "opalatex").symlink_to(install_dir / "OpalaTex")
-    (bin_dir / "opalatex-uninstall").symlink_to(install_dir / "uninstall.sh")
-    (applications / "opalatex.desktop").write_text(
-        f"[Desktop Entry]\nExec={install_dir}/OpalaTex\n", encoding="utf-8"
+    (bin_dir / "gilzabots").symlink_to(install_dir / "GilzaBots")
+    (bin_dir / "gilzabots-uninstall").symlink_to(install_dir / "uninstall.sh")
+    (applications / "gilzabots.desktop").write_text(
+        f"[Desktop Entry]\nExec={install_dir}/GilzaBots\n", encoding="utf-8"
     )
     bashrc = home / ".bashrc"
     bashrc.write_text(
-        f"export BEFORE=1\n\n# OpalaTex PATH\nexport PATH=\"{bin_dir}:$PATH\"\n",
+        f"export BEFORE=1\n\n# GilzaBots PATH\nexport PATH=\"{bin_dir}:$PATH\"\n",
         encoding="utf-8",
     )
 
@@ -46,9 +46,9 @@ def test_unix_uninstaller_removes_owned_files_and_preserves_user_data(tmp_path):
 
     assert result.returncode == 0, result.stderr
     assert not install_dir.exists()
-    assert not (bin_dir / "opalatex").exists()
-    assert not (applications / "opalatex.desktop").exists()
-    assert "OpalaTex PATH" not in bashrc.read_text(encoding="utf-8")
+    assert not (bin_dir / "gilzabots").exists()
+    assert not (applications / "gilzabots.desktop").exists()
+    assert "GilzaBots PATH" not in bashrc.read_text(encoding="utf-8")
     assert (data_dir / "sessions.db").read_text(encoding="utf-8") == "chats"
 
 
@@ -56,9 +56,9 @@ def test_installers_publish_discoverable_uninstall_entry_points():
     unix_installer = (ROOT / "install.sh").read_text(encoding="utf-8")
     windows_installer = (ROOT / "install.ps1").read_text(encoding="utf-8")
 
-    assert '"$BIN_DIR/opalatex-uninstall"' in unix_installer
-    assert "Windows\\CurrentVersion\\Uninstall\\OpalaTex" in windows_installer
-    assert "Uninstall OpalaTex.lnk" in windows_installer
+    assert '"$BIN_DIR/gilzabots-uninstall"' in unix_installer
+    assert "Windows\\CurrentVersion\\Uninstall\\GilzaBots" in windows_installer
+    assert "Uninstall GilzaBots.lnk" in windows_installer
 
 
 def test_uninstaller_fallback_fetch_is_branch_independent():
@@ -84,7 +84,7 @@ def test_a_missing_uninstaller_does_not_abort_the_installation():
     """The payload is already unpacked when the uninstaller is fetched.
 
     Aborting there leaves a half-installed application behind over a convenience
-    script, so the failure warns and continues, and the `opalatex-uninstall`
+    script, so the failure warns and continues, and the `gilzabots-uninstall`
     entry point is only published when the script is actually present.
     """
     unix_installer = (ROOT / "install.sh").read_text(encoding="utf-8")
@@ -104,12 +104,12 @@ def test_a_missing_uninstaller_does_not_abort_the_installation():
 
 def _run_unix_installer_on_package(tmp_path, payload):
     """Install a fake release tarball whose files are `payload` (path -> text)."""
-    package = tmp_path / "package" / "OpalaTex"
+    package = tmp_path / "package" / "GilzaBots"
     for relative, content in payload.items():
         target = package / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
-    archive = tmp_path / "OpalaTex-linux-x64.tar.gz"
+    archive = tmp_path / "GilzaBots-linux-x64.tar.gz"
     with tarfile.open(archive, "w:gz") as tar:
         tar.add(package, arcname=".")
 
@@ -121,7 +121,7 @@ def _run_unix_installer_on_package(tmp_path, payload):
         env={
             **os.environ,
             "HOME": str(home),
-            "OPALATEX_DOWNLOAD_URL": archive.as_uri(),
+            "GILZABOTS_DOWNLOAD_URL": archive.as_uri(),
             # Already on PATH, so the installer leaves shell rc files alone.
             "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}",
         },
@@ -138,22 +138,22 @@ def test_unix_installer_resolves_pyinstaller6_internal_resources(tmp_path):
 
     The launcher entry pointed at `<install>/icon.png`, which that layout never
     creates, so the app showed up with a blank icon; the bundled uninstaller was
-    likewise missed and `opalatex-uninstall` was never published.
+    likewise missed and `gilzabots-uninstall` was never published.
     """
     home, result = _run_unix_installer_on_package(
         tmp_path,
         {
-            "OpalaTex": "binary",
+            "GilzaBots": "binary",
             "_internal/icon.png": "png",
             "_internal/uninstall.sh": "#!/usr/bin/env bash\n",
         },
     )
 
     assert result.returncode == 0, result.stderr
-    install_dir = home / ".local" / "share" / "OpalaTex"
-    desktop = (home / ".local" / "share" / "applications" / "opalatex.desktop").read_text(encoding="utf-8")
+    install_dir = home / ".local" / "share" / "GilzaBots"
+    desktop = (home / ".local" / "share" / "applications" / "gilzabots.desktop").read_text(encoding="utf-8")
     assert f"Icon={install_dir}/_internal/icon.png\n" in desktop
-    uninstall_link = home / ".local" / "bin" / "opalatex-uninstall"
+    uninstall_link = home / ".local" / "bin" / "gilzabots-uninstall"
     assert os.readlink(uninstall_link) == f"{install_dir}/_internal/uninstall.sh"
 
     removal = subprocess.run(
@@ -172,14 +172,14 @@ def test_unix_installer_resolves_pyinstaller6_internal_resources(tmp_path):
 def test_unix_installer_keeps_legacy_flat_layout_resources(tmp_path):
     home, result = _run_unix_installer_on_package(
         tmp_path,
-        {"OpalaTex": "binary", "icon.png": "png", "uninstall.sh": "#!/usr/bin/env bash\n"},
+        {"GilzaBots": "binary", "icon.png": "png", "uninstall.sh": "#!/usr/bin/env bash\n"},
     )
 
     assert result.returncode == 0, result.stderr
-    install_dir = home / ".local" / "share" / "OpalaTex"
-    desktop = (home / ".local" / "share" / "applications" / "opalatex.desktop").read_text(encoding="utf-8")
+    install_dir = home / ".local" / "share" / "GilzaBots"
+    desktop = (home / ".local" / "share" / "applications" / "gilzabots.desktop").read_text(encoding="utf-8")
     assert f"Icon={install_dir}/icon.png\n" in desktop
-    assert os.readlink(home / ".local" / "bin" / "opalatex-uninstall") == f"{install_dir}/uninstall.sh"
+    assert os.readlink(home / ".local" / "bin" / "gilzabots-uninstall") == f"{install_dir}/uninstall.sh"
 
 
 def test_windows_installers_resolve_pyinstaller6_internal_uninstaller():
@@ -195,21 +195,21 @@ def test_windows_installers_resolve_pyinstaller6_internal_uninstaller():
     assert '"$exeDir\\_internal\\uninstall.ps1"' in installer
     assert '"$exeDir\\uninstall.ps1"' in installer
     assert '(Join-Path $installDir "_internal\\uninstall.ps1")' in uninstaller
-    assert '(Join-Path $installDir "OpalaTex\\_internal\\uninstall.ps1")' in uninstaller
+    assert '(Join-Path $installDir "GilzaBots\\_internal\\uninstall.ps1")' in uninstaller
 
 
 def test_unix_uninstaller_rejects_relative_purge_before_removing_app(tmp_path):
     home = tmp_path / "home"
-    install_dir = home / ".local" / "share" / "OpalaTex"
+    install_dir = home / ".local" / "share" / "GilzaBots"
     install_dir.mkdir(parents=True)
-    (install_dir / "OpalaTex").write_text("binary", encoding="utf-8")
+    (install_dir / "GilzaBots").write_text("binary", encoding="utf-8")
 
     result = subprocess.run(
         ["bash", str(ROOT / "uninstall.sh"), "--purge", "--yes"],
         env={
             **os.environ,
             "HOME": str(home),
-            "OPALATEX_HOME": "relative-data",
+            "GILZABOTS_HOME": "relative-data",
             "PATH": os.environ.get("PATH", ""),
         },
         capture_output=True,
@@ -219,7 +219,7 @@ def test_unix_uninstaller_rejects_relative_purge_before_removing_app(tmp_path):
 
     assert result.returncode != 0
     assert "relative data directory" in result.stderr
-    assert (install_dir / "OpalaTex").exists()
+    assert (install_dir / "GilzaBots").exists()
 
 
 def test_windows_uninstaller_requires_explicit_purge_and_exact_path_entries():
@@ -251,8 +251,8 @@ def test_windows_installer_silences_progress_only_in_its_own_scope():
 def test_windows_installer_refuses_to_extract_over_a_running_copy():
     installer = (ROOT / "install.ps1").read_text(encoding="utf-8")
 
-    check = installer.index("Test-OpalaTexRunning -Directory $installDir")
-    assert check < installer.index("Get-OpalaTexDownloadUrl\n")
+    check = installer.index("Test-GilzaBotsRunning -Directory $installDir")
+    assert check < installer.index("Get-GilzaBotsDownloadUrl\n")
     assert check < installer.index("Expand-Archive -Path")
 
 
@@ -277,11 +277,11 @@ def test_windows_uninstaller_reports_failures_instead_of_closing():
 
     assert "function Stop-Uninstall" in uninstaller
     assert "trap {" in uninstaller
-    assert "OpalaTex-uninstall.log" in uninstaller
+    assert "GilzaBots-uninstall.log" in uninstaller
     assert "throw " not in uninstaller, "a bare throw closes the console before it can be read"
     # Every check that refuses to continue runs before anything is removed.
     first_removal = uninstaller.index("Remove-Item -Recurse -Force $installDir")
-    assert uninstaller.index("Programs started from the OpalaTex folder") < first_removal
+    assert uninstaller.index("Programs started from the GilzaBots folder") < first_removal
     assert uninstaller.index("Refusing to purge unsafe data directory") < first_removal
 
 

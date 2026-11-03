@@ -11,13 +11,13 @@ import tarfile
 
 import pytest
 
-from opalatex import document_exporter, external_tools, latex_compiler
+from gilzabots import document_exporter, external_tools, latex_compiler
 
 
 @pytest.fixture
 def home(monkeypatch, tmp_path):
-    home = tmp_path / "opalatex-home"
-    monkeypatch.setenv("OPALATEX_HOME", str(home))
+    home = tmp_path / "gilzabots-home"
+    monkeypatch.setenv("GILZABOTS_HOME", str(home))
     monkeypatch.setattr(external_tools.sys, "platform", "linux")
     return home
 

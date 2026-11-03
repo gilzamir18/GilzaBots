@@ -19,21 +19,21 @@ def _result(raw):
 
 @pytest.fixture
 def project(tmp_path):
-    from opalatex.tools import set_project_context
+    from gilzabots.tools import set_project_context
 
     set_project_context(SimpleNamespace(project_path=str(tmp_path)))
     return tmp_path
 
 
 def test_output_and_exit_code_are_reported(project):
-    from opalatex.tools import run_command
+    from gilzabots.tools import run_command
 
     result = _result(_call(run_command, f'"{sys.executable}" -c "import sys; print(42); sys.exit(3)"'))
     assert result == {"stdout": "42", "stderr": "", "exit_code": 3}
 
 
 def test_long_output_keeps_its_end_and_saves_the_whole_text(project):
-    from opalatex.tools import run_command
+    from gilzabots.tools import run_command
 
     script = "for i in range(3000): print(f'line {i}')"
     stdout = _result(_call(run_command, f'"{sys.executable}" -c "{script}"'))["stdout"]
@@ -49,7 +49,7 @@ def test_long_output_keeps_its_end_and_saves_the_whole_text(project):
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX process groups")
 def test_a_timeout_stops_every_process_the_command_started(project):
-    from opalatex.tools import run_command
+    from gilzabots.tools import run_command
 
     pid_file = project / "child.pid"
     # The shell starts a background child that would outlive a kill of the shell alone.
@@ -76,14 +76,14 @@ def test_a_timeout_stops_every_process_the_command_started(project):
 
 @pytest.mark.parametrize("value,expected", [(5000, 1800), ("30", 30)])
 def test_timeout_is_capped_and_accepts_numeric_text(value, expected):
-    from opalatex.tools import _command_timeout
+    from gilzabots.tools import _command_timeout
 
     assert _command_timeout(value) == expected
 
 
 @pytest.mark.parametrize("value", [0, -5, "soon"])
 def test_an_invalid_timeout_is_refused(project, value):
-    from opalatex.tools import run_command
+    from gilzabots.tools import run_command
 
     with pytest.raises(ValueError) as error:
         _call(run_command, "echo hi", timeout_seconds=value)
@@ -91,7 +91,7 @@ def test_an_invalid_timeout_is_refused(project, value):
 
 
 def test_run_python_script_shares_the_runner(project):
-    from opalatex.tools import run_python_script
+    from gilzabots.tools import run_python_script
 
     (project / "hello.py").write_text("import sys\nprint('hi', sys.argv[1])\n", encoding="utf-8")
     assert _result(_call(run_python_script, "hello.py", "there"))["stdout"] == "hi there"

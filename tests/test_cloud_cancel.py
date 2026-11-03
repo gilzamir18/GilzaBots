@@ -14,12 +14,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.cloud import service
-from opalatex.cloud.engine import SyncEngine
-from opalatex.cloud.providers.local_folder import LocalFolderProvider
-from opalatex.cloud.state import CloudSettings, CloudState, load_state, save_settings
-from opalatex.ide_server import AsyncHTTPServer
-from opalatex.project import ProjectStore
+from gilzabots.cloud import service
+from gilzabots.cloud.engine import SyncEngine
+from gilzabots.cloud.providers.local_folder import LocalFolderProvider
+from gilzabots.cloud.state import CloudSettings, CloudState, load_state, save_settings
+from gilzabots.ide_server import AsyncHTTPServer
+from gilzabots.project import ProjectStore
 
 
 # ─── Fixtures & helpers ───────────────────────────────────────────────────────
@@ -250,7 +250,7 @@ async def test_a_cancelled_download_is_not_an_error_and_registers_nothing(
 ):
     seed_remote(remote_base, "thesis", 5)
     db_path = str(tmp_path / "machine-b.db")
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", db_path)
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", db_path)
     parent = tmp_path / "projects"
     parent.mkdir()
     destination = str(parent / "thesis")

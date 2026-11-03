@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex import jpt
-from opalatex.ide_server import AsyncHTTPServer
+from gilzabots import jpt
+from gilzabots.ide_server import AsyncHTTPServer
 
 
 def _deck_with_image(src):

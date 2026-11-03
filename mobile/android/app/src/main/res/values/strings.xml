@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">OpalaTex</string>
-    <string name="title_activity_main">OpalaTex</string>
-    <string name="package_name">com.opalacoder.opalatex</string>
-    <string name="custom_url_scheme">com.opalacoder.opalatex</string>
+    <string name="app_name">GilzaBots</string>
+    <string name="title_activity_main">GilzaBots</string>
+    <string name="package_name">io.github.gilzamir18.gilzabots</string>
+    <string name="custom_url_scheme">io.github.gilzamir18.gilzabots</string>
 </resources>

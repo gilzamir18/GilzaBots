@@ -17,9 +17,9 @@ import time
 
 import pytest
 
-from opalatex import agent_stdin
-from opalatex.cloud import chats
-from opalatex.project import ProjectStore
+from gilzabots import agent_stdin
+from gilzabots.cloud import chats
+from gilzabots.project import ProjectStore
 
 
 @pytest.fixture
@@ -392,7 +392,7 @@ def test_status_lines_and_each_agents_reasoning_stay_apart(turn):
 
 def test_the_segment_keeps_the_turns_running_token_count(turn, monkeypatch):
     store, project = turn
-    from opalatex.thought_context import ThoughtTokenMeter
+    from gilzabots.thought_context import ThoughtTokenMeter
 
     monkeypatch.setattr(agent_stdin, "_ACTIVE_THOUGHT_METER", ThoughtTokenMeter(""))
     for token in ["one", " two", " three"]:

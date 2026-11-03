@@ -12,7 +12,7 @@ import pytest
 
 pymupdf = pytest.importorskip("pymupdf")
 
-from opalatex.pdf_annotations import (  # noqa: E402
+from gilzabots.pdf_annotations import (  # noqa: E402
     DEFAULT_COLOR,
     MAX_CONTENT_CHARS,
     PdfAnnotationError,
@@ -385,7 +385,7 @@ def test_default_color_is_used_when_none_given(sample_pdf):
 import json  # noqa: E402
 from unittest.mock import AsyncMock  # noqa: E402
 
-from opalatex.ide_server import AsyncHTTPServer  # noqa: E402
+from gilzabots.ide_server import AsyncHTTPServer  # noqa: E402
 
 
 def _server_with_capture():

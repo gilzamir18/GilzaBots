@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from agenticblocks.blocks.speech import SpeechSynthesisError
-from opalatex.ide_server import AsyncHTTPServer
+from gilzabots.ide_server import AsyncHTTPServer
 
 MP3 = b"ID3\x03\x00\x00\x00\x00\x00\x00fake-mp3-payload"
 
@@ -36,16 +36,16 @@ def _json_body(response):
 @pytest.fixture
 def configured_speech(tmp_path, monkeypatch):
     """Point the speech config at a temp file and mark it ready."""
-    monkeypatch.setattr("opalatex.speech_config._CONFIG_PATH", tmp_path / "speech.json")
-    monkeypatch.setattr("opalatex.speech_config.configuration_problem", lambda: "")
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
+    monkeypatch.setattr("gilzabots.speech_config._CONFIG_PATH", tmp_path / "speech.json")
+    monkeypatch.setattr("gilzabots.speech_config.configuration_problem", lambda: "")
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
 
 
 # ─── /api/settings/speech ────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
 async def test_settings_round_trip_and_clamping(tmp_path, monkeypatch):
-    monkeypatch.setattr("opalatex.speech_config._CONFIG_PATH", tmp_path / "speech.json")
+    monkeypatch.setattr("gilzabots.speech_config._CONFIG_PATH", tmp_path / "speech.json")
     server, responses = _server_with_capture()
     writer = AsyncMock()
 
@@ -83,7 +83,7 @@ async def test_settings_round_trip_and_clamping(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_settings_report_why_speech_is_unavailable(tmp_path, monkeypatch):
-    monkeypatch.setattr("opalatex.speech_config._CONFIG_PATH", tmp_path / "speech.json")
+    monkeypatch.setattr("gilzabots.speech_config._CONFIG_PATH", tmp_path / "speech.json")
     server, responses = _server_with_capture()
 
     await server.route_api("GET", "/api/settings/speech", {}, {}, b"", AsyncMock())
@@ -104,7 +104,7 @@ async def test_speech_endpoint_returns_audio_bytes_not_json(configured_speech, m
         captured.update(text=text, voice=voice, language=language, model=model)
         return MP3, "audio/mpeg"
 
-    monkeypatch.setattr("opalatex.speech.execute_speech_synthesis", fake_execute)
+    monkeypatch.setattr("gilzabots.speech.execute_speech_synthesis", fake_execute)
 
     server, responses = _server_with_capture()
     await server.route_api(
@@ -146,13 +146,13 @@ async def test_an_unconfigured_install_answers_with_the_instruction(tmp_path, mo
     # The feature is opt-in and needs an endpoint nothing else in the app
     # requires, so "not configured" is a first-class answer with a fix in it,
     # delivered before any request is attempted.
-    monkeypatch.setattr("opalatex.speech_config._CONFIG_PATH", tmp_path / "speech.json")
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
+    monkeypatch.setattr("gilzabots.speech_config._CONFIG_PATH", tmp_path / "speech.json")
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
 
     async def must_not_run(*args, **kwargs):  # pragma: no cover
         raise AssertionError("no synthesis may be attempted when unconfigured")
 
-    monkeypatch.setattr("opalatex.speech.execute_speech_synthesis", must_not_run)
+    monkeypatch.setattr("gilzabots.speech.execute_speech_synthesis", must_not_run)
 
     server, responses = _server_with_capture()
     await server.route_api(
@@ -172,7 +172,7 @@ async def test_an_overlong_snippet_is_refused_as_a_bad_request(configured_speech
     async def fake_execute(text, **kwargs):
         raise ValueError("The selected snippet is too long to pronounce (9000 characters, limit 4000).")
 
-    monkeypatch.setattr("opalatex.speech.execute_speech_synthesis", fake_execute)
+    monkeypatch.setattr("gilzabots.speech.execute_speech_synthesis", fake_execute)
 
     server, responses = _server_with_capture()
     await server.route_api(
@@ -200,7 +200,7 @@ async def test_provider_failures_keep_their_classification(configured_speech, mo
     async def fake_execute(text, **kwargs):
         raise SpeechSynthesisError("boom", kind=kind)
 
-    monkeypatch.setattr("opalatex.speech.execute_speech_synthesis", fake_execute)
+    monkeypatch.setattr("gilzabots.speech.execute_speech_synthesis", fake_execute)
 
     server, responses = _server_with_capture()
     await server.route_api(
@@ -218,7 +218,7 @@ async def test_nothing_falls_back_to_silence(configured_speech, monkeypatch):
     async def fake_execute(text, **kwargs):
         raise SpeechSynthesisError("no route here", kind="unsupported")
 
-    monkeypatch.setattr("opalatex.speech.execute_speech_synthesis", fake_execute)
+    monkeypatch.setattr("gilzabots.speech.execute_speech_synthesis", fake_execute)
 
     server, responses = _server_with_capture()
     await server.route_api(
@@ -236,10 +236,10 @@ async def test_nothing_falls_back_to_silence(configured_speech, monkeypatch):
 
 @pytest.fixture
 def local_engine(tmp_path, monkeypatch):
-    from opalatex import speech_config, voice_store
+    from gilzabots import speech_config, voice_store
     monkeypatch.setattr(speech_config, "_CONFIG_PATH", tmp_path / "speech.json")
     monkeypatch.setattr(voice_store, "voices_dir", lambda: tmp_path / "voices")
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", tmp_path / "ui.json")
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", tmp_path / "ui.json")
     return tmp_path
 
 
@@ -252,7 +252,7 @@ def _install(root, key):
 
 def test_local_is_the_default_engine(local_engine):
     """Offline-capable by default, rather than implying a paid endpoint."""
-    from opalatex import speech_config
+    from gilzabots import speech_config
 
     assert speech_config.load_config()["engine"] == "local"
     assert speech_config.sanitize_engine("nonsense") == "local"
@@ -260,7 +260,7 @@ def test_local_is_the_default_engine(local_engine):
 
 
 def test_each_missing_piece_names_the_one_thing_to_do_next(local_engine, monkeypatch):
-    from opalatex import speech_config
+    from gilzabots import speech_config
 
     speech_config.save_config({"enabled": True, "engine": "local", "local_voice": ""})
     assert "download one" in speech_config.configuration_problem()
@@ -278,7 +278,7 @@ def test_each_missing_piece_names_the_one_thing_to_do_next(local_engine, monkeyp
 
 
 def test_the_local_engine_builds_a_local_onnx_block(local_engine):
-    from opalatex import speech_config
+    from gilzabots import speech_config
 
     _install(local_engine, "pt_BR-faber-medium")
     speech_config.save_config({
@@ -297,7 +297,7 @@ def test_the_local_engine_builds_a_local_onnx_block(local_engine):
 
 @pytest.mark.asyncio
 async def test_voices_endpoint_lists_installed_even_when_offline(local_engine, monkeypatch):
-    from opalatex import voice_store
+    from gilzabots import voice_store
 
     _install(local_engine, "pt_BR-faber-medium")
     monkeypatch.setattr(
@@ -332,7 +332,7 @@ async def test_a_bad_voice_key_is_refused_by_the_endpoint(local_engine):
 
 @pytest.mark.asyncio
 async def test_removing_the_selected_voice_clears_the_setting(local_engine):
-    from opalatex import speech_config
+    from gilzabots import speech_config
 
     _install(local_engine, "pt_BR-faber-medium")
     speech_config.save_config({

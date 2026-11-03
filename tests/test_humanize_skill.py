@@ -18,13 +18,13 @@ import sys
 
 import pytest
 
-from opalatex.assetstore import (
+from gilzabots.assetstore import (
     asset_matches_install,
     find_assets,
     install_asset,
     list_assets,
 )
-from opalatex.skills import discover_skills, parse_skill_md
+from gilzabots.skills import discover_skills, parse_skill_md
 
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _SKILL_DIR = os.path.join(_REPO_ROOT, "skills", "humanize")
@@ -121,7 +121,7 @@ def test_the_store_asset_carries_the_scanner_not_just_the_manifest(tmp_path):
     does not contain fails only at run time, in the user's project."""
     meta = find_assets("skill", "humanize")[0]
     install_asset(meta, str(tmp_path))
-    installed = tmp_path / ".opalatex" / "skills" / "humanize"
+    installed = tmp_path / ".gilzabots" / "skills" / "humanize"
     assert (installed / "SKILL.md").is_file()
     assert (installed / "SKILL.light.md").is_file()
     assert (installed / "scripts" / "humanize_scan.py").is_file()

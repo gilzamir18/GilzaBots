@@ -4,17 +4,17 @@ Status: implemented. Export format version **1**, device journal format
 version **1**.
 
 A mirrored project carries its conversations as files, because the database
-that holds them (`~/.opalatex/sessions.db`) is shared by every project on a
+that holds them (`~/.gilzabots/sessions.db`) is shared by every project on a
 machine and cannot be mirrored (see [cloud_sync.md](cloud_sync.md)). Two kinds
 of file exist, and they have different writers:
 
 | File | Written by | Read by |
 | --- | --- | --- |
-| `.opalatex/session/chats.json` — the **export** | every desktop, after merging | desktops, the mobile app |
-| `.opalatex/session/devices/<device id>.json` — a **device journal** | exactly one device (the mobile app) | desktops, other devices |
+| `.gilzabots/session/chats.json` — the **export** | every desktop, after merging | desktops, the mobile app |
+| `.gilzabots/session/devices/<device id>.json` — a **device journal** | exactly one device (the mobile app) | desktops, other devices |
 
 This document is the contract between those writers. The normative sources are
-[`opalatex/cloud/chats.py`](../../opalatex/cloud/chats.py) for the desktop and
+[`gilzabots/cloud/chats.py`](../../gilzabots/cloud/chats.py) for the desktop and
 [`mobile/src/project/journal.js`](../../mobile/src/project/journal.js) and
 [`keys.js`](../../mobile/src/project/keys.js) for the app. Where this document
 and the code disagree, the code is right and this document is a bug.
@@ -99,7 +99,7 @@ also what keeps a row folded into the export from appearing twice on the phone.
 
 ```json
 {
-  "kind": "opalatex.device-journal",
+  "kind": "gilzabots.device-journal",
   "version": 1,
   "device": { "id": "<uuid>", "name": "Pixel 8" },
   "project": "<the export's project field, when known>",
@@ -111,7 +111,7 @@ also what keeps a row folded into the export from appearing twice on the phone.
 
 ### 4.1 Path
 
-`.opalatex/session/devices/` plus a file name that ends in `.json`, does not
+`.gilzabots/session/devices/` plus a file name that ends in `.json`, does not
 start with `.`, and contains no `/` (`state.is_device_journal`). Anything else in
 that folder is not a journal.
 
@@ -125,7 +125,7 @@ that folder is not a journal.
 
 A desktop enforces the right-hand column by ignoring it, not by rejecting the
 file (`chats.merge_device_journal`): chat fields beyond identity are dropped,
-`settings` is never applied, and `kind` other than `opalatex.device-journal` or
+`settings` is never applied, and `kind` other than `gilzabots.device-journal` or
 `version` > 1 leaves the file untouched with a note. A phone must not be able to
 change the model a project runs, or roll back an orchestrator's memory.
 

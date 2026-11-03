@@ -1,27 +1,27 @@
-# Classic confinement request for `opalatex`
+# Classic confinement request for `gilzabots`
 
 > Draft for the `store-requests` category of https://forum.snapcraft.io.
 > Before posting, fill in the fields marked `TODO`.
 
 ---
 
-**Title:** Classic confinement request for opalatex
+**Title:** Classic confinement request for gilzabots
 
 Hello reviewers,
 
-I'd like to request **classic confinement** for the `opalatex` snap.
+I'd like to request **classic confinement** for the `gilzabots` snap.
 
-- **Snap name:** `opalatex`
+- **Snap name:** `gilzabots`
 - **Publisher:** TODO (Snap Store account name)
-- **Upstream:** https://github.com/opalacoderdev/OpalaTex (MIT license)
-- **Website:** https://www.opalacoder.com
-- **Contact:** dev@opalacoder.com
-- **Affiliation:** I am the upstream developer and maintainer of OpalaTex. The
+- **Upstream:** https://github.com/gilzamir18/GilzaBots (MIT license)
+- **Website:** https://github.com/gilzamir18/GilzaBots
+- **Contact:** https://github.com/gilzamir18/GilzaBots/issues
+- **Affiliation:** I am the upstream developer and maintainer of GilzaBots. The
   snap is built from the repository's own `snapcraft.yaml`.
 
-## What OpalaTex is
+## What GilzaBots is
 
-OpalaTex is a desktop IDE for LaTeX projects with a built-in AI assistant. A project is
+GilzaBots is a desktop IDE for LaTeX projects with a built-in AI assistant. A project is
 a folder the user chooses anywhere on disk. The application has:
 
 - an editor with a side-by-side PDF preview, SyncTeX, Git integration and a file explorer;
@@ -73,10 +73,10 @@ the terminal work with the user's toolchain.
 
 ## What classic is *not* requested for
 
-- **Not for privilege escalation.** OpalaTex never runs `sudo`/`pkexec` and never asks for
+- **Not for privilege escalation.** GilzaBots never runs `sudo`/`pkexec` and never asks for
   root. Everything runs as the logged-in user.
-- **Not for dot-file access, `/etc` access or hard-coded paths.** OpalaTex only needs its
-  own data directory (`.opalatex` in the home directory by default, and the user can move
+- **Not for dot-file access, `/etc` access or hard-coded paths.** GilzaBots only needs its
+  own data directory (`.gilzabots` in the home directory by default, and the user can move
   it). This already works under strict confinement.
 - **Not to install other packages or snaps**, and not to work around missing dependencies.
   The application's own runtime (Python, Qt/QtWebEngine, Tectonic, pandoc, git) is
@@ -109,10 +109,10 @@ The classic build will:
 
 ## Existing users
 
-`opalatex` is currently published with strict confinement. TODO: choose one:
+`gilzabots` is currently published with strict confinement. TODO: choose one:
 
 - (a) move the default track to classic and tell users to run
-  `snap refresh opalatex --classic`, or
+  `snap refresh gilzabots --classic`, or
 - (b) keep strict on the default track and publish classic on a separate track, as the
   review process document suggests for snaps that switch.
 

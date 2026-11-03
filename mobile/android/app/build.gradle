@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "com.opalacoder.opalatex"
+    namespace = "io.github.gilzamir18.gilzabots"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.opalacoder.opalatex"
+        applicationId "io.github.gilzamir18.gilzabots"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
@@ -18,14 +18,14 @@ android {
     }
     // Release signing comes from the environment (the CI secrets), never from
     // the repository. Without it a release build is produced unsigned.
-    def releaseKeystore = System.getenv("OPALATEX_ANDROID_KEYSTORE")
+    def releaseKeystore = System.getenv("GILZABOTS_ANDROID_KEYSTORE")
     signingConfigs {
         release {
             if (releaseKeystore) {
                 storeFile file(releaseKeystore)
-                storePassword System.getenv("OPALATEX_ANDROID_KEYSTORE_PASSWORD")
-                keyAlias System.getenv("OPALATEX_ANDROID_KEY_ALIAS")
-                keyPassword System.getenv("OPALATEX_ANDROID_KEY_PASSWORD")
+                storePassword System.getenv("GILZABOTS_ANDROID_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("GILZABOTS_ANDROID_KEY_ALIAS")
+                keyPassword System.getenv("GILZABOTS_ANDROID_KEY_PASSWORD")
             }
         }
     }

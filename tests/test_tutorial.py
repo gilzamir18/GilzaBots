@@ -13,11 +13,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.ide_server import AsyncHTTPServer
-from opalatex.memgpt_runtime import build_chat_orchestrator
-from opalatex.onboarding import PILOT_SKILL_NAME, pilot_skill_content
-from opalatex.project import ProjectData, ProjectStore, tutorial_chat_id
-from opalatex.tutorial import (
+from gilzabots.ide_server import AsyncHTTPServer
+from gilzabots.memgpt_runtime import build_chat_orchestrator
+from gilzabots.onboarding import PILOT_SKILL_NAME, pilot_skill_content
+from gilzabots.project import ProjectData, ProjectStore, tutorial_chat_id
+from gilzabots.tutorial import (
     get_topic,
     load_guide,
     load_intro,
@@ -63,7 +63,7 @@ def test_every_topic_has_a_question_and_an_answer(lang):
 def test_intro_is_present_and_drops_the_file_title(lang):
     intro = load_intro(lang)
     assert intro.strip()
-    # The `# OpalaTex …` title is useful in the file but redundant as the first line
+    # The `# GilzaBots …` title is useful in the file but redundant as the first line
     # of a chat message.
     assert not intro.startswith("# ")
 
@@ -97,7 +97,7 @@ def test_monitors_topic_clarifies_experimental_status(lang):
     assert "EXPERIMENTAL" in answer, f"[{lang}] 'monitors' answer must state it is experimental"
     # The warning opens the answer, before anything about how to use the feature.
     assert answer.lstrip().startswith(">") and "EXPERIMENTAL" in answer.split("\n\n", 1)[0]
-    assert "opalatex monitors" in answer and "register" not in answer.split("\n\n", 1)[0]
+    assert "gilzabots monitors" in answer and "register" not in answer.split("\n\n", 1)[0]
     tools = get_topic("tools-features", lang)["answer"]
     assert "(Experimental)" in tools and ("Monitor Agents" in tools or "Agentes Monitores" in tools)
 
@@ -166,13 +166,13 @@ def test_tutorial_chat_id_is_reserved_and_derived():
 
 def test_orchestrator_loads_the_guide_in_the_tutorial_chat(tmp_path):
     agent = build_chat_orchestrator(_project(tmp_path, tutorial_chat_id("t")), None)
-    assert "OpalaTex Tutorial (this chat only)" in agent.system_prompt
+    assert "GilzaBots Tutorial (this chat only)" in agent.system_prompt
     assert "cloud-for-big-data ::" in agent.system_prompt
 
 
 def test_orchestrator_does_not_load_the_guide_in_other_chats(tmp_path):
     agent = build_chat_orchestrator(_project(tmp_path, "main_t"), None)
-    assert "OpalaTex Tutorial (this chat only)" not in agent.system_prompt
+    assert "GilzaBots Tutorial (this chat only)" not in agent.system_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -183,7 +183,7 @@ def _api_harness(tmp_path, monkeypatch):
     """A server whose responses are collected instead of written to a socket."""
     db_path = str(tmp_path / "projects.db")
     store = ProjectStore(db_path=db_path)
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", db_path)
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", db_path)
 
     server = AsyncHTTPServer()
     responses = []

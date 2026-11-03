@@ -13,10 +13,10 @@ mistake produces a *plausible* failure that costs a round trip to diagnose.
   * `standalone` with a border is what crops the page to the drawing. Compiling
     the picture inside an article class yields an A4 page with a small figure
     in the corner, which then converts to a mostly-empty PNG.
-  * The engine is the one OpalaTex ships (`bin/tectonic`), found the same way
+  * The engine is the one GilzaBots ships (`bin/tectonic`), found the same way
     the IDE finds it, so a picture compiles here exactly as it does in the
     editor.
-  * The raster step prefers PyMuPDF, which is a hard dependency of OpalaTex and
+  * The raster step prefers PyMuPDF, which is a hard dependency of GilzaBots and
     therefore always present, over `pdftoppm`, which is not.
 
 Usage:
@@ -155,8 +155,8 @@ def standalone_document(picture: str, preamble: list[str], *, border: int = 4) -
 def find_engine() -> list[str] | None:
     """The LaTeX engine to compile with, as an argv prefix.
 
-    Tectonic first and by the same lookup the IDE uses (`opalatex/latex_compiler
-    .py: get_tectonic_path`): OpalaTex ships it in `bin/`, so it is present even
+    Tectonic first and by the same lookup the IDE uses (`gilzabots/latex_compiler
+    .py: get_tectonic_path`): GilzaBots ships it in `bin/`, so it is present even
     where the machine has no TeX installation at all.
     """
     exe = "tectonic.exe" if sys.platform == "win32" else "tectonic"
@@ -195,7 +195,7 @@ def compile_to_pdf(document: str, work_dir: str) -> str:
     engine = find_engine()
     if not engine:
         raise SystemExit(
-            "no LaTeX engine found. OpalaTex ships tectonic in bin/; run this "
+            "no LaTeX engine found. GilzaBots ships tectonic in bin/; run this "
             "script from inside the installation, or install tectonic/pdflatex."
         )
     tex_path = os.path.join(work_dir, "picture.tex")

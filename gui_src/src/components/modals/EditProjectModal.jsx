@@ -355,7 +355,7 @@ export default function EditProjectModal({
                   style={{ width: '100%', padding: '8px' }}
                   onClick={async () => {
                     try {
-                      const res = await fetch('/api/opalatex/load-contextual-skills', {
+                      const res = await fetch('/api/gilzabots/load-contextual-skills', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ project_path: editingProject.project_path })
@@ -402,7 +402,7 @@ export default function EditProjectModal({
                 <button
                   type="button"
                   onClick={() => setShowAdvancedParams(!showAdvancedParams)}
-                  style={{ background: 'transparent', border: 'none', color: '#007acc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 0', fontSize: '12px', fontWeight: 'bold', textAlign: 'left', width: 'fit-content' }}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--vscode-accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 0', fontSize: '12px', fontWeight: 'bold', textAlign: 'left', width: 'fit-content' }}
                 >
                   <span>{showAdvancedParams ? '▼' : '▶'} {t('editProjectModal.advancedOrchestrator')}</span>
                 </button>
@@ -533,7 +533,7 @@ export default function EditProjectModal({
                 <button
                   type="button"
                   onClick={() => setShowAdvancedParams(!showAdvancedParams)}
-                  style={{ background: 'transparent', border: 'none', color: '#007acc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 0', fontSize: '12px', fontWeight: 'bold', textAlign: 'left', width: 'fit-content' }}
+                  style={{ background: 'transparent', border: 'none', color: 'var(--vscode-accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 0', fontSize: '12px', fontWeight: 'bold', textAlign: 'left', width: 'fit-content' }}
                 >
                   <span>{showAdvancedParams ? '▼' : '▶'} {t('editProjectModal.advancedWorker')}</span>
                 </button>
@@ -543,7 +543,7 @@ export default function EditProjectModal({
 
                     {/* Agent params */}
                     <div>
-                      <div style={{ color: '#007acc', fontSize: '11px', fontWeight: 'bold', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      <div style={{ color: 'var(--vscode-accent)', fontSize: '11px', fontWeight: 'bold', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                         {t('editProjectModal.agentParams')}
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>

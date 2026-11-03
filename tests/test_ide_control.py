@@ -1,10 +1,10 @@
 """The agent's control of the IDE window: its tools and their channel.
 
 The tools act on the window, not the disk, so every one of them is a round trip
-(opalatex/ide_control.py): an `ide_command` event goes out on the turn's stream,
+(gilzabots/ide_control.py): an `ide_command` event goes out on the turn's stream,
 the desktop app carries it out and posts its answer with the resulting tabs.
 These tests play the window's part by answering from the event hook, the way
-the desktop app answers through /api/opalatex/ide_command_result.
+the desktop app answers through /api/gilzabots/ide_command_result.
 """
 
 import asyncio
@@ -13,10 +13,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from opalatex import agent_stdin, ide_control
-from opalatex.ide_control import IdeCommandError, resolve_ide_command, send_ide_command
-from opalatex.prompt_surface import GUI_ONLY_TOOLS
-from opalatex.tools import (
+from gilzabots import agent_stdin, ide_control
+from gilzabots.ide_control import IdeCommandError, resolve_ide_command, send_ide_command
+from gilzabots.prompt_surface import GUI_ONLY_TOOLS
+from gilzabots.tools import (
     close_file,
     editor_state_path,
     get_editor_state,
@@ -66,7 +66,7 @@ def project(tmp_path):
 
 def _stage(project, **state):
     path = editor_state_path(str(project))
-    (project / ".opalatex").mkdir(exist_ok=True)
+    (project / ".gilzabots").mkdir(exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(state, f)
 
@@ -226,8 +226,8 @@ def test_staging_records_which_tab_the_buffer_belongs_to(tmp_path):
 
 
 def _orchestrator_tool_names(tmp_path, model="ollama/test"):
-    from opalatex.memgpt_runtime import build_chat_orchestrator
-    from opalatex.project import ProjectStore
+    from gilzabots.memgpt_runtime import build_chat_orchestrator
+    from gilzabots.project import ProjectStore
 
     store = ProjectStore(db_path=str(tmp_path / "s.db"))
     project = store.create(name="p", mode="auto", model=model,
@@ -255,15 +255,15 @@ def test_the_terminal_orchestrator_does_not(tmp_path):
 
 
 def test_helpers_are_not_given_the_window_controls():
-    from opalatex.tools import get_helper_tools
+    from gilzabots.tools import get_helper_tools
 
     names = {str(getattr(t, "name", "")) for t in get_helper_tools()}
     assert not {"open_file", "close_file", "reveal_in_pdf", "set_layout", "get_problems"} & names
 
 
 def test_helpers_read_the_terminal_on_the_desktop_only_and_never_drive_it():
-    from opalatex.prompt_surface import tools_for_surface
-    from opalatex.tools import get_helper_tools
+    from gilzabots.prompt_surface import tools_for_surface
+    from gilzabots.tools import get_helper_tools
 
     names = {str(getattr(t, "name", "")) for t in tools_for_surface(get_helper_tools())}
     assert "read_terminal" in names
@@ -283,7 +283,7 @@ def test_helpers_read_the_terminal_on_the_desktop_only_and_never_drive_it():
 
 def test_the_map_names_every_part_the_main_agent_reaches():
     """Under both policies the main agent holds every tool the map names."""
-    from opalatex.memgpt_runtime import desktop_workspace_block
+    from gilzabots.memgpt_runtime import desktop_workspace_block
 
     block = desktop_workspace_block()
     assert "`compile_latex`" in block and "`run_background_command`" in block
@@ -346,7 +346,7 @@ def test_the_layouts_offered_are_the_windows_own():
     import re
     from pathlib import Path
 
-    from opalatex.tools import IDE_LAYOUTS
+    from gilzabots.tools import IDE_LAYOUTS
 
     source = (Path(__file__).parent.parent / "gui_src/src/utils/layoutModes.js").read_text(encoding="utf-8")
     declared = re.search(r"export const LAYOUT_MODES = \[([^\]]*)\]", source).group(1)
@@ -391,7 +391,7 @@ def test_only_the_most_recent_problems_are_shown(project, window):
 
 
 def test_screen_text_reads_like_the_terminal():
-    from opalatex.terminal_manager import screen_text
+    from gilzabots.terminal_manager import screen_text
 
     raw = (
         b"\x1b]0;user@host: ~\x07\x1b[01;32muser@host\x1b[00m:~$ npm run dev\r\n"
@@ -422,7 +422,7 @@ class _Session:
 def _terminal_output(session, project_path):
     from unittest.mock import AsyncMock
 
-    from opalatex.ide_server import AsyncHTTPServer
+    from gilzabots.ide_server import AsyncHTTPServer
 
     server = AsyncHTTPServer()
     server.active_terminal = session
@@ -456,7 +456,7 @@ def terminal_api(monkeypatch):
     import urllib.error
     import urllib.request
 
-    from opalatex import local_auth
+    from gilzabots import local_auth
 
     reply = {"status": 200, "body": {"text": "", "truncated": False}}
     monkeypatch.setattr(local_auth, "local_api_connection", lambda: ("http://127.0.0.1:1", "c=1"))

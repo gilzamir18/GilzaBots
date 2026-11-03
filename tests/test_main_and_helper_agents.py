@@ -15,12 +15,12 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
-import opalatex.agent_stdin as agent_stdin
-import opalatex.memgpt_runtime as runtime
-import opalatex.tools as tools
+import gilzabots.agent_stdin as agent_stdin
+import gilzabots.memgpt_runtime as runtime
+import gilzabots.tools as tools
 from agenticblocks.blocks.llm.agent import LLMAgentBlock, ToolCallRecord
-from opalatex.project import ProjectData
-from opalatex.skills import HELPER_ROLE, INSTRUCTIONS_ROLE, parse_skill_md, skill_role
+from gilzabots.project import ProjectData
+from gilzabots.skills import HELPER_ROLE, INSTRUCTIONS_ROLE, parse_skill_md, skill_role
 
 
 # ── fixtures ─────────────────────────────────────────────────────────────────
@@ -52,7 +52,7 @@ def _activate(project_path, *names):
 
 @pytest.fixture
 def project(tmp_path, monkeypatch):
-    from opalatex import models_store
+    from gilzabots import models_store
 
     monkeypatch.setattr(models_store, "_MODELS_STORE_PATH", tmp_path / "models_store.json")
     monkeypatch.setattr(agent_stdin, "print_event", lambda *_a, **_k: None)
@@ -79,7 +79,7 @@ def test_a_skill_without_a_role_is_carried_out_by_the_main_agent(tmp_path):
 
 
 def test_the_bundled_auxiliary_skills_are_helpers_and_the_rest_are_not():
-    from opalatex.skills import discover_skills
+    from gilzabots.skills import discover_skills
 
     roles = {s["name"]: skill_role(s) for s in discover_skills("")}
     for name in ("staged-reader", "elementary-ops", "log-table-condenser", "web-search"):
@@ -92,7 +92,7 @@ def test_the_bundled_auxiliary_skills_are_helpers_and_the_rest_are_not():
 def test_the_asset_store_copy_of_a_helper_is_a_helper_too(name):
     """An installed store copy shadows the bundled skill, so it must agree."""
     import zipfile
-    from opalatex.skills import _parse_frontmatter
+    from gilzabots.skills import _parse_frontmatter
 
     archive = os.path.join(os.path.dirname(tools.__file__), "assetstore", "skills", f"{name}.zip")
     with zipfile.ZipFile(archive) as z:
@@ -243,7 +243,7 @@ def test_the_main_agent_receives_the_report_and_the_failed_calls(project, monkey
         _tool_call("c1", "search_code", {"query": r"\label{sec:intro}", "path": "main5.tex", "use_regex": True}),
         _tool_call("c2", "search_code", {"query": r"\label{sec:intro}", "path": "main5.tex"}),
         _tool_call("c3", "write_file", {"path": "main5.tex", "content": "oops"}),
-        _tool_call("c4", "write_file", {"path": ".opalatex/notes.md", "content": "intro at 1"}),
+        _tool_call("c4", "write_file", {"path": ".gilzabots/notes.md", "content": "intro at 1"}),
     ]
 
     result, _seen, memgpt = _run_scripted_helper(
@@ -257,7 +257,7 @@ def test_the_main_agent_receives_the_report_and_the_failed_calls(project, monkey
     assert "1 of them a successful search_code" in result
     assert "- call 3 write_file failed: Error: helpers do not change project files" in result
     # The helper's scratch note was written; the project file was not touched.
-    assert os.path.isfile(os.path.join(project.project_path, ".opalatex", "notes.md"))
+    assert os.path.isfile(os.path.join(project.project_path, ".gilzabots", "notes.md"))
     with open(os.path.join(project.project_path, "main5.tex"), encoding="utf-8") as f:
         assert f.read().startswith("\\section{Intro}")
     # The loop breakers classify the report only, never the runtime's error list.
@@ -316,8 +316,8 @@ def test_a_helper_writes_only_under_the_scratch_area(project):
     tools.set_project_context(project)
     tools.set_worker_context(True, "ollama/small-model")
 
-    assert "Successfully" in _write_file(".opalatex/notes/a.md")
-    for outside in ("main5.tex", ".opalatex/../main5.tex", "new_chapter.tex"):
+    assert "Successfully" in _write_file(".gilzabots/notes/a.md")
+    for outside in ("main5.tex", ".gilzabots/../main5.tex", "new_chapter.tex"):
         with pytest.raises(ValueError, match="helpers do not change project files"):
             _write_file(outside)
 
@@ -381,7 +381,7 @@ def test_an_invalid_regex_fails_with_what_is_wrong_with_it(project):
 # ── vision ───────────────────────────────────────────────────────────────────
 
 def test_model_supports_vision():
-    from opalatex.config import model_supports_vision
+    from gilzabots.config import model_supports_vision
 
     assert model_supports_vision("ollama/anything", {"force_vision": True})
     assert not model_supports_vision("ollama/unknown-local-model", {})

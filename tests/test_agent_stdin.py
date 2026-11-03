@@ -10,7 +10,7 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock
 from types import SimpleNamespace
 
-from opalatex.agent_stdin import (
+from gilzabots.agent_stdin import (
     print_event,
     wrap_tool,
     patched_get_helper_tools,
@@ -32,7 +32,7 @@ from opalatex.agent_stdin import (
 
 
 def test_record_turn_thought_keeps_every_chunk(monkeypatch):
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     chunks = []
     monkeypatch.setattr(stdin_mod, "_ACTIVE_THOUGHT_CHUNKS", chunks)
@@ -65,7 +65,7 @@ def test_auxiliary_tool_call_thought_uses_compact_text_not_json():
 
 
 def test_print_event_auxiliary_tool_call_thought_hides_raw_json(monkeypatch):
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     events = []
     chunks = []
@@ -89,8 +89,8 @@ def test_print_event(monkeypatch):
     # Create a dummy stream to capture real stdout
     stream = io.StringIO()
     # Temporarily monkeypatch the module's _real_stdout
-    import opalatex.agent_stdin
-    monkeypatch.setattr(opalatex.agent_stdin, "_real_stdout", stream)
+    import gilzabots.agent_stdin
+    monkeypatch.setattr(gilzabots.agent_stdin, "_real_stdout", stream)
 
     print_event("test_event", {"foo": "bar", "num": 123})
     
@@ -105,7 +105,7 @@ def test_print_event(monkeypatch):
 
 
 def test_print_event_persists_thinking_and_stream_activity(monkeypatch):
-    import opalatex.agent_stdin
+    import gilzabots.agent_stdin
 
     saved = []
 
@@ -118,9 +118,9 @@ def test_print_event_persists_thinking_and_stream_activity(monkeypatch):
             saved.append((project.name, event, content, agent, payload or {}))
             return len(saved)
 
-    monkeypatch.setattr(opalatex.agent_stdin, "current_project", FakeProject())
-    monkeypatch.setattr(opalatex.agent_stdin, "current_store", FakeStore())
-    monkeypatch.setattr(opalatex.agent_stdin, "event_hook", lambda _payload: None)
+    monkeypatch.setattr(gilzabots.agent_stdin, "current_project", FakeProject())
+    monkeypatch.setattr(gilzabots.agent_stdin, "current_store", FakeStore())
+    monkeypatch.setattr(gilzabots.agent_stdin, "event_hook", lambda _payload: None)
 
     print_event("thought", {"content": "Think this through.", "agent": "chat_orchestrator"})
     print_event("stream_chunk", {"content": "Visible stream.", "agent": "chat_orchestrator"})
@@ -176,7 +176,7 @@ def test_patched_get_helper_tools():
 
 
 def test_empty_response_failure_message_is_localized():
-    from opalatex.i18n import set_lang
+    from gilzabots.i18n import set_lang
 
     set_lang("en")
     assert _empty_response_failure_message() == "The agent finished without a non-empty final response after automatic correction attempts. No fallback response was saved."
@@ -186,7 +186,7 @@ def test_empty_response_failure_message_is_localized():
 
 
 def test_ollama_model_not_found_error_is_localized():
-    from opalatex.i18n import set_lang
+    from gilzabots.i18n import set_lang
 
     project = SimpleNamespace(model="ollama/gemma")
     exc = Exception("model not found, try pulling it first")
@@ -202,7 +202,7 @@ def test_ollama_model_not_found_error_is_localized():
 
 
 def test_remote_ollama_model_not_found_error_does_not_claim_local_download():
-    from opalatex.i18n import set_lang
+    from gilzabots.i18n import set_lang
 
     project = SimpleNamespace(model="ollama/gpt-oss:20b", api_base="http://100.85.255.111:11434/v1")
     exc = Exception("model not found, try pulling it first")
@@ -215,7 +215,7 @@ def test_remote_ollama_model_not_found_error_does_not_claim_local_download():
 
 
 def test_ollama_404_page_not_found_is_reported_as_connection_error():
-    from opalatex.i18n import set_lang
+    from gilzabots.i18n import set_lang
 
     project = SimpleNamespace(model="ollama/gpt-oss:20b", api_base="http://100.85.255.111:11434/v1")
     exc = Exception("OllamaException - 404 page not found")
@@ -233,7 +233,7 @@ def test_stream_stalled_mid_response_is_not_reported_as_connection_error():
     Text captured from LiteLLM against a server that streamed thinking chunks
     and then stopped sending data.
     """
-    from opalatex.i18n import set_lang
+    from gilzabots.i18n import set_lang
 
     project = SimpleNamespace(model="ollama/gpt-oss:20b", api_base="http://100.85.255.111:11434/v1")
     exc = Exception(
@@ -255,7 +255,7 @@ def test_stream_stalled_mid_response_is_not_reported_as_connection_error():
 
 
 def test_request_timeout_is_not_reported_as_connection_error():
-    from opalatex.i18n import set_lang
+    from gilzabots.i18n import set_lang
 
     project = SimpleNamespace(model="ollama/gpt-oss:20b", api_base="http://100.85.255.111:11434/v1")
     # A 500 s timeout must not be read as an Ollama HTTP 500 either.
@@ -273,7 +273,7 @@ def test_request_timeout_is_not_reported_as_connection_error():
 
 
 def test_refused_connection_is_still_reported_as_connection_error():
-    from opalatex.i18n import set_lang
+    from gilzabots.i18n import set_lang
 
     project = SimpleNamespace(model="ollama/gpt-oss:20b", api_base="http://10.255.255.1:11434")
     exc = Exception(
@@ -286,7 +286,7 @@ def test_refused_connection_is_still_reported_as_connection_error():
 
 
 def test_insufficient_quota_error_is_localized():
-    from opalatex.i18n import set_lang
+    from gilzabots.i18n import set_lang
     project = SimpleNamespace(model="openai/gpt-5.5")
     exc = Exception("OpenAIException - {\"error\": {\"message\": \"You exceeded your current quota, please check your plan and billing details.\", \"type\": \"insufficient_quota\"}}")
 
@@ -324,7 +324,7 @@ def test_worker_summary_response_falls_back_to_last_worker_summary():
 def test_worker_summary_response_prefers_visible_intermediate_agent_response():
     clear_worker_message_buffer()
 
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     original_hook = stdin_mod.event_hook
     stdin_mod.event_hook = lambda _payload: None
@@ -461,9 +461,9 @@ def test_iteration_reflection_only_accepts_assistant_prose():
 
 @pytest.mark.asyncio
 async def test_handle_run_inline_normalizes_remote_ollama_api_base(monkeypatch):
-    import opalatex.agent_stdin as stdin_mod
-    import opalatex.config as config_mod
-    import opalatex.litellm_compat as compat_mod
+    import gilzabots.agent_stdin as stdin_mod
+    import gilzabots.config as config_mod
+    import gilzabots.litellm_compat as compat_mod
 
     captured = {}
     events = []
@@ -530,7 +530,7 @@ async def test_handle_run_inline_normalizes_remote_ollama_api_base(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_handle_run_retries_orchestrator_before_using_worker_summary(monkeypatch):
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     events = []
     prompts = []
@@ -573,7 +573,7 @@ async def test_handle_run_retries_orchestrator_before_using_worker_summary(monke
 
 @pytest.mark.asyncio
 async def test_handle_run_does_not_promote_worker_message_without_orchestrator_response(monkeypatch, tmp_path):
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     events = []
     saved_messages = []
@@ -641,8 +641,8 @@ async def test_handle_run_does_not_promote_worker_message_without_orchestrator_r
 
 @pytest.mark.asyncio
 async def test_handle_run_reports_error_when_orchestrator_never_sends_message(monkeypatch, tmp_path):
-    import opalatex.agent_stdin as stdin_mod
-    from opalatex.i18n import set_lang
+    import gilzabots.agent_stdin as stdin_mod
+    from gilzabots.i18n import set_lang
 
     set_lang("en")
 
@@ -711,8 +711,8 @@ async def test_handle_run_reports_error_when_orchestrator_never_sends_message(mo
 
 @pytest.mark.asyncio
 async def test_handle_run_does_not_duplicate_user_message_on_failed_retries(monkeypatch, tmp_path):
-    import opalatex.agent_stdin as stdin_mod
-    from opalatex.project import ProjectStore
+    import gilzabots.agent_stdin as stdin_mod
+    from gilzabots.project import ProjectStore
 
     db_path = str(tmp_path / "projects.db")
     project_dir = tmp_path / "project"
@@ -784,7 +784,7 @@ async def test_handle_run_does_not_duplicate_user_message_on_failed_retries(monk
 
 @pytest.mark.asyncio
 async def test_handle_run_persists_visible_response_without_thought_snapshot(monkeypatch, tmp_path):
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     events = []
     saved_messages = []
@@ -844,7 +844,7 @@ async def test_handle_run_persists_visible_response_without_thought_snapshot(mon
 
 @pytest.mark.asyncio
 async def test_handle_run_does_not_persist_auxiliary_thought_events_in_chat_history(monkeypatch, tmp_path):
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     events = []
     saved_messages = []
@@ -914,7 +914,7 @@ async def test_handle_run_does_not_persist_auxiliary_thought_events_in_chat_hist
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 @pytest.mark.asyncio
 async def test_handle_run_checkpoints_direct_file_writes(monkeypatch, tmp_path):
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     events = []
     saved_messages = []
@@ -964,7 +964,7 @@ async def test_handle_run_checkpoints_direct_file_writes(monkeypatch, tmp_path):
     log = subprocess.run(
         [
             "git",
-            f"--git-dir={tmp_path / '.opalatex' / '.shadowgit'}",
+            f"--git-dir={tmp_path / '.gilzabots' / '.shadowgit'}",
             f"--work-tree={tmp_path}",
             "log",
             "--format=%s",
@@ -978,7 +978,7 @@ async def test_handle_run_checkpoints_direct_file_writes(monkeypatch, tmp_path):
     status = subprocess.run(
         [
             "git",
-            f"--git-dir={tmp_path / '.opalatex' / '.shadowgit'}",
+            f"--git-dir={tmp_path / '.gilzabots' / '.shadowgit'}",
             f"--work-tree={tmp_path}",
             "status",
             "--porcelain",
@@ -998,7 +998,7 @@ async def test_handle_run_checkpoints_direct_file_writes(monkeypatch, tmp_path):
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 @pytest.mark.asyncio
 async def test_handle_run_removes_turn_checkpoints_without_file_changes(monkeypatch, tmp_path):
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     events = []
     saved_messages = []
@@ -1047,7 +1047,7 @@ async def test_handle_run_removes_turn_checkpoints_without_file_changes(monkeypa
     log = subprocess.run(
         [
             "git",
-            f"--git-dir={tmp_path / '.opalatex' / '.shadowgit'}",
+            f"--git-dir={tmp_path / '.gilzabots' / '.shadowgit'}",
             f"--work-tree={tmp_path}",
             "log",
             "--format=%s",
@@ -1065,7 +1065,7 @@ async def test_handle_run_removes_turn_checkpoints_without_file_changes(monkeypa
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 @pytest.mark.asyncio
 async def test_handle_run_finalizes_checkpoint_when_agent_errors(monkeypatch, tmp_path):
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     events = []
     saved_messages = []
@@ -1115,7 +1115,7 @@ async def test_handle_run_finalizes_checkpoint_when_agent_errors(monkeypatch, tm
     log = subprocess.run(
         [
             "git",
-            f"--git-dir={tmp_path / '.opalatex' / '.shadowgit'}",
+            f"--git-dir={tmp_path / '.gilzabots' / '.shadowgit'}",
             f"--work-tree={tmp_path}",
             "log",
             "--format=%s",
@@ -1129,7 +1129,7 @@ async def test_handle_run_finalizes_checkpoint_when_agent_errors(monkeypatch, tm
     status = subprocess.run(
         [
             "git",
-            f"--git-dir={tmp_path / '.opalatex' / '.shadowgit'}",
+            f"--git-dir={tmp_path / '.gilzabots' / '.shadowgit'}",
             f"--work-tree={tmp_path}",
             "status",
             "--porcelain",
@@ -1149,8 +1149,8 @@ async def test_handle_run_finalizes_checkpoint_when_agent_errors(monkeypatch, tm
 @pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 @pytest.mark.asyncio
 async def test_handle_run_finalizes_checkpoint_when_cancelled(monkeypatch, tmp_path):
-    import opalatex.agent_stdin as stdin_mod
-    import opalatex.vcs as vcs
+    import gilzabots.agent_stdin as stdin_mod
+    import gilzabots.vcs as vcs
     import threading
 
     changed = asyncio.Event()
@@ -1228,7 +1228,7 @@ async def test_handle_run_finalizes_checkpoint_when_cancelled(monkeypatch, tmp_p
     log = subprocess.run(
         [
             "git",
-            f"--git-dir={tmp_path / '.opalatex' / '.shadowgit'}",
+            f"--git-dir={tmp_path / '.gilzabots' / '.shadowgit'}",
             f"--work-tree={tmp_path}",
             "log",
             "--format=%s",
@@ -1241,7 +1241,7 @@ async def test_handle_run_finalizes_checkpoint_when_cancelled(monkeypatch, tmp_p
     status = subprocess.run(
         [
             "git",
-            f"--git-dir={tmp_path / '.opalatex' / '.shadowgit'}",
+            f"--git-dir={tmp_path / '.gilzabots' / '.shadowgit'}",
             f"--work-tree={tmp_path}",
             "status",
             "--porcelain",
@@ -1266,7 +1266,7 @@ async def test_handle_run_finalizes_checkpoint_when_cancelled(monkeypatch, tmp_p
 
 @pytest.mark.asyncio
 async def test_server_interrupt_acknowledges_immediately_and_cancels_once():
-    from opalatex.ide_server import AsyncHTTPServer
+    from gilzabots.ide_server import AsyncHTTPServer
 
     server = AsyncHTTPServer()
     event_queue = asyncio.Queue()
@@ -1288,7 +1288,7 @@ async def test_server_interrupt_acknowledges_immediately_and_cancels_once():
 @pytest.mark.asyncio
 async def test_project_handlers(tmp_path, monkeypatch):
     """Test project listing, creation, and deletion via stdin handlers."""
-    from opalatex.agent_stdin import handle_create_project, handle_list_projects, handle_delete_project
+    from gilzabots.agent_stdin import handle_create_project, handle_list_projects, handle_delete_project
     
     db_file = str(tmp_path / "test_db.sqlite")
     
@@ -1297,8 +1297,8 @@ async def test_project_handlers(tmp_path, monkeypatch):
     def mock_print_event(event, data):
         events.append((event, data))
         
-    import opalatex.agent_stdin
-    monkeypatch.setattr(opalatex.agent_stdin, "print_event", mock_print_event)
+    import gilzabots.agent_stdin
+    monkeypatch.setattr(gilzabots.agent_stdin, "print_event", mock_print_event)
     
     # 1. Create project
     await handle_create_project({
@@ -1341,18 +1341,18 @@ async def test_project_handlers(tmp_path, monkeypatch):
 
 
 def test_skip_directories_in_collect_python_files(tmp_path):
-    """Verify that _collect_python_files skips tests, opalatex, skills, and debug directories."""
-    from opalatex.tools import _collect_python_files
+    """Verify that _collect_python_files skips tests, gilzabots, skills, and debug directories."""
+    from gilzabots.tools import _collect_python_files
     import os
     
     # Create structure
-    (tmp_path / "opalatex").mkdir()
+    (tmp_path / "gilzabots").mkdir()
     (tmp_path / "tests").mkdir()
     (tmp_path / "skills").mkdir()
     (tmp_path / "debug").mkdir()
     
     # Write python files inside skipped directories
-    (tmp_path / "opalatex" / "main.py").write_text("print('core')")
+    (tmp_path / "gilzabots" / "main.py").write_text("print('core')")
     (tmp_path / "tests" / "test_app.py").write_text("print('test')")
     (tmp_path / "skills" / "run.py").write_text("print('skill')")
     (tmp_path / "debug" / "debug.py").write_text("print('debug')")
@@ -1414,7 +1414,7 @@ def test_ollama_context_exceeded_400_is_reported_as_context_exceeded_not_generic
     """A context-size-exceeded 400 from Ollama must surface the specific,
     actionable context message instead of the generic 'reproduce it' HTTP fallback.
     """
-    from opalatex.i18n import set_lang
+    from gilzabots.i18n import set_lang
 
     project = SimpleNamespace(model="ollama_chat/hf.co/LiquidAI/LFM2.5-2.6B-GGUF:Q4_K_M", api_base="")
     exc = Exception(
@@ -1433,8 +1433,8 @@ def test_ollama_context_exceeded_400_is_reported_as_context_exceeded_not_generic
 
 
 def test_ollama_system_message_order_error_suggests_enabling_catalog_flag(monkeypatch):
-    from opalatex.i18n import set_lang
-    from opalatex import config as config_mod
+    from gilzabots.i18n import set_lang
+    from gilzabots import config as config_mod
 
     monkeypatch.setattr(config_mod, "model_requires_single_system_message", lambda model: False)
 
@@ -1454,8 +1454,8 @@ def test_ollama_system_message_order_error_suggests_enabling_catalog_flag(monkey
 
 
 def test_ollama_system_message_order_error_reports_unresolved_when_flag_already_set(monkeypatch):
-    from opalatex.i18n import set_lang
-    from opalatex import config as config_mod
+    from gilzabots.i18n import set_lang
+    from gilzabots import config as config_mod
 
     monkeypatch.setattr(config_mod, "model_requires_single_system_message", lambda model: True)
 
@@ -1481,8 +1481,8 @@ def test_badrequest_system_message_order_error_is_not_reported_as_parameter_reje
     ``invalid_request_error`` too, so the ordering diagnostic must be checked
     first or the actionable message is lost.
     """
-    from opalatex.i18n import set_lang
-    from opalatex import config as config_mod
+    from gilzabots.i18n import set_lang
+    from gilzabots import config as config_mod
 
     monkeypatch.setattr(config_mod, "model_requires_single_system_message", lambda model: False)
 
@@ -1506,7 +1506,7 @@ def test_server_prompt_budget_error_is_not_reported_as_connection_failure():
     The server answered, so blaming the connection hides the only two things
     the user can act on: the host's KV cache budget and the catalog num_ctx.
     """
-    from opalatex.i18n import set_lang
+    from gilzabots.i18n import set_lang
 
     project = SimpleNamespace(model="openai/Qwen3.6-35B-A3B-NVFP4", api_base="")
     exc = Exception(
@@ -1526,7 +1526,7 @@ def test_server_prompt_budget_error_is_not_reported_as_connection_failure():
 
 
 def test_prompt_budget_from_error_ignores_unrelated_failures():
-    from opalatex.agent_stdin import _prompt_budget_from_error
+    from gilzabots.agent_stdin import _prompt_budget_from_error
 
     assert _prompt_budget_from_error("litellm.APIConnectionError: connection refused") is None
     assert _prompt_budget_from_error("prompt is too long: 13557 tokens > 8221 maximum") == (13557, 8221)
@@ -1558,7 +1558,7 @@ def test_handle_create_project_reports_a_taken_folder_without_crashing(tmp_path,
     """
     import asyncio
 
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     events = []
     monkeypatch.setattr(stdin_mod, "print_event", lambda ev, data: events.append((ev, data)))
@@ -1601,7 +1601,7 @@ async def test_thinking_panel_follows_the_resolved_capability_not_a_project_sett
     have the provider reasoning on every turn while the Thinking panel stayed
     empty — two switches, one behaviour, and no way to tell which one was lying.
     """
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     events = []
 

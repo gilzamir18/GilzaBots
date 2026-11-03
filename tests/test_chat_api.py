@@ -3,8 +3,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.ide_server import AsyncHTTPServer, _ollama_tags_url_for_model_info
-from opalatex.project import ProjectStore
+from gilzabots.ide_server import AsyncHTTPServer, _ollama_tags_url_for_model_info
+from gilzabots.project import ProjectStore
 
 
 @pytest.mark.asyncio
@@ -23,7 +23,7 @@ async def test_chat_truncate_endpoint_returns_superseded_ids(tmp_path, monkeypat
     first_id = store.append_message(project, "user", "first")
     reply_id = store.append_message(project, "assistant", "first reply")
     second_id = store.append_message(project, "user", "second")
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", db_path)
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", db_path)
 
     server = AsyncHTTPServer()
     writer = AsyncMock()
@@ -74,7 +74,7 @@ async def test_chat_truncate_endpoint_rejects_request_without_stable_anchor(tmp_
     project = store.load("myproj")
     store.append_message(project, "user", "first")
     store.append_message(project, "assistant", "first reply")
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", db_path)
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", db_path)
 
     server = AsyncHTTPServer()
     writer = AsyncMock()
@@ -118,7 +118,7 @@ async def test_clear_all_chats_endpoint_resets_project_chats(tmp_path, monkeypat
     store.create_chat("myproj", "branch-1", "Branch")
     branch = store.load("myproj", chat_id="branch-1")
     store.append_message(branch, "user", "branch message")
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", db_path)
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", db_path)
 
     server = AsyncHTTPServer()
     writer = AsyncMock()
@@ -157,7 +157,7 @@ async def test_load_local_ollama_models_endpoint_returns_added_models(monkeypatc
         "supports_thinking": False,
     }]
     monkeypatch.setattr(
-        "opalatex.models_store.load_local_ollama_models",
+        "gilzabots.models_store.load_local_ollama_models",
         lambda: added_models,
     )
     server = AsyncHTTPServer()
@@ -184,13 +184,13 @@ async def test_load_local_ollama_models_endpoint_returns_added_models(monkeypatc
 
 @pytest.mark.asyncio
 async def test_load_local_ollama_models_endpoint_reports_missing_installation(monkeypatch):
-    from opalatex.models_store import LocalOllamaNotInstalledError
+    from gilzabots.models_store import LocalOllamaNotInstalledError
 
     def raise_not_installed():
         raise LocalOllamaNotInstalledError()
 
     monkeypatch.setattr(
-        "opalatex.models_store.load_local_ollama_models",
+        "gilzabots.models_store.load_local_ollama_models",
         raise_not_installed,
     )
     server = AsyncHTTPServer()
@@ -238,12 +238,12 @@ async def test_update_project_endpoint_updates_model(tmp_path, monkeypatch):
         project_name="My Project",
         project_path=str(tmp_path / "project"),
     )
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", db_path)
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", db_path)
     # Selecting a local Ollama model pre-fetches it; the test must not shell out
     # to `ollama pull`. See tests/test_ollama_model_prefetch.py for that path.
     pulled = []
     monkeypatch.setattr(
-        "opalatex.ollama_manager.pull_model_in_background",
+        "gilzabots.ollama_manager.pull_model_in_background",
         lambda name, report=None: pulled.append(name) or True,
     )
 
@@ -258,7 +258,7 @@ async def test_update_project_endpoint_updates_model(tmp_path, monkeypatch):
 
     await server.route_api(
         "POST",
-        "/api/opalatex/update-project",
+        "/api/gilzabots/update-project",
         {},
         {},
         json.dumps({
@@ -282,7 +282,7 @@ def _api_harness(tmp_path, monkeypatch):
     """A server whose responses are collected instead of written to a socket."""
     db_path = str(tmp_path / "projects.db")
     store = ProjectStore(db_path=db_path)
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", db_path)
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", db_path)
 
     server = AsyncHTTPServer()
     responses = []
@@ -427,7 +427,7 @@ async def test_chat_history_serves_the_occupancy_stored_for_that_chat(tmp_path, 
 
     # Another conversation owns the in-process slot, exactly as it would after
     # sending a message in a different chat.
-    from opalatex import token_usage
+    from gilzabots import token_usage
     token_usage.set_context_scope(token_usage.context_scope_key("/elsewhere", "other"))
     token_usage.record_context_tokens(999)
 
@@ -596,7 +596,7 @@ async def test_the_token_stream_cap_can_never_reach_the_reasoning(tmp_path, monk
     now against a different mechanism, since the reasoning is fetched per
     message instead of being capped alongside the stream.
     """
-    from opalatex.ide_server import CHAT_HISTORY_STREAM_CHUNK_LIMIT
+    from gilzabots.ide_server import CHAT_HISTORY_STREAM_CHUNK_LIMIT
 
     store, server, responses = _api_harness(tmp_path, monkeypatch)
     project = store.create("myproj", "plan", "fake/model", project_path=str(tmp_path / "project"))

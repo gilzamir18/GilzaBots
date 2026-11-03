@@ -12,9 +12,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.ide_server import AsyncHTTPServer
+from gilzabots.ide_server import AsyncHTTPServer
 
-from opalatex.assetstore import (
+from gilzabots.assetstore import (
     VALID_TYPES,
     install_asset,
     list_assets,
@@ -41,7 +41,7 @@ def _write_zip(path: Path, entries: dict[str, str]) -> None:
 @pytest.fixture
 def template(tmp_path, monkeypatch):
     """Publish a template into an isolated store and return its metadata."""
-    import opalatex.assetstore as store
+    import gilzabots.assetstore as store
 
     store_dir = tmp_path / "store" / "templates"
     store_dir.mkdir(parents=True)
@@ -156,11 +156,11 @@ def test_bundled_example_template_is_visible_in_the_repo_store():
 
 def test_package_store_templates_are_discovered_when_repo_root_absent(tmp_path, monkeypatch):
     """When running from a package where repo root templates/ is missing, templates under _STORE_ROOT/templates load."""
-    import opalatex.assetstore as store
+    import gilzabots.assetstore as store
 
-    pkg_templates_dir = tmp_path / "opalatex" / "assetstore" / "templates"
+    pkg_templates_dir = tmp_path / "gilzabots" / "assetstore" / "templates"
     pkg_templates_dir.mkdir(parents=True)
-    monkeypatch.setattr(store, "_STORE_ROOT", tmp_path / "opalatex" / "assetstore")
+    monkeypatch.setattr(store, "_STORE_ROOT", tmp_path / "gilzabots" / "assetstore")
     monkeypatch.setattr(store, "_REPO_ROOT", tmp_path / "site-packages")
 
     (pkg_templates_dir / "packaged-template.yaml").write_text(SIDECAR, encoding="utf-8")
@@ -191,7 +191,7 @@ def test_pyproject_force_includes_templates():
         .get("force-include", {})
     )
     assert "templates" in force_include
-    assert force_include["templates"] == "opalatex/assetstore/templates"
+    assert force_include["templates"] == "gilzabots/assetstore/templates"
 
 
 # ---------------------------------------------------------------------------

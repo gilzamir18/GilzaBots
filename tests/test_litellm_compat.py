@@ -1,5 +1,5 @@
 def test_sanitize_tool_call_messages_strips_incomplete_tool_call():
-    from opalatex.litellm_compat import sanitize_tool_call_messages
+    from gilzabots.litellm_compat import sanitize_tool_call_messages
 
     messages = [
         {"role": "user", "content": "Look at this image"},
@@ -27,7 +27,7 @@ def test_sanitize_tool_call_messages_strips_incomplete_tool_call():
 
 
 def test_sanitize_tool_call_messages_converts_orphan_tool_message():
-    from opalatex.litellm_compat import sanitize_tool_call_messages
+    from gilzabots.litellm_compat import sanitize_tool_call_messages
 
     sanitized = sanitize_tool_call_messages([
         {"role": "tool", "name": "read_file", "tool_call_id": "call_old", "content": "ok"}
@@ -39,7 +39,7 @@ def test_sanitize_tool_call_messages_converts_orphan_tool_message():
 
 
 def test_sanitize_tool_call_messages_preserves_complete_tool_pair():
-    from opalatex.litellm_compat import sanitize_tool_call_messages
+    from gilzabots.litellm_compat import sanitize_tool_call_messages
 
     messages = [
         {"role": "user", "content": "read x"},
@@ -63,7 +63,7 @@ def test_sanitize_tool_call_messages_preserves_complete_tool_pair():
 
 def test_sanitize_tool_call_messages_preserves_pair_after_assistant_turn():
     """assistant -> assistant(tool_calls) is valid: only id matching is enforced."""
-    from opalatex.litellm_compat import sanitize_tool_call_messages
+    from gilzabots.litellm_compat import sanitize_tool_call_messages
 
     messages = [
         {"role": "assistant", "content": "Previous assistant text"},
@@ -92,7 +92,7 @@ def test_sanitize_tool_call_messages_preserves_pair_after_system_alert():
     to survive sanitization, because a chat or agent state saved before that
     change can replay it.
     """
-    from opalatex.litellm_compat import sanitize_tool_call_messages
+    from gilzabots.litellm_compat import sanitize_tool_call_messages
 
     messages = [
         {"role": "user", "content": "edit the file"},
@@ -116,7 +116,7 @@ def test_sanitize_tool_call_messages_preserves_pair_after_system_alert():
 
 
 def test_sanitize_tool_call_messages_preserves_pair_at_history_start():
-    from opalatex.litellm_compat import sanitize_tool_call_messages
+    from gilzabots.litellm_compat import sanitize_tool_call_messages
 
     messages = [
         {"role": "system", "content": "summary"},
@@ -139,7 +139,7 @@ def test_sanitize_tool_call_messages_preserves_pair_at_history_start():
 
 def test_sanitize_tool_call_messages_moves_interleaved_system_alert_past_tool_block():
     """A system alert must never split an assistant tool_calls message from its results."""
-    from opalatex.litellm_compat import sanitize_tool_call_messages
+    from gilzabots.litellm_compat import sanitize_tool_call_messages
 
     alert = {"role": "system", "content": "SYSTEM ALERT: the tool call was empty."}
     assistant = {
@@ -171,7 +171,7 @@ def test_sanitize_tool_call_messages_moves_interleaved_system_alert_past_tool_bl
 
 
 def test_sanitize_tool_call_messages_downgrades_only_when_a_result_is_missing():
-    from opalatex.litellm_compat import sanitize_tool_call_messages
+    from gilzabots.litellm_compat import sanitize_tool_call_messages
 
     sanitized = sanitize_tool_call_messages([
         {"role": "user", "content": "hi"},
@@ -194,7 +194,7 @@ def test_sanitize_tool_call_messages_downgrades_only_when_a_result_is_missing():
 
 
 def test_wrap_agent_litellm_compat_adds_drop_params(monkeypatch):
-    from opalatex.litellm_compat import wrap_agent_litellm_compat
+    from gilzabots.litellm_compat import wrap_agent_litellm_compat
 
     calls = {}
 
@@ -217,7 +217,7 @@ def test_wrap_agent_litellm_compat_adds_drop_params(monkeypatch):
 
 
 def test_wrap_agent_litellm_compat_sanitizes_runtime_kwargs():
-    from opalatex.litellm_compat import wrap_agent_litellm_compat
+    from gilzabots.litellm_compat import wrap_agent_litellm_compat
 
     calls = {}
 
@@ -247,7 +247,7 @@ def test_wrap_agent_litellm_compat_sanitizes_runtime_kwargs():
 
 
 def test_wrap_agent_litellm_compat_normalizes_ollama_keyerror_message():
-    from opalatex.litellm_compat import wrap_agent_litellm_compat
+    from gilzabots.litellm_compat import wrap_agent_litellm_compat
 
     class FakeOllamaError(Exception):
         pass
@@ -278,7 +278,7 @@ def test_wrap_agent_litellm_compat_normalizes_ollama_keyerror_message():
 
 
 def test_wrap_agent_litellm_compat_repairs_internal_history_in_place():
-    from opalatex.litellm_compat import wrap_agent_litellm_compat
+    from gilzabots.litellm_compat import wrap_agent_litellm_compat
 
     class FakeAgent:
         def __init__(self):
@@ -314,7 +314,7 @@ def test_wrap_agent_litellm_compat_repairs_internal_history_in_place():
 
 
 def test_wrap_agent_litellm_compat_preserves_native_tool_role_for_ollama():
-    from opalatex.litellm_compat import wrap_agent_litellm_compat
+    from gilzabots.litellm_compat import wrap_agent_litellm_compat
 
     calls = {}
     messages = [
@@ -352,7 +352,7 @@ def test_wrap_agent_litellm_compat_preserves_native_tool_role_for_ollama():
 
 
 def test_wrap_agent_litellm_compat_preserves_stream_and_tools_for_ollama():
-    from opalatex.litellm_compat import wrap_agent_litellm_compat
+    from gilzabots.litellm_compat import wrap_agent_litellm_compat
 
     calls = {}
 
@@ -381,7 +381,7 @@ def test_wrap_agent_litellm_compat_preserves_stream_and_tools_for_ollama():
 
 
 def test_sanitize_litellm_kwargs_preserves_ollama_tool_schema():
-    from opalatex.config import sanitize_litellm_kwargs_for_model
+    from gilzabots.config import sanitize_litellm_kwargs_for_model
 
     tools = [{"type": "function", "function": {"name": "read_file"}}]
 
@@ -401,7 +401,7 @@ def test_sanitize_litellm_kwargs_preserves_ollama_tool_schema():
 
 
 def test_wrap_agent_litellm_compat_repairs_history_before_run():
-    from opalatex.litellm_compat import wrap_agent_litellm_compat
+    from gilzabots.litellm_compat import wrap_agent_litellm_compat
 
     class FakeAgent:
         model = "openai/gpt-5.5"
@@ -438,7 +438,7 @@ def test_wrap_agent_litellm_compat_repairs_history_before_run():
 
 def test_find_tool_for_args_returns_none_when_schema_match_is_ambiguous():
     from agenticblocks.core.function_block import as_tool
-    from opalatex.litellm_compat import find_tool_for_args
+    from gilzabots.litellm_compat import find_tool_for_args
 
     @as_tool(name="run_command")
     def run_command(command: str) -> str:
@@ -456,7 +456,7 @@ def test_find_tool_for_args_returns_none_when_schema_match_is_ambiguous():
 
 def test_find_tool_for_args_requires_complete_unique_schema_match():
     from agenticblocks.core.function_block import as_tool
-    from opalatex.litellm_compat import find_tool_for_args
+    from gilzabots.litellm_compat import find_tool_for_args
 
     @as_tool(name="read_file")
     def read_file(path: str) -> str:
@@ -478,7 +478,7 @@ def test_find_tool_for_args_requires_complete_unique_schema_match():
 
 
 def test_repeated_tool_validation_errors_are_detected():
-    from opalatex.litellm_compat import _has_repeated_tool_validation_errors
+    from gilzabots.litellm_compat import _has_repeated_tool_validation_errors
 
     messages = [
         {
@@ -502,7 +502,7 @@ def test_repeated_tool_validation_errors_are_detected():
 
 
 def test_single_tool_validation_error_does_not_trip_loop_breaker():
-    from opalatex.litellm_compat import _has_repeated_tool_validation_errors
+    from gilzabots.litellm_compat import _has_repeated_tool_validation_errors
 
     messages = [
         {
@@ -517,7 +517,7 @@ def test_single_tool_validation_error_does_not_trip_loop_breaker():
 
 def test_repeated_validation_disables_only_the_rejected_tool():
     """A bad search call must not take read_file or create_plan out with it."""
-    from opalatex.litellm_compat import wrap_agent_litellm_compat
+    from gilzabots.litellm_compat import wrap_agent_litellm_compat
 
     captured = {}
 
@@ -577,7 +577,7 @@ def test_repeated_validation_disables_only_the_rejected_tool():
 
 def test_the_breaker_alert_names_only_tools_the_request_still_declares():
     """An agent with its own tool set must not be pointed at read_file or create_plan."""
-    from opalatex.litellm_compat import wrap_agent_litellm_compat
+    from gilzabots.litellm_compat import wrap_agent_litellm_compat
 
     captured = {}
 
@@ -627,7 +627,7 @@ def test_the_breaker_alert_names_only_tools_the_request_still_declares():
 
 
 def test_repeated_validation_reports_each_offending_tool():
-    from opalatex.litellm_compat import _repeated_tool_validation_error_names
+    from gilzabots.litellm_compat import _repeated_tool_validation_error_names
 
     messages = []
     for name in ("search_code", "read_file"):
@@ -640,7 +640,7 @@ def test_repeated_validation_reports_each_offending_tool():
 
 
 def test_repeated_validation_is_scoped_to_the_current_user_turn():
-    from opalatex.litellm_compat import _repeated_tool_validation_error_names
+    from gilzabots.litellm_compat import _repeated_tool_validation_error_names
 
     error = {
         "role": "tool",
@@ -667,7 +667,7 @@ def test_function_tool_schema_omits_adapter_implementation_docs():
 
 
 def test_analyze_image_resanitizes_kwargs_for_final_model(monkeypatch):
-    import opalatex.tools as tools
+    import gilzabots.tools as tools
 
     calls = {}
 
@@ -695,7 +695,7 @@ def test_analyze_image_resanitizes_kwargs_for_final_model(monkeypatch):
 
     monkeypatch.setattr(tools, "_PROJECT_SESSION", FakeSession())
     monkeypatch.setattr("litellm.completion", fake_completion)
-    monkeypatch.setattr("opalatex.ui_settings.load_ui_settings", lambda: {})
+    monkeypatch.setattr("gilzabots.ui_settings.load_ui_settings", lambda: {})
     tools.set_recent_file_attachments({
         "input_file_0.jpg": {
             "type": "image",
@@ -718,7 +718,7 @@ def test_analyze_image_resanitizes_kwargs_for_final_model(monkeypatch):
     assert "top_k" not in calls
 
 def test_consolidate_leading_system_messages_merges_stray_system_messages_into_one():
-    from opalatex.litellm_compat import consolidate_leading_system_messages
+    from gilzabots.litellm_compat import consolidate_leading_system_messages
 
     messages = [
         {"role": "system", "content": "base prompt"},
@@ -735,7 +735,7 @@ def test_consolidate_leading_system_messages_merges_stray_system_messages_into_o
 
 
 def test_consolidate_leading_system_messages_noop_for_single_system_message():
-    from opalatex.litellm_compat import consolidate_leading_system_messages
+    from gilzabots.litellm_compat import consolidate_leading_system_messages
 
     messages = [
         {"role": "system", "content": "base prompt"},
@@ -746,8 +746,8 @@ def test_consolidate_leading_system_messages_noop_for_single_system_message():
 
 
 def test_wrap_agent_litellm_compat_merges_mid_turn_system_alert_when_catalog_requires_it(monkeypatch):
-    from opalatex import litellm_compat
-    from opalatex.litellm_compat import wrap_agent_litellm_compat
+    from gilzabots import litellm_compat
+    from gilzabots.litellm_compat import wrap_agent_litellm_compat
 
     monkeypatch.setattr(litellm_compat, "model_requires_single_system_message", lambda model: True)
 
@@ -778,8 +778,8 @@ def test_wrap_agent_litellm_compat_merges_mid_turn_system_alert_when_catalog_req
 
 
 def test_wrap_agent_litellm_compat_leaves_message_order_when_catalog_does_not_require_it(monkeypatch):
-    from opalatex import litellm_compat
-    from opalatex.litellm_compat import wrap_agent_litellm_compat
+    from gilzabots import litellm_compat
+    from gilzabots.litellm_compat import wrap_agent_litellm_compat
 
     monkeypatch.setattr(litellm_compat, "model_requires_single_system_message", lambda model: False)
 
@@ -809,8 +809,8 @@ def test_wrap_agent_litellm_compat_leaves_message_order_when_catalog_does_not_re
 
 
 def test_wrap_agent_litellm_compat_leaves_message_order_for_non_ollama_provider(monkeypatch):
-    from opalatex import litellm_compat
-    from opalatex.litellm_compat import wrap_agent_litellm_compat
+    from gilzabots import litellm_compat
+    from gilzabots.litellm_compat import wrap_agent_litellm_compat
 
     monkeypatch.setattr(litellm_compat, "model_requires_single_system_message", lambda model: False)
 
@@ -846,8 +846,8 @@ def test_wrap_agent_litellm_compat_merges_system_messages_for_openai_compatible_
     reject them when the model is served over an OpenAI-compatible endpoint
     (vLLM/NIM), where the runtime id carries an ``openai/`` prefix.
     """
-    from opalatex import litellm_compat
-    from opalatex.litellm_compat import wrap_agent_litellm_compat
+    from gilzabots import litellm_compat
+    from gilzabots.litellm_compat import wrap_agent_litellm_compat
 
     monkeypatch.setattr(litellm_compat, "model_requires_single_system_message", lambda model: True)
 
@@ -881,7 +881,7 @@ def test_wrap_agent_litellm_compat_merges_system_messages_for_openai_compatible_
 
 
 def test_consolidate_leading_system_messages_flattens_content_parts():
-    from opalatex.litellm_compat import consolidate_leading_system_messages
+    from gilzabots.litellm_compat import consolidate_leading_system_messages
 
     messages = [
         {"role": "system", "content": [{"type": "text", "text": "base prompt"}]},
@@ -895,7 +895,7 @@ def test_consolidate_leading_system_messages_flattens_content_parts():
 
 
 def test_normalize_ollama_tool_call_parse_error_keeps_diagnostic_detail():
-    from opalatex.litellm_compat import _normalize_ollama_unexpected_response_error
+    from gilzabots.litellm_compat import _normalize_ollama_unexpected_response_error
 
     exc = Exception(
         "Ollama_chatException - KeyError: 'message', Got unexpected response "
@@ -911,7 +911,7 @@ def test_normalize_ollama_tool_call_parse_error_keeps_diagnostic_detail():
 
 def test_normalize_llama_server_tool_call_rejection_as_tool_call_json_error():
     """Wording of llama-server-backed Ollama builds, recorded from a real session."""
-    from opalatex.litellm_compat import _normalize_ollama_unexpected_response_error
+    from gilzabots.litellm_compat import _normalize_ollama_unexpected_response_error
 
     normalized = _normalize_ollama_unexpected_response_error(Exception((
     "litellm.BadRequestError: Ollama_chatException - KeyError: 'message', Got unexpected "
@@ -919,7 +919,7 @@ def test_normalize_llama_server_tool_call_rejection_as_tool_call_json_error():
     "for \"run_skill\": invalid character \\'\\\\n\\' in string literal'}"
 )))
 
-    assert "OPALATEX_OLLAMA_TOOL_CALL_JSON_ESCAPE" in str(normalized)
+    assert "GILZABOTS_OLLAMA_TOOL_CALL_JSON_ESCAPE" in str(normalized)
     assert "run_skill" in str(normalized)
     assert "unexpected response instead of a chat message" not in str(normalized)
 
@@ -931,9 +931,9 @@ def test_wrap_agent_litellm_compat_merges_system_messages_for_thinking_remapped_
     message; the agent runs under the remapped `ollama_chat/` id while the
     catalog entry is stored as `ollama/`.
     """
-    from opalatex import models_store
-    from opalatex.config import resolve_model_route
-    from opalatex.litellm_compat import wrap_agent_litellm_compat
+    from gilzabots import models_store
+    from gilzabots.config import resolve_model_route
+    from gilzabots.litellm_compat import wrap_agent_litellm_compat
 
     monkeypatch.setattr(models_store, "_MODELS_STORE_PATH", tmp_path / "models.json")
     models_store.add_or_update_connection({

@@ -4,8 +4,8 @@ import stat
 
 import pytest
 
-from opalatex import atomic_file
-from opalatex.atomic_file import write_text_atomic
+from gilzabots import atomic_file
+from gilzabots.atomic_file import write_text_atomic
 
 
 def test_the_file_is_replaced_with_the_new_text(tmp_path):
@@ -23,7 +23,7 @@ def test_a_failed_write_keeps_the_old_file_and_leaves_no_temp(tmp_path, monkeypa
     def failing_replace(source, destination):
         raise OSError("disk full")
 
-    import opalatex.cloud.atomic as cloud_atomic
+    import gilzabots.cloud.atomic as cloud_atomic
     monkeypatch.setattr(cloud_atomic, "replace_file", failing_replace)
     with pytest.raises(OSError):
         write_text_atomic(str(target), "new")

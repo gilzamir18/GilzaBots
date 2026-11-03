@@ -1,7 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 Write-Host "=========================================="
-Write-Host "       OpalaTex - Build do Executavel       "
+Write-Host "       GilzaBots - Build do Executavel       "
 Write-Host "=========================================="
 
 $VenvScripts = "$PSScriptRoot\.venv\Scripts"
@@ -18,7 +18,7 @@ pip install ".[gui]"
 # checked against what is actually installed before packaging starts.
 Write-Host "`n[1.5/4] Checking the Qt runtime that will be packaged..."
 python scripts/check_qt_runtime.py
-if ($LASTEXITCODE -ne 0) { throw "The installed Qt is known to break OpalaTex; see the errors above." }
+if ($LASTEXITCODE -ne 0) { throw "The installed Qt is known to break GilzaBots; see the errors above." }
 
 Write-Host "`n[2/4] Construindo o frontend (React/Vite)..."
 Push-Location gui_src
@@ -61,16 +61,16 @@ Remove-Item -Force $pandocZip
 Remove-Item -Recurse -Force $pandocExtractDir
 
 Write-Host "`n[3.7/4] Injetando o cliente OAuth do Google (opcional)..."
-# Com OPALATEX_GDRIVE_CLIENT_ID definido, o build embute o cliente e a
+# Com GILZABOTS_GDRIVE_CLIENT_ID definido, o build embute o cliente e a
 # sincronizacao na nuvem passa a conectar em um clique. Sem ele, o app continua
 # funcionando: o usuario cadastra o proprio cliente OAuth nas configuracoes.
 # O array vazio some no splat, entao nenhum argumento vazio chega ao PyInstaller.
 $googleClientArgs = @()
-if ($env:OPALATEX_GDRIVE_CLIENT_ID) {
+if ($env:GILZABOTS_GDRIVE_CLIENT_ID) {
     python scripts/embed_google_client.py --from-env
-    $googleClientArgs = @("--add-data=opalatex/cloud/providers/bundled_google_client.json;opalatex/cloud/providers")
+    $googleClientArgs = @("--add-data=gilzabots/cloud/providers/bundled_google_client.json;gilzabots/cloud/providers")
 } else {
-    Write-Host "OPALATEX_GDRIVE_CLIENT_ID nao definido - build sem cliente OAuth embutido."
+    Write-Host "GILZABOTS_GDRIVE_CLIENT_ID nao definido - build sem cliente OAuth embutido."
 }
 
 Write-Host "`n[4/4] Empacotando com PyInstaller..."
@@ -78,16 +78,16 @@ Write-Host "`n[4/4] Empacotando com PyInstaller..."
 $winptyAgentPath = python -c "import winpty, os; print(os.path.join(os.path.dirname(winpty.__file__), 'winpty-agent.exe'))"
 
 # A sintaxe de --add-data no Windows usa ponto-e-virgula (;)
-pyinstaller --name "OpalaTex" `
+pyinstaller --name "GilzaBots" `
             @googleClientArgs `
             --windowed `
-            --icon="AppIcons/OpalaTex.ico" `
-            --add-data="opalatex/gui;opalatex/gui" `
-            --add-data="opalatex/icon.png;opalatex" `
+            --icon="AppIcons/GilzaBots.ico" `
+            --add-data="gilzabots/gui;gilzabots/gui" `
+            --add-data="gilzabots/icon.png;gilzabots" `
             --add-data="icon.png;." `
-            --add-data="opalatex/assetstore;opalatex/assetstore" `
-            --add-data="opalatex/templates;opalatex/templates" `
-            --add-data="opalatex/guides;opalatex/guides" `
+            --add-data="gilzabots/assetstore;gilzabots/assetstore" `
+            --add-data="gilzabots/templates;gilzabots/templates" `
+            --add-data="gilzabots/guides;gilzabots/guides" `
             --add-data="bin;bin" `
             --add-data="config.yaml;." `
             --add-data="skills;skills" `
@@ -125,5 +125,5 @@ pyinstaller --name "OpalaTex" `
 
 Write-Host "`n=========================================="
 Write-Host "Build concluido com sucesso!"
-Write-Host "O executavel pode ser encontrado em: .\dist\OpalaTex\OpalaTex.exe"
+Write-Host "O executavel pode ser encontrado em: .\dist\GilzaBots\GilzaBots.exe"
 Write-Host "=========================================="

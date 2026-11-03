@@ -13,10 +13,10 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-from opalatex.monitors import agent_tools, api, daemon as daemon_mod, engine as engine_mod
-from opalatex.monitors import notify, service, spec, store as st, wake_runner
-from opalatex.monitors.checks import CheckError
-from opalatex.monitors.spec import MonitorSpecError, normalize_spec
+from gilzabots.monitors import agent_tools, api, daemon as daemon_mod, engine as engine_mod
+from gilzabots.monitors import notify, service, spec, store as st, wake_runner
+from gilzabots.monitors.checks import CheckError
+from gilzabots.monitors.spec import MonitorSpecError, normalize_spec
 
 
 class Clock:
@@ -309,7 +309,7 @@ class TestEngine:
         assert mstore.get_monitor(monitor["id"])["status"] == st.STATUS_COMPLETED
 
     def test_a_new_chat_is_opened_for_each_wakeup(self, mstore, clock, tmp_path):
-        from opalatex.project import ProjectStore
+        from gilzabots.project import ProjectStore
 
         sessions = ProjectStore(db_path=str(tmp_path / "sessions.db"))
         sessions.create("proj", "auto", "", project_path=str(tmp_path / "proj"))
@@ -437,7 +437,7 @@ class TestEngine:
 
 @pytest.fixture
 def session(monkeypatch, tmp_path):
-    from opalatex import tools
+    from gilzabots import tools
 
     project = types.SimpleNamespace(name="proj", project_path=str(tmp_path), current_chat_id="chat-1",
                                     mode="auto", results={})
@@ -546,7 +546,7 @@ class TestAgentTools:
         assert st.MonitorStore().list_monitors() == []
 
     def test_the_orchestrator_holds_the_tools_and_the_prompt_block(self):
-        from opalatex.memgpt_runtime import chat_orchestrator_system_prompt  # noqa: F401
+        from gilzabots.memgpt_runtime import chat_orchestrator_system_prompt  # noqa: F401
         assert "register_monitor" in agent_tools.MONITORS_PROMPT_BLOCK
 
 
@@ -559,7 +559,7 @@ class TestNotify:
         with pytest.raises(ValueError):
             notify.parse_open_uri("https://evil/open?project=x")
         with pytest.raises(ValueError):
-            notify.parse_open_uri("opalatex-monitor:run?cmd=rm")
+            notify.parse_open_uri("gilzabots-monitor:run?cmd=rm")
 
     def test_freedesktop_call_escapes_and_maps_clicks(self, monkeypatch):
         calls = []
@@ -607,11 +607,11 @@ class TestNotify:
         uri = notify.open_uri("p", "c")
         xml = notify.toast_xml('A "quote" <tag>', "x & y", uri, "Open chat")
         assert "&quot;quote&quot; &lt;tag&gt;" in xml and "x &amp; y" in xml
-        assert 'activationType="protocol"' in xml and "opalatex-monitor:open?project=p&amp;chat=c" in xml
+        assert 'activationType="protocol"' in xml and "gilzabots-monitor:open?project=p&amp;chat=c" in xml
         script = notify.toast_script(xml)
         payload = script.split("FromBase64String('")[1].split("'")[0]
         assert base64.b64decode(payload).decode("utf-8") == xml
-        assert "CreateToastNotifier('com.opalacoder.OpalaTex')" in script
+        assert "CreateToastNotifier('io.github.gilzamir18.GilzaBots')" in script
 
     def test_windows_toast_registers_aumid_and_settings_even_for_notify_test(self, monkeypatch):
         registry: dict[tuple[str, str], dict[str, tuple[int, object]]] = {}
@@ -652,12 +652,12 @@ class TestNotify:
         notifier = notify.default_notifier()
         assert isinstance(notifier, notify.WindowsToastNotifier)
         assert notifier.open_command and notifier.open_command[-2:] == ["monitors", "open"]
-        notifier.send("OpalaTex", "Monitor notifications work.")
+        notifier.send("GilzaBots", "Monitor notifications work.")
 
         aumid_key = ("HKCU", rf"Software\Classes\AppUserModelId\{notify.WINDOWS_APP_ID}")
         settings_key = ("HKCU", rf"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\{notify.WINDOWS_APP_ID}")
         command_key = ("HKCU", rf"Software\Classes\{notify.URI_SCHEME}\shell\open\command")
-        assert registry[aumid_key]["DisplayName"] == (1, "OpalaTex")
+        assert registry[aumid_key]["DisplayName"] == (1, "GilzaBots")
         assert registry[settings_key]["Enabled"] == (4, 1)
         assert registry[settings_key]["ShowInActionCenter"] == (4, 1)
         assert command_key in registry
@@ -668,7 +668,7 @@ class TestNotify:
         # Notification Settings are still registered before showing the toast.
         registry.clear()
         direct = notify.WindowsToastNotifier("powershell.exe", open_command=None)
-        direct.send("OpalaTex", "Direct toast")
+        direct.send("GilzaBots", "Direct toast")
         assert aumid_key in registry and settings_key in registry
         assert command_key not in registry
 
@@ -688,17 +688,17 @@ class TestNotify:
 
 class TestService:
     def test_systemd_unit_carries_the_data_folder(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("OPALATEX_HOME", "/data/opala home")
+        monkeypatch.setenv("GILZABOTS_HOME", "/data/gilza home")
         unit = service.SystemdUserAutostart(config_home=str(tmp_path)).unit_text()
         assert "ExecStart=" in unit and "monitors daemon" in unit
-        assert 'Environment="OPALATEX_HOME=/data/opala home"' in unit
+        assert 'Environment="GILZABOTS_HOME=/data/gilza home"' in unit
         assert "Restart=on-failure" in unit
 
     def test_snap_autostart_entry_names_the_snap_app(self, tmp_path):
         entry = service.XdgAutostart(config_home=str(tmp_path), snap=True)
         entry.install()
         assert entry.installed()
-        assert "Exec=opalatex.monitors" in open(entry.entry_path).read()
+        assert "Exec=gilzabots.monitors" in open(entry.entry_path).read()
         entry.uninstall()
         assert not entry.installed()
 
@@ -708,11 +708,11 @@ class TestService:
         unit = service.SystemdUserAutostart(config_home=str(tmp_path))
         monkeypatch.setattr(service, "current_home", lambda: "/data/main")
         unit.install()
-        assert unit.installed() and "# OpalaTex data folder: /data/main" in open(unit.unit_path).read()
+        assert unit.installed() and "# GilzaBots data folder: /data/main" in open(unit.unit_path).read()
 
         monkeypatch.setattr(service, "current_home", lambda: "/tmp/scratch-home")
         assert unit.installed() is False and unit.foreign_owner() == "/data/main"
-        with pytest.raises(RuntimeError, match=r"another OpalaTex data folder \(/data/main\); it was not removed"):
+        with pytest.raises(RuntimeError, match=r"another GilzaBots data folder \(/data/main\); it was not removed"):
             unit.uninstall()
         with pytest.raises(RuntimeError, match="it was not replaced"):
             unit.install()
@@ -730,12 +730,12 @@ class TestService:
             handle.write("[Service]\nExecStart=/x/python main.py monitors daemon\n")
         assert unit.owner() == "/data/default"
         with open(unit.unit_path, "w") as handle:
-            handle.write('[Service]\nEnvironment="OPALATEX_HOME=/data/other place"\n')
+            handle.write('[Service]\nEnvironment="GILZABOTS_HOME=/data/other place"\n')
         assert unit.owner() == "/data/other place"
         entry = service.XdgAutostart(config_home=str(tmp_path), snap=False)
         os.makedirs(os.path.dirname(entry.entry_path))
         with open(entry.entry_path, "w") as handle:
-            handle.write("Exec=env OPALATEX_HOME=/data/x /py main.py monitors daemon\n")
+            handle.write("Exec=env GILZABOTS_HOME=/data/x /py main.py monitors daemon\n")
         assert entry.owner() == "/data/x"
 
     def test_set_autostart_reports_a_foreign_service(self, mstore, tmp_path, monkeypatch):
@@ -770,7 +770,7 @@ class TestService:
 
     def test_open_chat_uses_the_running_window_or_starts_one(self, mstore, monkeypatch, _isolated_monitors):
         saved = {}
-        monkeypatch.setattr("opalatex.ui_settings.save_ui_settings", lambda data: saved.update(data))
+        monkeypatch.setattr("gilzabots.ui_settings.save_ui_settings", lambda data: saved.update(data))
         assert service.open_chat(mstore, "proj", "c1") == {"launched": True}
         assert saved == {"last_active_project": "proj"}
         assert len(_isolated_monitors) == 1
@@ -779,12 +779,12 @@ class TestService:
         assert len(_isolated_monitors) == 1
         assert mstore.take_open_request()["chat_id"] == "c2"
 
-    def test_opalatex_command_runs_main_py_from_a_checkout(self):
-        argv = service.opalatex_command() if hasattr(service, "opalatex_command") else None
+    def test_gilzabots_command_runs_main_py_from_a_checkout(self):
+        argv = service.gilzabots_command() if hasattr(service, "gilzabots_command") else None
         assert argv[-1].endswith("main.py")
 
     def test_spawn_detached_on_windows_avoids_conflicting_creation_flags(self, monkeypatch):
-        from opalatex.monitors import process as proc_mod
+        from gilzabots.monitors import process as proc_mod
 
         captured = {}
 
@@ -909,7 +909,7 @@ class TestDaemon:
         assert calls[0][1][-2:] == ["monitors", "daemon"]
 
     def test_code_fingerprint_is_stable_and_versioned(self):
-        from opalatex import __version__
+        from gilzabots import __version__
 
         assert service.code_fingerprint() == service.code_fingerprint()
         assert service.code_fingerprint().startswith(__version__ + "|")
@@ -991,7 +991,7 @@ class TestUnattendedTurn:
     """A monitor's turn asks nothing outside its chat; it reports in its reply."""
 
     def _run_unattended(self, monkeypatch, body):
-        from opalatex import agent_stdin
+        from gilzabots import agent_stdin
 
         seen = {}
 
@@ -1012,7 +1012,7 @@ class TestUnattendedTurn:
         assert seen["during"] == "News" and seen["after"] is None
 
     def test_no_question_reaches_a_front_end(self, monkeypatch):
-        from opalatex import agent_stdin, tools
+        from gilzabots import agent_stdin, tools
 
         events = []
         monkeypatch.setattr(agent_stdin, "print_event", lambda event, data: events.append(event))
@@ -1045,7 +1045,7 @@ class TestUnattendedTurn:
         assert "input_request" not in events
 
     def test_auto_mode_tools_still_run(self, monkeypatch, tmp_path):
-        from opalatex import tools
+        from gilzabots import tools
 
         project = types.SimpleNamespace(name="proj", project_path=str(tmp_path), current_chat_id="c-un",
                                         mode="auto", results={})
@@ -1096,7 +1096,7 @@ class TestUnattendedTurn:
         assert "To keep waiting, register a new monitor" not in one_shot_new_chat
 
     def test_a_woken_turn_cannot_re_register_while_its_monitor_continues(self, session, mstore, monkeypatch):
-        from opalatex import agent_stdin
+        from gilzabots import agent_stdin
 
         recurring = mstore.create_monitor(_wake_spec(
             name="Notícias de IA",
@@ -1146,7 +1146,7 @@ class TestUnattendedTurn:
         assert [m["id"] for m in mstore.list_monitors()] == [recurring["id"]]
 
     def test_a_woken_turn_can_register_a_followup_once_its_task_wait_ended(self, session, mstore, clock, monkeypatch):
-        from opalatex import agent_stdin
+        from gilzabots import agent_stdin
 
         wait = mstore.create_monitor(_wake_spec(name="step 1", repeat=False))
         clock.advance(120)
@@ -1182,8 +1182,8 @@ class TestUnattendedTurn:
         assert len(st.MonitorStore().list_monitors((st.STATUS_ACTIVE,))) == 1
 
     def test_the_headless_runner_marks_its_turn(self, mstore, tmp_path, monkeypatch):
-        from opalatex import agent_stdin
-        from opalatex.project import ProjectStore
+        from gilzabots import agent_stdin
+        from gilzabots.project import ProjectStore
 
         sessions = ProjectStore(db_path=str(tmp_path / "s.db"))
         sessions.create("proj", "auto", "", project_path=str(tmp_path / "p"))
@@ -1211,7 +1211,7 @@ class TestUnattendedTurn:
 
 class TestTurnLease:
     def test_a_turn_refuses_a_chat_another_process_holds(self, monkeypatch):
-        from opalatex import agent_stdin
+        from gilzabots import agent_stdin
 
         st.MonitorStore().acquire_lease("proj", "chat-1", os.getppid(), "monitor")
         events = []
@@ -1227,7 +1227,7 @@ class TestTurnLease:
         assert events[0][0] == "error" and "monitor" in events[0][1]["message"]
 
     def test_a_turn_holds_and_releases_its_chat(self, monkeypatch):
-        from opalatex import agent_stdin
+        from gilzabots import agent_stdin
 
         seen = []
 
@@ -1301,14 +1301,14 @@ class TestApi:
 
 class TestCli:
     def test_monitors_subcommand_is_found_after_the_snap_gui_flag(self):
-        from opalatex.cli import _monitors_argv
+        from gilzabots.cli import _monitors_argv
 
         assert _monitors_argv(["--gui", "monitors", "list"]) == ["list"]
         assert _monitors_argv(["monitors"]) == []
         assert _monitors_argv(["--cli"]) is None
 
     def test_list_and_pause(self, capsys):
-        from opalatex.monitors.cli import main
+        from gilzabots.monitors.cli import main
 
         mstore = st.MonitorStore()
         monitor = mstore.create_monitor(_spec())
@@ -1319,7 +1319,7 @@ class TestCli:
         assert main(["open", "https://x"]) == 2
 
     def test_llm_verdict_parsing(self):
-        from opalatex.monitors.llm_check import parse_answer
+        from gilzabots.monitors.llm_check import parse_answer
 
         assert parse_answer('```json\n{"met": true, "value": "5.6", "summary": "up"}\n```')["met"] is True
         assert parse_answer('<think>hm</think>{"met": false}')["met"] is False
@@ -1396,8 +1396,8 @@ class TestConsistencyReview:
         assert seen and seen[0] != main
 
     def test_a_background_turn_gets_no_window_tools_and_no_window_prompt(self, monkeypatch):
-        from opalatex import agent_stdin
-        from opalatex.prompt_surface import GUI_ONLY_TOOLS, body_for_surface, tools_for_surface
+        from gilzabots import agent_stdin
+        from gilzabots.prompt_surface import GUI_ONLY_TOOLS, body_for_surface, tools_for_surface
 
         tools = [types.SimpleNamespace(name=name) for name in ("read_file", *GUI_ONLY_TOOLS)]
         body = "- `open_file` opens a file\n- `/compile` builds the PDF\n- `read_file` reads"
@@ -1409,7 +1409,7 @@ class TestConsistencyReview:
         assert len(tools_for_surface(tools)) == len(tools)
 
     def test_the_background_prompt_block_replaces_the_window_block(self):
-        from opalatex import memgpt_runtime
+        from gilzabots import memgpt_runtime
 
         block = memgpt_runtime._BACKGROUND_REPLY_BLOCK
         assert "nobody is watching" in block and "renders Markdown" in block

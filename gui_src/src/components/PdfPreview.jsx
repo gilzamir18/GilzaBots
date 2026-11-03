@@ -320,7 +320,7 @@ const PdfPreview = forwardRef(({ base64Pdf, sourceUrl, directUrl, isCompiling, e
   const readPdfSelection = () => readSelectionWithin(containerRef.current);
 
   // ── Annotations ────────────────────────────────────────────────────────
-  // Marks are stored inside the PDF itself (see opalatex/pdf_annotations.py), so
+  // Marks are stored inside the PDF itself (see gilzabots/pdf_annotations.py), so
   // they interoperate with Zotero, Acrobat and any other reader. That storage is
   // only appropriate for a standalone PDF: the compiled LaTeX preview is
   // regenerated on every build and would drop anything written into it.

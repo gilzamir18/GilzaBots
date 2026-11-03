@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex import ide_server
-from opalatex.ide_server import AsyncHTTPServer
+from gilzabots import ide_server
+from gilzabots.ide_server import AsyncHTTPServer
 
 
 def _server_with_capture():
@@ -27,7 +27,7 @@ def _server_with_capture():
 
 @pytest.fixture
 def settings_file(tmp_path, monkeypatch):
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
     monkeypatch.setattr(ide_server, "_STARTUP_DIAGNOSTICS", {}, raising=False)
     return tmp_path / "ui_settings.json"
 
@@ -82,7 +82,7 @@ async def test_startup_report_carries_the_previous_crash_to_the_window(settings_
         "pid": 1234,
         "started": "2026-09-15T21:59:00+00:00",
         "native_fault": True,
-        "log_path": "/home/user/.opalatex/logs/crash.log",
+        "log_path": "/home/user/.gilzabots/logs/crash.log",
     }
     ide_server._STARTUP_DIAGNOSTICS = {
         "previous_run_failures": [failure],

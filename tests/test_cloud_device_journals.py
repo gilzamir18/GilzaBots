@@ -3,7 +3,7 @@
 Two things have to hold for a phone to carry on a project's conversation:
 
 1. What the phone writes reaches this machine's database. The phone writes a
-   journal of its own (`.opalatex/session/devices/<id>.json`) rather than
+   journal of its own (`.gilzabots/session/devices/<id>.json`) rather than
    rewriting `chats.json`, so two clients never race on one file.
 2. The orchestrator here knows what was said there. It restores its context
    from `agent_state`, not from the visible history, so merged turns are queued
@@ -16,16 +16,16 @@ import os
 import pytest
 
 from agenticblocks.blocks.llm.memgpt_agent import MemGPTAgentBlock
-from opalatex import memgpt_runtime
-from opalatex.cloud import chats, service
-from opalatex.cloud.state import (
+from gilzabots import memgpt_runtime
+from gilzabots.cloud import chats, service
+from gilzabots.cloud.state import (
     DEVICE_JOURNALS_REL_DIR,
     CloudSettings,
     is_device_journal,
     save_settings,
 )
-from opalatex.cloud.scanner import scan_project
-from opalatex.project import ProjectStore
+from gilzabots.cloud.scanner import scan_project
+from gilzabots.project import ProjectStore
 
 
 @pytest.fixture
@@ -102,12 +102,12 @@ def history_of(machine, chat_id):
 # ─── The path rule ────────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("rel_path, expected", [
-    (".opalatex/session/devices/phone.json", True),
-    (".opalatex/session/devices/a1b2-c3.json", True),
-    (".opalatex/session/devices/.phone.json.tmp", False),
-    (".opalatex/session/devices/nested/phone.json", False),
-    (".opalatex/session/devices/phone.txt", False),
-    (".opalatex/session/chats.json", False),
+    (".gilzabots/session/devices/phone.json", True),
+    (".gilzabots/session/devices/a1b2-c3.json", True),
+    (".gilzabots/session/devices/.phone.json.tmp", False),
+    (".gilzabots/session/devices/nested/phone.json", False),
+    (".gilzabots/session/devices/phone.txt", False),
+    (".gilzabots/session/chats.json", False),
     ("devices/phone.json", False),
 ])
 def test_device_journal_paths(rel_path, expected):
@@ -216,7 +216,7 @@ def test_journals_stay_home_when_conversation_sync_is_off(tmp_path, shared_remot
     with open(path, "w", encoding="utf-8") as handle:
         handle.write("{}")
 
-    from opalatex.cloud.state import load_state
+    from gilzabots.cloud.state import load_state
 
     scan = scan_project(desktop["path"], load_state(desktop["path"]).settings)
     assert f"{DEVICE_JOURNALS_REL_DIR}/phone.json" not in scan.entries

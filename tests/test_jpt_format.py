@@ -1,7 +1,7 @@
 """The `.jpt` format, from the Python side.
 
 The format has two implementations — `gui_src/src/slides/model.js`, which the
-editor runs, and `opalatex/jpt/model.py`, which agents author with — so the
+editor runs, and `gilzabots/jpt/model.py`, which agents author with — so the
 tests that matter most here are the ones that keep them from drifting:
 
   * every deck this side writes validates against `docs/specs/jpt.schema.json`,
@@ -19,7 +19,7 @@ import subprocess
 
 import pytest
 
-from opalatex import jpt
+from gilzabots import jpt
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA = os.path.join(REPO, "docs", "specs", "jpt.schema.json")

@@ -12,7 +12,7 @@ deleted, and a project with no chat opens none.
 """
 import pytest
 
-from opalatex.project import ChatNotFoundError, ProjectData, ProjectStore, _conn
+from gilzabots.project import ChatNotFoundError, ProjectData, ProjectStore, _conn
 
 
 @pytest.fixture()
@@ -144,8 +144,8 @@ def test_writes_without_an_open_chat_fail(store):
 @pytest.mark.asyncio
 async def test_a_turn_without_an_open_chat_fails_before_running(store, monkeypatch):
     """The front-ends create a chat before the first message; a turn without one is refused."""
-    import opalatex.agent_stdin as stdin_mod
-    from opalatex.i18n import _
+    import gilzabots.agent_stdin as stdin_mod
+    from gilzabots.i18n import _
 
     project = store.create("myproj", "auto", "ollama/qwen3.5:cloud")
     events = []
@@ -174,7 +174,7 @@ async def test_a_turn_without_an_open_chat_fails_before_running(store, monkeypat
 
 
 def _capture_stdin_run(monkeypatch, store):
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     events, runs = [], []
 
@@ -190,7 +190,7 @@ def _capture_stdin_run(monkeypatch, store):
 @pytest.mark.asyncio
 async def test_a_first_stdin_run_naming_the_project_starts_a_chat(store, monkeypatch):
     """The stdin front-end starts a chat with the first message, as the window and the REPL do."""
-    from opalatex.i18n import _
+    from gilzabots.i18n import _
 
     store.create("myproj", "auto", "ollama/qwen3.5:cloud")
     stdin_mod, events, runs = _capture_stdin_run(monkeypatch, store)
@@ -242,7 +242,7 @@ async def test_a_stdin_run_on_a_project_with_a_chat_creates_none(store, monkeypa
 @pytest.mark.asyncio
 async def test_a_stdin_run_on_an_unregistered_project_names_the_cause(store, monkeypatch):
     """The history tables reference `projects`: such a turn would die on its first write."""
-    from opalatex.i18n import _
+    from gilzabots.i18n import _
 
     stdin_mod, events, runs = _capture_stdin_run(monkeypatch, store)
 

@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.ide_server import AsyncHTTPServer
-from opalatex.ui_settings import (
+from gilzabots.ide_server import AsyncHTTPServer
+from gilzabots.ui_settings import (
     UI_SCALE_MAX,
     UI_SCALE_MIN,
     clamp_ui_scale,
@@ -35,13 +35,13 @@ def test_clamp_ui_scale_falls_back_instead_of_shrinking():
 
 
 def test_ui_scale_defaults_to_unscaled(tmp_path, monkeypatch):
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
     assert load_ui_settings()["ui_scale"] == 1.0
 
 
 def test_ui_scale_survives_a_restart(tmp_path, monkeypatch):
     settings_file = tmp_path / "ui_settings.json"
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", settings_file)
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", settings_file)
     save_ui_settings({"ui_scale": 1.4})
     # Re-read from disk, as a fresh session would.
     assert load_ui_settings()["ui_scale"] == 1.4
@@ -49,7 +49,7 @@ def test_ui_scale_survives_a_restart(tmp_path, monkeypatch):
 
 
 def test_ui_scale_does_not_disturb_the_other_settings(tmp_path, monkeypatch):
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
     save_ui_settings({"lang": "pt-BR"})
     save_ui_settings({"ui_scale": 1.2})
     settings = load_ui_settings()
@@ -60,7 +60,7 @@ def test_ui_scale_does_not_disturb_the_other_settings(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_appearance_settings_endpoints(tmp_path, monkeypatch):
     settings_file = tmp_path / "ui_settings.json"
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", settings_file)
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", settings_file)
 
     server = AsyncHTTPServer()
     writer = AsyncMock()
@@ -91,7 +91,7 @@ async def test_appearance_settings_endpoints(tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_appearance_endpoint_clamps_hostile_input(tmp_path, monkeypatch):
     settings_file = tmp_path / "ui_settings.json"
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", settings_file)
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", settings_file)
 
     server = AsyncHTTPServer()
     writer = AsyncMock()

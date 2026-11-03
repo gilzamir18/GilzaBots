@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.cloud.providers import google_drive
-from opalatex.ide_server import AsyncHTTPServer
+from gilzabots.cloud.providers import google_drive
+from gilzabots.ide_server import AsyncHTTPServer
 
 
 @pytest.fixture
@@ -23,8 +23,8 @@ def isolated_client(tmp_path, monkeypatch):
     bundled_file.parent.mkdir(parents=True)
     monkeypatch.setattr(google_drive, "client_config_path", lambda: str(user_file))
     monkeypatch.setattr(google_drive, "bundled_client_path", lambda: str(bundled_file))
-    monkeypatch.delenv("OPALATEX_GDRIVE_CLIENT_ID", raising=False)
-    monkeypatch.delenv("OPALATEX_GDRIVE_CLIENT_SECRET", raising=False)
+    monkeypatch.delenv("GILZABOTS_GDRIVE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GILZABOTS_GDRIVE_CLIENT_SECRET", raising=False)
     return {"user": user_file, "bundled": bundled_file}
 
 
@@ -72,8 +72,8 @@ def test_a_user_client_overrides_the_bundled_one(isolated_client):
 def test_the_environment_overrides_both(isolated_client, monkeypatch):
     _write(isolated_client["bundled"], {"client_id": "ship-id", "client_secret": "ship-secret"})
     google_drive.save_client_config("mine-id", "mine-secret")
-    monkeypatch.setenv("OPALATEX_GDRIVE_CLIENT_ID", "env-id")
-    monkeypatch.setenv("OPALATEX_GDRIVE_CLIENT_SECRET", "env-secret")
+    monkeypatch.setenv("GILZABOTS_GDRIVE_CLIENT_ID", "env-id")
+    monkeypatch.setenv("GILZABOTS_GDRIVE_CLIENT_SECRET", "env-secret")
 
     assert google_drive.describe_client_config() == {
         "client_id": "env-id",

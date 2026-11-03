@@ -11,7 +11,7 @@ Covers the new directory/SKILL.md format:
 import os
 import textwrap
 
-from opalatex.skills import (
+from gilzabots.skills import (
     parse_skill_md,
     discover_skills,
     read_skills_yaml,
@@ -170,7 +170,7 @@ def test_discover_skills_finds_directories(tmp_path, monkeypatch):
     _write_skill(base, "alpha", "---\nname: alpha\ndescription: A.\n---")
     _write_skill(base, "beta", "---\nname: beta\ndescription: B.\n---")
 
-    monkeypatch.setattr("opalatex.skills.skill_search_dirs",
+    monkeypatch.setattr("gilzabots.skills.skill_search_dirs",
                         lambda project_path="": [base])
     names = {s["name"] for s in discover_skills(str(tmp_path / "project"))}
     assert names == {"alpha", "beta"}
@@ -183,7 +183,7 @@ def test_discover_skills_project_shadows_bundled(tmp_path, monkeypatch):
     _write_skill(bundled, "shared", "---\nname: shared\ndescription: bundled version.\n---")
 
     # project dir comes first → wins
-    monkeypatch.setattr("opalatex.skills.skill_search_dirs",
+    monkeypatch.setattr("gilzabots.skills.skill_search_dirs",
                         lambda project_path="": [proj, bundled])
     skills = discover_skills(str(tmp_path / "proj"))
     shared = [s for s in skills if s["name"] == "shared"]
@@ -211,7 +211,7 @@ def test_active_skills_without_yaml_loads_only_mandatory(tmp_path, monkeypatch):
     _write_skill(base, "chat-orchestrator", "---\nname: chat-orchestrator\ndescription: core.\n---")
     _write_skill(base, "foo", "---\nname: foo\ndescription: F.\n---")
     _write_skill(base, "bar", "---\nname: bar\ndescription: B.\n---")
-    monkeypatch.setattr("opalatex.skills.skill_search_dirs",
+    monkeypatch.setattr("gilzabots.skills.skill_search_dirs",
                         lambda project_path="": [base])
 
     names = {s["name"] for s in active_skills(str(tmp_path / "proj"))}
@@ -225,7 +225,7 @@ def test_active_skills_with_yaml_filters_to_declared_plus_mandatory(tmp_path, mo
     _write_skill(base, "foo", "---\nname: foo\ndescription: F.\n---")
     _write_skill(base, "bar", "---\nname: bar\ndescription: B.\n---")
     (proj / "skills.yaml").write_text("skills:\n  - foo\n", encoding="utf-8")
-    monkeypatch.setattr("opalatex.skills.skill_search_dirs",
+    monkeypatch.setattr("gilzabots.skills.skill_search_dirs",
                         lambda project_path="": [base])
 
     names = {s["name"] for s in active_skills(str(proj))}
@@ -251,7 +251,7 @@ def test_level1_metadata_renders_name_and_description():
 def test_find_skill_dir_returns_path(tmp_path, monkeypatch):
     base = str(tmp_path / "skills")
     d = _write_skill(base, "target", "---\nname: target\ndescription: T.\n---")
-    monkeypatch.setattr("opalatex.skills.skill_search_dirs",
+    monkeypatch.setattr("gilzabots.skills.skill_search_dirs",
                         lambda project_path="": [base])
     assert find_skill_dir("target", str(tmp_path)) == os.path.abspath(d)
     assert find_skill_dir("nope", str(tmp_path)) is None
@@ -272,14 +272,14 @@ def test_bundled_chat_orchestrator_discoverable():
 # ---------------------------------------------------------------------------
 
 def test_add_skill_writes_skills_yaml_and_filters_active(tmp_path, monkeypatch):
-    from opalatex.skills import (
+    from gilzabots.skills import (
         add_skill_to_project, active_skills, read_skills_yaml,
     )
     base = str(tmp_path / "proj" / "skills")
     _write_skill(base, "chat-orchestrator", "---\nname: chat-orchestrator\ndescription: core.\n---")
     _write_skill(base, "foo", "---\nname: foo\ndescription: F.\n---")
     _write_skill(base, "bar", "---\nname: bar\ndescription: B.\n---")
-    monkeypatch.setattr("opalatex.skills.skill_search_dirs",
+    monkeypatch.setattr("gilzabots.skills.skill_search_dirs",
                         lambda project_path="": [base])
     proj = str(tmp_path / "proj")
 
@@ -298,11 +298,11 @@ def test_add_skill_writes_skills_yaml_and_filters_active(tmp_path, monkeypatch):
 
 
 def test_remove_skill_updates_active_and_protects_mandatory(tmp_path, monkeypatch):
-    from opalatex.skills import remove_skill_from_project, active_skills
+    from gilzabots.skills import remove_skill_from_project, active_skills
     base = str(tmp_path / "proj" / "skills")
     _write_skill(base, "chat-orchestrator", "---\nname: chat-orchestrator\ndescription: core.\n---")
     _write_skill(base, "foo", "---\nname: foo\ndescription: F.\n---")
-    monkeypatch.setattr("opalatex.skills.skill_search_dirs",
+    monkeypatch.setattr("gilzabots.skills.skill_search_dirs",
                         lambda project_path="": [base])
     proj = str(tmp_path / "proj")
     (tmp_path / "proj" / "skills.yaml").write_text("skills:\n  - foo\n", encoding="utf-8")

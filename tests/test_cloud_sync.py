@@ -9,11 +9,11 @@ import os
 
 import pytest
 
-from opalatex.cloud.base import normalize_rel_path
-from opalatex.cloud.engine import PULL, PUSH, SyncEngine, conflict_copy_name
-from opalatex.cloud.providers.local_folder import LocalFolderProvider
-from opalatex.cloud.scanner import scan_project
-from opalatex.cloud.state import CloudSettings, CloudState, load_state, save_state
+from gilzabots.cloud.base import normalize_rel_path
+from gilzabots.cloud.engine import PULL, PUSH, SyncEngine, conflict_copy_name
+from gilzabots.cloud.providers.local_folder import LocalFolderProvider
+from gilzabots.cloud.scanner import scan_project
+from gilzabots.cloud.state import CloudSettings, CloudState, load_state, save_state
 
 
 # ─── Fixtures & helpers ───────────────────────────────────────────────────────
@@ -345,7 +345,7 @@ def test_sync_state_is_never_uploaded(project, provider):
 
 def test_shadow_git_is_never_uploaded(project, provider):
     write(project, "main.tex", "v1")
-    write(project, ".opalatex/.shadowgit/HEAD", "ref: refs/heads/master")
+    write(project, ".gilzabots/.shadowgit/HEAD", "ref: refs/heads/master")
 
     report, state = sync(project, provider)
 
@@ -428,7 +428,7 @@ def test_state_round_trips(project):
 
 
 def test_corrupt_state_degrades_to_an_empty_baseline(project):
-    path = os.path.join(project, ".opalatex", "cloud", "state.json")
+    path = os.path.join(project, ".gilzabots", "cloud", "state.json")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as handle:
         handle.write("{not json")

@@ -13,9 +13,9 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-import opalatex.agent_stdin as stdin_mod
-import opalatex.terminal as T
-from opalatex.ide_server import AsyncHTTPServer
+import gilzabots.agent_stdin as stdin_mod
+import gilzabots.terminal as T
+from gilzabots.ide_server import AsyncHTTPServer
 
 
 def _hooks():
@@ -72,11 +72,11 @@ async def test_run_is_refused_while_a_turn_is_alive(monkeypatch, cancel_requeste
     )
     alive = asyncio.create_task(asyncio.Event().wait())
     if cancel_requested:
-        alive._opalatex_cancel_requested = True
+        alive._gilzabots_cancel_requested = True
     server.active_agent_task = alive
     try:
         await server.route_api(
-            "POST", "/api/opalatex/run", {}, {},
+            "POST", "/api/gilzabots/run", {}, {},
             json.dumps({"agent": "chat_orchestrator", "prompt": "hi"}).encode("utf-8"),
             AsyncMock(),
         )
@@ -126,7 +126,7 @@ async def test_a_lost_stream_keeps_a_turn_waiting_for_its_answer(monkeypatch):
         reader, writer = await asyncio.open_connection("127.0.0.1", port)
         body = json.dumps({"agent": "chat_orchestrator", "prompt": "turn A"}).encode("utf-8")
         writer.write(
-            b"POST /api/opalatex/run HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+            b"POST /api/gilzabots/run HTTP/1.1\r\nHost: 127.0.0.1\r\n"
             b"Content-Type: application/json\r\n"
             + f"Content-Length: {len(body)}\r\n\r\n".encode("utf-8") + body
         )
@@ -147,7 +147,7 @@ async def test_a_lost_stream_keeps_a_turn_waiting_for_its_answer(monkeypatch):
         responses = []
         server.send_response = lambda _w, status, body, content_type="text/plain": responses.append(status)
         await server.route_api(
-            "POST", "/api/opalatex/input_response", {}, {},
+            "POST", "/api/gilzabots/input_response", {}, {},
             json.dumps({"id": "q1", "value": "the answer"}).encode("utf-8"),
             AsyncMock(),
         )

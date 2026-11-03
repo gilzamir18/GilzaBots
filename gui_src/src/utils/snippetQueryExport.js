@@ -9,7 +9,7 @@
  * like everything else the user reads.
  */
 
-// Mirrors opalatex/pdf_annotations.MAX_CONTENT_CHARS. The server refuses a
+// Mirrors gilzabots/pdf_annotations.MAX_CONTENT_CHARS. The server refuses a
 // longer note with an error; the card disables the action up front and says
 // why, instead of offering a button that can only fail.
 export const PDF_NOTE_MAX_CHARS = 10000;

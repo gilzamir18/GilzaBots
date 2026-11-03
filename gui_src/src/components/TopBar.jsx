@@ -29,7 +29,7 @@ export default function TopBar({
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         {/* App Title / Logo Area could go here */}
         <span style={{ fontWeight: 'bold', color: 'var(--vscode-titleBar-activeForeground, var(--vscode-text-fg))', fontSize: '13px' }}>
-          OpalaTex
+          GilzaBots
         </span>
       </div>
 

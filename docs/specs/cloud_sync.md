@@ -1,7 +1,7 @@
 # Cloud project mirroring — decisions and current state
 
 Status: implemented. Google Drive plus a local-folder backend, behind a
-provider-neutral facade in `opalatex/cloud/`.
+provider-neutral facade in `gilzabots/cloud/`.
 
 This file records the decisions that are already settled, so they do not get
 re-litigated. The architecture itself is described in §2.16 of
@@ -12,7 +12,7 @@ re-litigated. The architecture itself is described in §2.16 of
 | Question | Decision |
 | --- | --- |
 | What is mirrored | The whole project: every file in the directory **and** the project's conversations, chats, activity and per-chat memory. |
-| Conversations | Exported from the global `sessions.db` to `.opalatex/session/chats.json`, which syncs as a file and is merged back on arrival. The database itself is never mirrored. |
+| Conversations | Exported from the global `sessions.db` to `.gilzabots/session/chats.json`, which syncs as a file and is merged back on arrival. The database itself is never mirrored. |
 | Build artifacts (`.aux`, `.log`, `.synctex.gz`, the compiled PDF) | Included by default; a per-project toggle turns them off. |
 | `.env` | **Excluded by default.** It holds provider API keys. Including it requires an explicit opt-in behind a confirmation. |
 | OAuth scope | `drive.file` only. |
@@ -22,7 +22,7 @@ re-litigated. The architecture itself is described in §2.16 of
 | Conflict resolution | The user chooses per file: keep mine, keep the cloud version, or keep both. |
 | Progress feedback | Per-file badges in the explorer, plus the file in flight and a counter in the status bar. |
 | Default state | Off. A project transfers nothing until the user enables it. |
-| Other devices (the mobile app) | Write their own journal under `.opalatex/session/devices/`, never `chats.json`; a pass merges the journals it downloads. Turns merged into a chat with saved orchestrator state are queued for that orchestrator. See [chats_export.md](chats_export.md) and [mobile_app.md](mobile_app.md). |
+| Other devices (the mobile app) | Write their own journal under `.gilzabots/session/devices/`, never `chats.json`; a pass merges the journals it downloads. Turns merged into a chat with saved orchestrator state are queued for that orchestrator. See [chats_export.md](chats_export.md) and [mobile_app.md](mobile_app.md). |
 
 ## Why `.env` is the one exception to "sync everything"
 
@@ -78,17 +78,17 @@ So a release now carries its own client, and the user never sees a credential.
 ### How the client reaches the build
 
 `scripts/embed_google_client.py` writes
-`opalatex/cloud/providers/bundled_google_client.json`, which PyInstaller picks
+`gilzabots/cloud/providers/bundled_google_client.json`, which PyInstaller picks
 up as package data. The file is git-ignored: the credentials come from the
-release pipeline's secrets (`OPALATEX_GDRIVE_CLIENT_ID` /
-`OPALATEX_GDRIVE_CLIENT_SECRET` in the build workflow), not from the
+release pipeline's secrets (`GILZABOTS_GDRIVE_CLIENT_ID` /
+`GILZABOTS_GDRIVE_CLIENT_SECRET` in the build workflow), not from the
 repository. A build without those secrets still works — it simply ships no
 client, and the Account tab asks for one.
 
 ### The release that shipped without a client
 
 Verified against the published `v0.2.10` asset that `install.ps1` installs
-(`OpalaTex-windows-x64.zip`, 561 MB, 11478 entries, whole central directory
+(`GilzaBots-windows-x64.zip`, 561 MB, 11478 entries, whole central directory
 read): **`bundled_google_client.json` is not in it.** Every install from that
 release therefore had Cloud sync unable to open the Google sign-in at all — the
 Connect button had no client to build an authorization URL from, so it could
@@ -96,7 +96,7 @@ only report the missing-client message. Nothing in the app could have fixed
 that; OAuth has no flow without a client id.
 
 The cause is a chain of optional steps, each individually reasonable:
-`build_exe.ps1` injects the client only `if ($env:OPALATEX_GDRIVE_CLIENT_ID)`
+`build_exe.ps1` injects the client only `if ($env:GILZABOTS_GDRIVE_CLIENT_ID)`
 and otherwise prints a note and carries on; the workflow feeds that env var from
 a repository secret; an unset secret therefore produces a complete, publishable,
 silently crippled release.
@@ -111,7 +111,7 @@ build so forks and branch builds stay permissive: the secrets are required
 `bundled_google_client.json` is `.gitignore`'d, and hatchling drops VCS-ignored
 files from the wheel by default. The snap installs with `pip install .`, so
 **every installed build shipped without a client** while the source tree had
-one — and the only symptom was Cloud sync answering "this build of OpalaTex
+one — and the only symptom was Cloud sync answering "this build of GilzaBots
 carries no Google OAuth client", sending the user to the Google Cloud console
 for a chore the feature exists to avoid. A working dev checkout hides it
 completely, because there `__file__` resolves to the source tree.
@@ -126,11 +126,11 @@ source tree did. A checkout with no credentials still builds — it just says so
 `google_drive.describe_client_config()` picks the first source that carries a
 client id:
 
-1. `OPALATEX_GDRIVE_CLIENT_ID` / `_SECRET` in the environment — development, or
+1. `GILZABOTS_GDRIVE_CLIENT_ID` / `_SECRET` in the environment — development, or
    a distribution injecting a client at run time.
 2. The user's own client, saved through Cloud sync → Account → *Use my own
    Google OAuth client*. It **overrides** the bundled one, so a user who wants
-   their own quota and their own consent screen gets them; *Use the OpalaTex
+   their own quota and their own consent screen gets them; *Use the GilzaBots
    client* deletes the override.
 3. The client bundled with the build.
 
@@ -144,7 +144,7 @@ override cannot disable a working connection.
 3. OAuth consent screen → External → add themselves as a test user. With
    `drive.file` there is nothing to submit for review.
 4. Credentials → Create credentials → OAuth client ID → **Desktop app**.
-5. Paste the client ID and secret into OpalaTex → Cloud sync → Account.
+5. Paste the client ID and secret into GilzaBots → Cloud sync → Account.
 
 ## Why downloading a project is its own flow
 
@@ -322,7 +322,7 @@ dead-IPv6 case is reproducible without depending on the network under test.
 
 ## Why change detection is not the shadow git repo
 
-Reusing `.opalatex/.shadowgit` looks obvious — it already tracks content hashes
+Reusing `.gilzabots/.shadowgit` looks obvious — it already tracks content hashes
 and can answer "what changed since X". It was rejected for two reasons:
 
 1. It deliberately ignores LaTeX build output, which is part of what the feature
@@ -330,7 +330,7 @@ and can answer "what changed since X". It was rejected for two reasons:
 2. The VCS strategy is user-configurable and `NoGitStrategy` is supported. A
    git-only design would leave those projects unable to sync at all.
 
-The manifest in `.opalatex/cloud/state.json` is used instead, with an
+The manifest in `.gilzabots/cloud/state.json` is used instead, with an
 exact size+mtime fast path so unchanged files are not re-hashed.
 
 ## What is deliberately not solved
@@ -355,9 +355,9 @@ exact size+mtime fast path so unchanged files are not re-hashed.
 
 ## Adding another provider
 
-Implement `CloudStorageProvider` in `opalatex/cloud/providers/`, add an entry to
-`opalatex/cloud/registry.py`, and add the module to `hiddenimports` in
-`OpalaTex.spec`. `list_projects` is optional — a backend that cannot enumerate
+Implement `CloudStorageProvider` in `gilzabots/cloud/providers/`, add an entry to
+`gilzabots/cloud/registry.py`, and add the module to `hiddenimports` in
+`GilzaBots.spec`. `list_projects` is optional — a backend that cannot enumerate
 leaves `Capabilities.project_listing` false and the download flow reports that
 instead of showing an empty account. `delete_root` is optional too — without it the delete dialog's cloud
 option fails with the backend's message and nothing is deleted; set `recoverable_root_deletion` when it

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://www.opalacoder.com/schemas/jpt-1.schema.json",
-  "title": "OpalaTex presentation (.jpt), format version 1",
+  "$id": "https://github.com/gilzamir18/GilzaBots/schemas/jpt-1.schema.json",
+  "title": "GilzaBots presentation (.jpt), format version 1",
   "description": "Describes the deck.json a conforming JPT package writer emits. The reader in gui_src/src/slides/model.js is deliberately more permissive and repairs rather than rejects: see jpt_format.md §7. Unknown keys are legal everywhere by design (invariant I2), so every object here sets additionalProperties: true.",
   "type": "object",
   "additionalProperties": true,

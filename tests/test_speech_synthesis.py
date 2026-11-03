@@ -1,7 +1,7 @@
-"""Tests for speech synthesis: the AgenticBlocks block and the OpalaTex service.
+"""Tests for speech synthesis: the AgenticBlocks block and the GilzaBots service.
 
 Nothing here reaches a provider. The framework tests register a fake adapter and
-fake LiteLLM entry points; the OpalaTex tests point the config at a stub block.
+fake LiteLLM entry points; the GilzaBots tests point the config at a stub block.
 What is being pinned down is the contract every engine must be normalised into
 -- audio bytes with a type the browser can actually decode, a refusal rather
 than a truncation when the passage is too long, and a classified error when
@@ -348,10 +348,10 @@ def test_format_and_extension_tables_agree():
     assert extension_for_audio_mime("audio/unknown") == ".mp3"
 
 
-# ─── OpalaTex: config sanitising ─────────────────────────────────────────────
+# ─── GilzaBots: config sanitising ─────────────────────────────────────────────
 
 def test_speech_config_clamps_what_providers_would_reject():
-    from opalatex import speech_config
+    from gilzabots import speech_config
 
     assert speech_config.sanitize_response_format("WAV") == "wav"
     assert speech_config.sanitize_response_format("aiff") == "mp3"
@@ -368,7 +368,7 @@ def test_speech_ships_disabled_and_says_what_to_configure(monkeypatch):
     # Speech needs something the install does not have yet — a downloaded voice,
     # or a configured endpoint — so an unconfigured install must not offer a
     # menu item that can only fail.
-    from opalatex import speech_config
+    from gilzabots import speech_config
 
     monkeypatch.setattr(speech_config, "load_config", lambda: dict(speech_config._DEFAULTS))
     problem = speech_config.configuration_problem()
@@ -402,10 +402,10 @@ def test_speech_ships_disabled_and_says_what_to_configure(monkeypatch):
     assert "download one" in problem and "offline" in problem
 
 
-# ─── OpalaTex: the service wrapper ───────────────────────────────────────────
+# ─── GilzaBots: the service wrapper ───────────────────────────────────────────
 
 def test_language_tags_resolve_like_the_translation_setting():
-    from opalatex.speech import resolve_language_tag
+    from gilzabots.speech import resolve_language_tag
 
     assert resolve_language_tag("pt-BR") == "pt-BR"
     # An unknown regional variant falls back to its base language rather than
@@ -421,7 +421,7 @@ def test_language_tags_resolve_like_the_translation_setting():
 
 
 def test_execute_speech_refuses_an_empty_or_overlong_snippet(monkeypatch):
-    from opalatex import speech
+    from gilzabots import speech
 
     with pytest.raises(ValueError):
         asyncio.run(speech.execute_speech_synthesis("   "))
@@ -432,7 +432,7 @@ def test_execute_speech_refuses_an_empty_or_overlong_snippet(monkeypatch):
 
 
 def test_execute_speech_returns_bytes_and_a_servable_type(monkeypatch):
-    from opalatex import speech, speech_config
+    from gilzabots import speech, speech_config
 
     async def fake_adapter(model, request, model_kwargs):
         return SpeechArtifact(data_b64=_b64(MP3), mime="audio/mpeg")

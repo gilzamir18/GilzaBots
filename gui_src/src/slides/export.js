@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // export.js
 //
-// Getting a deck out of OpalaTex, in the three shapes people actually ask for:
+// Getting a deck out of GilzaBots, in the three shapes people actually ask for:
 //
 //   • PPTX  — a real, editable PowerPoint file. Built with PptxGenJS (MIT),
 //             entirely in the browser: no server round-trip and no headless
@@ -103,7 +103,7 @@ function pictureSource(src, resolveSrc) {
 // after the file is built (`injectEquations`), and this name on the shape is how
 // the second pass finds the first one's work.
 function equationMarker(index) {
-  return `opalatex-equation-${index}`;
+  return `gilzabots-equation-${index}`;
 }
 
 // PowerPoint pads the inside of a text box by 0.1in left and right and 0.05in
@@ -196,11 +196,11 @@ export async function buildPptx(deck, { resolveSrc } = {}) {
   // A custom layout rather than one of the presets: a deck whose aspect the
   // user changed must not be silently letterboxed into 16:9 on export.
   pptx.defineLayout({
-    name: 'OPALA',
+    name: 'GILZABOTS',
     width: PPTX_WIDTH_IN,
     height: deck.height * scale,
   });
-  pptx.layout = 'OPALA';
+  pptx.layout = 'GILZABOTS';
   if (deck.title) pptx.title = deck.title;
 
   // Filled in as the slides are built, and consumed by the OMML pass at the
@@ -1035,8 +1035,8 @@ export async function exportPdf(deck, options = {}) {
   return { inlined, failed, ...printResult };
 }
 
-export const PDF_EXPORT_RESULT_EVENT = 'opalatex:pdf-export-result';
-export const PDF_EXPORT_FRAME_PREFIX = 'opalatex-pdf-v1:';
+export const PDF_EXPORT_RESULT_EVENT = 'gilzabots:pdf-export-result';
+export const PDF_EXPORT_FRAME_PREFIX = 'gilzabots-pdf-v1:';
 
 let pdfRequestSequence = 0;
 let browserPrintFrame = null;
@@ -1122,7 +1122,7 @@ ${EXPORT_MATH_CSS}
 
 async function printDeck(deck, fileName) {
   const html = deckToPrintHtml(deck);
-  const host = window.__opalatexPdfPrintHost;
+  const host = window.__gilzabotsPdfPrintHost;
   if (host?.supported === false) {
     const error = new Error('PDF_FRAME_PRINT_UNSUPPORTED');
     error.code = 'PDF_FRAME_PRINT_UNSUPPORTED';

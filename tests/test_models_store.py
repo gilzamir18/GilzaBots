@@ -1,7 +1,7 @@
 import pytest
 
-from opalatex import config as config_mod
-from opalatex import models_store
+from gilzabots import config as config_mod
+from gilzabots import models_store
 
 
 def _make_connection(store, **overrides):
@@ -390,8 +390,8 @@ def test_load_models_filters_cloud_models_in_community_mode(tmp_path, monkeypatc
     # pre-upgrade `models.json` import would look, to also exercise the
     # legacy-column fallback path during filtering.
     models_store.save_models([
-        {"id": "OpalaTexCloud", "provider": "OpalaTex", "name": "OpalaTex Cloud", "api_key": "", "api_base": ""},
-        {"id": "OpalaTexCloudGemini35Flash", "provider": "OpalaTex", "name": "OpalaTex Cloud Gemini 3.5 Flash (6x credits)", "api_key": "", "api_base": ""},
+        {"id": "GilzaBotsCloud", "provider": "GilzaBots", "name": "GilzaBots Cloud", "api_key": "", "api_base": ""},
+        {"id": "GilzaBotsCloudGemini35Flash", "provider": "GilzaBots", "name": "GilzaBots Cloud Gemini 3.5 Flash (6x credits)", "api_key": "", "api_base": ""},
     ])
 
     loaded = models_store.load_models()
@@ -422,7 +422,7 @@ def test_load_local_ollama_models_adds_only_unconfigured_models(tmp_path, monkey
         }
     ])
     monkeypatch.setattr(
-        "opalatex.ollama_manager.check_ollama_status",
+        "gilzabots.ollama_manager.check_ollama_status",
         lambda: {"installed": True},
     )
 
@@ -452,7 +452,7 @@ def test_load_local_ollama_models_adds_only_unconfigured_models(tmp_path, monkey
 
 def test_load_local_ollama_models_requires_ollama_installation(monkeypatch):
     monkeypatch.setattr(
-        "opalatex.ollama_manager.check_ollama_status",
+        "gilzabots.ollama_manager.check_ollama_status",
         lambda: {"installed": False},
     )
 

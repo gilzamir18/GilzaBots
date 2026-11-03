@@ -1,5 +1,5 @@
 /**
- * Row identities, computed exactly as `opalatex/cloud/chats.py` computes them.
+ * Row identities, computed exactly as `gilzabots/cloud/chats.py` computes them.
  *
  * A message or activity row the phone writes into its journal comes back to it
  * inside `chats.json` once a desktop has folded it in. Both copies must be

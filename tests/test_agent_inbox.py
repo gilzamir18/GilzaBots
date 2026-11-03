@@ -351,14 +351,14 @@ def test_a_block_without_an_inbox_is_unchanged():
     assert asyncio.run(agent.run(AgentInput(prompt="go"))).response == "done"
 
 
-# ── OpalaTex wiring ─────────────────────────────────────────────────────────
+# ── GilzaBots wiring ─────────────────────────────────────────────────────────
 
 
 @pytest.fixture
-def opalatex_turn(tmp_path, monkeypatch):
+def gilzabots_turn(tmp_path, monkeypatch):
     """A running orchestrator turn with an inbox open, plus the events it emits."""
-    from opalatex import agent_stdin
-    from opalatex.project import ProjectStore
+    from gilzabots import agent_stdin
+    from gilzabots.project import ProjectStore
 
     store = ProjectStore(db_path=str(tmp_path / "projects.db"))
     store.create(
@@ -396,106 +396,106 @@ def opalatex_turn(tmp_path, monkeypatch):
 
 
 def test_submitting_without_a_running_turn_is_refused(monkeypatch):
-    from opalatex import agent_stdin
+    from gilzabots import agent_stdin
 
     monkeypatch.setattr(agent_stdin, "_active_inbox", None)
     with pytest.raises(InboxClosedError):
         agent_stdin.submit_chat_message("hello")
 
 
-def test_submitting_to_another_chat_is_refused(opalatex_turn):
-    module = opalatex_turn.module
+def test_submitting_to_another_chat_is_refused(gilzabots_turn):
+    module = gilzabots_turn.module
 
     with pytest.raises(module.InboxScopeError):
         module.submit_chat_message(
             "hello",
-            project_path=opalatex_turn.project.project_path,
+            project_path=gilzabots_turn.project.project_path,
             chat_id="some-other-chat",
         )
     # The right chat still goes through.
     result = module.submit_chat_message(
         "hello",
-        project_path=opalatex_turn.project.project_path,
-        chat_id=opalatex_turn.project.current_chat_id,
+        project_path=gilzabots_turn.project.project_path,
+        chat_id=gilzabots_turn.project.current_chat_id,
     )
     assert result["pending"] == 1
 
 
-def test_the_active_scope_is_published_while_a_turn_runs(opalatex_turn):
-    scope = opalatex_turn.module.active_inbox_scope()
+def test_the_active_scope_is_published_while_a_turn_runs(gilzabots_turn):
+    scope = gilzabots_turn.module.active_inbox_scope()
 
-    assert scope["chat_id"] == opalatex_turn.project.current_chat_id
+    assert scope["chat_id"] == gilzabots_turn.project.current_chat_id
     assert scope["pending"] == 0
 
 
-def test_delivery_stores_the_message_and_reports_its_identity(opalatex_turn):
-    module = opalatex_turn.module
+def test_delivery_stores_the_message_and_reports_its_identity(gilzabots_turn):
+    module = gilzabots_turn.module
     module.submit_chat_message(
         "check the bibliography too",
         client_message_id="client-1",
-        chat_id=opalatex_turn.project.current_chat_id,
+        chat_id=gilzabots_turn.project.current_chat_id,
     )
 
-    item = opalatex_turn.inbox.drain()[0]
-    opalatex_turn.agent.on_message_delivery(item)
+    item = gilzabots_turn.inbox.drain()[0]
+    gilzabots_turn.agent.on_message_delivery(item)
 
-    history = opalatex_turn.store.load("proj").history
+    history = gilzabots_turn.store.load("proj").history
     assert [(m["role"], m["content"]) for m in history] == [
         ("user", "check the bibliography too"),
     ]
 
-    delivered = [d for e, d in opalatex_turn.events if e == "user_message_delivered"]
-    saved = [d for e, d in opalatex_turn.events if e == "user_message_saved"]
+    delivered = [d for e, d in gilzabots_turn.events if e == "user_message_delivered"]
+    saved = [d for e, d in gilzabots_turn.events if e == "user_message_saved"]
     assert delivered[0]["client_message_id"] == "client-1"
     # Same stable identity every other message operation anchors on.
     assert saved[0]["client_message_id"] == "client-1"
     assert saved[0]["message_id"] == delivered[0]["message_id"] is not None
 
 
-def test_the_turn_ending_hands_back_what_it_never_delivered(opalatex_turn):
-    module = opalatex_turn.module
+def test_the_turn_ending_hands_back_what_it_never_delivered(gilzabots_turn):
+    module = gilzabots_turn.module
     module.submit_chat_message(
         "too late",
         client_message_id="client-2",
-        chat_id=opalatex_turn.project.current_chat_id,
+        chat_id=gilzabots_turn.project.current_chat_id,
     )
 
-    module._close_turn_inbox(opalatex_turn.agent, opalatex_turn.inbox, "chat_orchestrator")
+    module._close_turn_inbox(gilzabots_turn.agent, gilzabots_turn.inbox, "chat_orchestrator")
 
-    backlog = [d for e, d in opalatex_turn.events if e == "user_message_backlog"]
+    backlog = [d for e, d in gilzabots_turn.events if e == "user_message_backlog"]
     assert backlog[0]["items"] == [{
         "item_id": backlog[0]["items"][0]["item_id"],
         "client_message_id": "client-2",
     }]
     # An undelivered message is never written to the conversation: it was not read.
-    assert opalatex_turn.store.load("proj").history == []
+    assert gilzabots_turn.store.load("proj").history == []
 
 
-def test_closing_the_turn_detaches_the_inbox_from_a_reused_agent(opalatex_turn):
-    module = opalatex_turn.module
+def test_closing_the_turn_detaches_the_inbox_from_a_reused_agent(gilzabots_turn):
+    module = gilzabots_turn.module
 
-    module._close_turn_inbox(opalatex_turn.agent, opalatex_turn.inbox, "chat_orchestrator")
+    module._close_turn_inbox(gilzabots_turn.agent, gilzabots_turn.inbox, "chat_orchestrator")
 
     # The chat orchestrator block outlives the turn: leaving a closed inbox
     # attached would make the next turn reject every message.
-    assert opalatex_turn.agent.inbox is None
-    assert opalatex_turn.agent.on_message_delivery is None
+    assert gilzabots_turn.agent.inbox is None
+    assert gilzabots_turn.agent.on_message_delivery is None
     assert module.active_inbox_scope() is None
 
 
-def test_cancelling_a_queued_message_keeps_it_out_of_the_conversation(opalatex_turn):
-    module = opalatex_turn.module
+def test_cancelling_a_queued_message_keeps_it_out_of_the_conversation(gilzabots_turn):
+    module = gilzabots_turn.module
     result = module.submit_chat_message(
         "never mind",
-        chat_id=opalatex_turn.project.current_chat_id,
+        chat_id=gilzabots_turn.project.current_chat_id,
     )
 
     assert module.cancel_chat_message(result["item_id"]) is True
     assert module.cancel_chat_message(result["item_id"]) is False
-    assert len(opalatex_turn.inbox) == 0
+    assert len(gilzabots_turn.inbox) == 0
 
 
-def test_delivery_is_reported_during_the_turn_not_after_it(opalatex_turn, monkeypatch):
+def test_delivery_is_reported_during_the_turn_not_after_it(gilzabots_turn, monkeypatch):
     """The badge that says "read by the agent" depends on this event ordering.
 
     The front-end has no other way to know a queued message stopped waiting, so
@@ -503,10 +503,10 @@ def test_delivery_is_reported_during_the_turn_not_after_it(opalatex_turn, monkey
     running -- before the answer that took it into account, not after the stream
     has already closed.
     """
-    module = opalatex_turn.module
-    agent = _memgpt_agent(opalatex_turn.inbox)
-    agent.on_message_delivery = opalatex_turn.agent.on_message_delivery
-    monkeypatch.setattr(module, "_active_inbox", opalatex_turn.inbox)
+    module = gilzabots_turn.module
+    agent = _memgpt_agent(gilzabots_turn.inbox)
+    agent.on_message_delivery = gilzabots_turn.agent.on_message_delivery
+    monkeypatch.setattr(module, "_active_inbox", gilzabots_turn.inbox)
 
     calls = {"n": 0}
 
@@ -516,7 +516,7 @@ def test_delivery_is_reported_during_the_turn_not_after_it(opalatex_turn, monkey
             module.submit_chat_message(
                 "and cite the source",
                 client_message_id="client-3",
-                chat_id=opalatex_turn.project.current_chat_id,
+                chat_id=gilzabots_turn.project.current_chat_id,
             )
             return _response(tool_calls=[_tool_call("c1", "probe", '{"target": "x"}')])
         module.print_event("agent_response", {"response": "done"})
@@ -525,6 +525,6 @@ def test_delivery_is_reported_during_the_turn_not_after_it(opalatex_turn, monkey
     agent._acompletion = fake_acompletion
     asyncio.run(agent.run(AgentInput(prompt="write it")))
 
-    names = [event for event, _data in opalatex_turn.events]
+    names = [event for event, _data in gilzabots_turn.events]
     assert "user_message_delivered" in names
     assert names.index("user_message_delivered") < names.index("agent_response")

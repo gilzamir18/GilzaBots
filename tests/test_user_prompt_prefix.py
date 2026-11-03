@@ -73,8 +73,8 @@ def test_single_shot_transforms_never_receive_the_prefix():
     refined prompt. Neither call site takes the parameter any more.
     """
     import inspect
-    from opalatex.ide_server import _execute_prompt_evolution
-    from opalatex.translation import execute_translation
+    from gilzabots.ide_server import _execute_prompt_evolution
+    from gilzabots.translation import execute_translation
 
     for func in (execute_translation, _execute_prompt_evolution):
         assert 'user_prompt_prefix' not in inspect.signature(func).parameters
@@ -82,7 +82,7 @@ def test_single_shot_transforms_never_receive_the_prefix():
 
 def test_existing_database_migrates_without_losing_project(api):
     import sqlite3
-    from opalatex.project import ProjectStore
+    from gilzabots.project import ProjectStore
     with sqlite3.connect(api.store.db_path) as connection:
         connection.execute('ALTER TABLE projects DROP COLUMN user_prompt_prefix')
     reopened = ProjectStore(db_path=api.store.db_path)

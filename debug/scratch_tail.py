@@ -1,6 +1,6 @@
 import os
 
-log_path = os.path.expanduser("~/.opalatex/logs/llm_debug.log")
+log_path = os.path.expanduser("~/.gilzabots/logs/llm_debug.log")
 try:
     with open(log_path, "r", encoding="utf-8") as f:
         lines = f.readlines()

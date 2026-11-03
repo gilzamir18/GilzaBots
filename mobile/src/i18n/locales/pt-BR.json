@@ -1,6 +1,6 @@
 {
   "app": {
-    "name": "OpalaTex",
+    "name": "GilzaBots",
     "loading": "Carregando…",
     "retry": "Tentar de novo",
     "back": "Voltar",
@@ -10,8 +10,8 @@
     "close": "Fechar"
   },
   "signIn": {
-    "title": "Seus projetos do OpalaTex, em qualquer lugar",
-    "body": "Conecte a conta Google para a qual o OpalaTex do computador espelha os projetos. O app vê apenas as pastas criadas pelo OpalaTex.",
+    "title": "Seus projetos do GilzaBots, em qualquer lugar",
+    "body": "Conecte a conta Google para a qual o GilzaBots do computador espelha os projetos. O app vê apenas as pastas criadas pelo GilzaBots.",
     "connect": "Conectar ao Google Drive",
     "connecting": "Conectando…",
     "failed": "A autorização do Google falhou: {{message}}",
@@ -43,7 +43,7 @@
     "offline": "Sem conexão — mostrando a cópia em cache",
     "syncFailed": "A sincronização falhou: {{message}}",
     "noExport": "Este projeto ainda não tem conversas no Drive. Verifique se \"Sincronizar conversas\" está ativo no painel de sincronização do computador.",
-    "exportNewer": "As conversas foram gravadas por um OpalaTex mais novo. Atualize o app para lê-las.",
+    "exportNewer": "As conversas foram gravadas por um GilzaBots mais novo. Atualize o app para lê-las.",
     "pickDetail": "Escolha uma conversa ou um arquivo."
   },
   "chats": {

@@ -23,7 +23,7 @@ def _snapcraft():
 
 
 def test_the_bundled_venv_names_the_runtime_base_interpreter():
-    build = _snapcraft()["parts"]["opalatex"]["override-build"]
+    build = _snapcraft()["parts"]["gilzabots"]["override-build"]
     rewrite = "sed -i 's#^home = .*#home = /usr/bin#' \"$CRAFT_PART_INSTALL/pyvenv.cfg\""
     assert rewrite in build
     # The pip installs run before the rewrite, with the interpreter that made the venv.
@@ -32,7 +32,7 @@ def test_the_bundled_venv_names_the_runtime_base_interpreter():
 
 def test_the_snap_stages_ensurepip_and_the_pip_wheel():
     # python3.12-venv carries ensurepip and pulls in python3-pip-whl.
-    assert "python3.12-venv" in _snapcraft()["parts"]["opalatex"]["stage-packages"]
+    assert "python3.12-venv" in _snapcraft()["parts"]["gilzabots"]["stage-packages"]
 
 
 def test_the_snap_exposes_ensurepip_and_the_wheels_at_their_absolute_paths():

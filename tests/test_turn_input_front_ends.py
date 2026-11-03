@@ -8,7 +8,7 @@ question: the turn waited out the 24h timeout.
 
 The GUI half of these tests pins the event the desktop app receives, because it
 works and must keep working: the same payload per request type, answered by
-resolving ``_gui_input_pending`` exactly as /api/opalatex/input_response does.
+resolving ``_gui_input_pending`` exactly as /api/gilzabots/input_response does.
 """
 
 import asyncio
@@ -16,8 +16,8 @@ import json
 
 import pytest
 
-import opalatex.agent_stdin as agent_stdin
-import opalatex.cli_render as cli_render
+import gilzabots.agent_stdin as agent_stdin
+import gilzabots.cli_render as cli_render
 
 
 @pytest.fixture
@@ -133,8 +133,8 @@ def test_a_multi_select_answer_has_the_desktop_wire_format(terminal):
 
 
 def test_the_turn_hooks_install_the_shared_path(monkeypatch):
-    """`ask_question` reaches the hook through opalatex.terminal.aask."""
-    import opalatex.terminal as T
+    """`ask_question` reaches the hook through gilzabots.terminal.aask."""
+    import gilzabots.terminal as T
 
     restore = agent_stdin._install_turn_input_hooks(
         agent_stdin._turn_confirm_hook,
@@ -152,7 +152,7 @@ def test_an_interactive_command_runs_in_the_terminal_and_the_user_reports(termin
 
     calls = []
     monkeypatch.setattr(subprocess, "call", lambda cmd, **kw: calls.append((cmd, kw)) or 0)
-    monkeypatch.setattr("opalatex.tools.get_project_path", lambda: str(tmp_path))
+    monkeypatch.setattr("gilzabots.tools.get_project_path", lambda: str(tmp_path))
     terminal.append("")  # accept the default, which follows the exit code
 
     answer = asyncio.run(asyncio.wait_for(
@@ -181,7 +181,7 @@ def test_a_background_command_runs_as_a_process_of_the_terminal_session(tmp_path
     """The desktop app sends it to the IDE's main terminal over HTTP; the CLI has neither."""
     import time
 
-    from opalatex import tools
+    from gilzabots import tools
 
     monkeypatch.setattr(tools, "get_project_path", lambda: str(tmp_path))
     monkeypatch.setattr(agent_stdin, "_background_command_runner", cli_render.terminal_background_command)
@@ -189,7 +189,7 @@ def test_a_background_command_runs_as_a_process_of_the_terminal_session(tmp_path
         fn = getattr(tools.run_background_command, "_func", tools.run_background_command)
         result = asyncio.run(fn("echo started"))
         assert result.startswith("SUCCESS")
-        log = next((tmp_path / ".opalatex" / "background").glob("command-*.log"))
+        log = next((tmp_path / ".gilzabots" / "background").glob("command-*.log"))
         for _ in range(50):
             if log.read_text().strip():
                 break
@@ -201,7 +201,7 @@ def test_a_background_command_runs_as_a_process_of_the_terminal_session(tmp_path
 
 
 def test_the_gui_path_is_used_when_no_runner_is_installed(tmp_path, monkeypatch):
-    from opalatex import tools
+    from gilzabots import tools
 
     monkeypatch.setattr(agent_stdin, "_background_command_runner", None)
     monkeypatch.setattr(tools, "get_project_path", lambda: str(tmp_path))
@@ -211,13 +211,13 @@ def test_the_gui_path_is_used_when_no_runner_is_installed(tmp_path, monkeypatch)
         sent.append("http")
         raise ConnectionRefusedError("no server")
 
-    monkeypatch.setattr("opalatex.local_auth.local_api_connection", fake_connection)
+    monkeypatch.setattr("gilzabots.local_auth.local_api_connection", fake_connection)
     fn = getattr(tools.run_background_command, "_func", tools.run_background_command)
     result = asyncio.run(fn("npm run dev"))
 
     assert sent == ["http"]
     assert result.startswith("FAILED to send command to background terminal")
-    assert not (tmp_path / ".opalatex" / "background").exists()
+    assert not (tmp_path / ".gilzabots" / "background").exists()
 
 
 def test_installing_the_terminal_sets_and_clears_both_front_end_hooks():

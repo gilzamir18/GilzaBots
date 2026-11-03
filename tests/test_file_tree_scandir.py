@@ -12,8 +12,8 @@ import sys
 
 import pytest
 
-from opalatex.ide_server import (
-    _is_opalatex_hidden_artifact,
+from gilzabots.ide_server import (
+    _is_gilzabots_hidden_artifact,
     _is_workspace_hidden_by_extension,
     get_file_tree,
 )
@@ -30,7 +30,7 @@ def _reference_tree(dir_path, root_path=None, show_hidden_files=False, hidden_ex
     for item in items:
         if item in ['node_modules', '.git', '.venv', '.env', '__pycache__', '.pytest_cache']:
             continue
-        if _is_opalatex_hidden_artifact(item):
+        if _is_gilzabots_hidden_artifact(item):
             continue
         full_path = os.path.join(dir_path, item)
         rel_path = os.path.relpath(full_path, root_path)
@@ -62,7 +62,7 @@ def _build_project(root):
         (root / skipped).mkdir()
         (root / skipped / "inner.txt").write_text("skip", encoding="utf-8")
     (root / ".env").write_text("KEY=1", encoding="utf-8")
-    (root / "opalatex_partial_main.tex").write_text("hidden artifact", encoding="utf-8")
+    (root / "gilzabots_partial_main.tex").write_text("hidden artifact", encoding="utf-8")
     (root / "empty").mkdir()
 
 

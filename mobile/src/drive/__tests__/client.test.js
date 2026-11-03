@@ -7,7 +7,7 @@ const noSleep = async () => {};
 
 function setup() {
   const fake = createFakeDrive();
-  const container = fake.folder('OpalaTex');
+  const container = fake.folder('GilzaBots');
   const root = fake.folder('thesis', container);
   fake.folder('slides', container);
   fake.add({ name: 'not-a-project.txt', parent: container, content: 'x' });
@@ -16,7 +16,7 @@ function setup() {
   return { fake, root, drive, getToken };
 }
 
-test('projects are the folders of the OpalaTex container', async () => {
+test('projects are the folders of the GilzaBots container', async () => {
   const { drive } = setup();
   assert.deepEqual((await drive.listProjects()).map((p) => p.name), ['slides', 'thesis']);
 });
@@ -46,9 +46,9 @@ test('the index follows the desktop rules for paths', async () => {
 test('writing creates missing folders, then updates in place', async () => {
   const { fake, root, drive } = setup();
   const index = await drive.buildIndex(root);
-  await drive.writeText(index, '.opalatex/session/devices/d1.json', '{"a":1}');
-  await drive.writeText(index, '.opalatex/session/devices/d1.json', '{"a":2}');
-  assert.equal(fake.read('.opalatex/session/devices/d1.json', root), '{"a":2}');
+  await drive.writeText(index, '.gilzabots/session/devices/d1.json', '{"a":1}');
+  await drive.writeText(index, '.gilzabots/session/devices/d1.json', '{"a":2}');
+  assert.equal(fake.read('.gilzabots/session/devices/d1.json', root), '{"a":2}');
   const named = [...fake.files.values()].filter((f) => f.name === 'd1.json');
   assert.equal(named.length, 1);
 });

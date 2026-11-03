@@ -25,13 +25,13 @@ Both are widened here.
 
 import pytest
 
-from opalatex.agent_stdin import _has_unfenced_tool_call_payload
-from opalatex.memgpt_runtime import (
+from gilzabots.agent_stdin import _has_unfenced_tool_call_payload
+from gilzabots.memgpt_runtime import (
     _NATIVE_TOOL_CALL_REMINDER,
     _needs_native_tool_call_reminder,
     build_chat_orchestrator,
 )
-from opalatex.project import ProjectData
+from gilzabots.project import ProjectData
 
 
 # ── 1. The prompt reminder reaches the orchestrator ──────────────────────────
@@ -133,7 +133,7 @@ def test_fenced_json_is_left_alone():
     assert not _has_unfenced_tool_call_payload(
         "Here is what a tool call looks like:\n\n"
         '```json\n{"name": "web_search", "arguments": {"query": "x"}}\n```\n\n'
-        "Note that OpalaTex issues it natively instead."
+        "Note that GilzaBots issues it natively instead."
     )
 
 
@@ -200,17 +200,17 @@ def test_announced_intent_without_json_is_not_flagged():
 
 
 def test_breaker_is_bounded():
-    from opalatex.agent_stdin import SERIALIZED_TOOL_CALL_MAX_CORRECTION_ATTEMPTS
+    from gilzabots.agent_stdin import SERIALIZED_TOOL_CALL_MAX_CORRECTION_ATTEMPTS
 
     assert 1 <= SERIALIZED_TOOL_CALL_MAX_CORRECTION_ATTEMPTS <= 3
 
 
 def test_corrective_prompt_and_failure_message_are_localized():
-    from opalatex.agent_stdin import (
+    from gilzabots.agent_stdin import (
         _serialized_tool_call_failure_message,
         _serialized_tool_call_retry_prompt,
     )
-    from opalatex.i18n import set_lang
+    from gilzabots.i18n import set_lang
 
     for lang in ("en", "pt"):
         set_lang(lang)
@@ -223,7 +223,7 @@ def test_corrective_prompt_and_failure_message_are_localized():
 
 def test_rejected_payload_goes_to_diagnostics_not_the_chat(monkeypatch):
     """Discarding the text with no trace makes a false positive undebuggable."""
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     events = []
     monkeypatch.setattr(stdin_mod, "print_event", lambda ev, data: events.append((ev, data)))
@@ -261,7 +261,7 @@ def _correct(scripted_first, scripted_rest, monkeypatch):
     import asyncio
     import contextlib
 
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     monkeypatch.setattr(stdin_mod, "print_event", lambda *a, **k: None)
     monkeypatch.setattr(stdin_mod, "apply_meta_params", lambda *a, **k: contextlib.nullcontext())
@@ -291,7 +291,7 @@ def test_the_corrected_run_output_travels_with_its_response(monkeypatch):
     import contextlib
     from types import SimpleNamespace
 
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     monkeypatch.setattr(stdin_mod, "print_event", lambda *a, **k: None)
     monkeypatch.setattr(stdin_mod, "apply_meta_params", lambda *a, **k: contextlib.nullcontext())
@@ -349,7 +349,7 @@ def test_an_unrecoverable_model_fails_loudly_instead_of_showing_json(monkeypatch
 
 
 def test_the_breaker_stops_after_the_configured_attempts(monkeypatch):
-    from opalatex.agent_stdin import SERIALIZED_TOOL_CALL_MAX_CORRECTION_ATTEMPTS
+    from gilzabots.agent_stdin import SERIALIZED_TOOL_CALL_MAX_CORRECTION_ATTEMPTS
     import pytest as _pytest
 
     payload = '{"name": "read_file", "arguments": {"path": "a.tex"}}'
@@ -357,7 +357,7 @@ def test_the_breaker_stops_after_the_configured_attempts(monkeypatch):
     import asyncio
     import contextlib
 
-    import opalatex.agent_stdin as stdin_mod
+    import gilzabots.agent_stdin as stdin_mod
 
     monkeypatch.setattr(stdin_mod, "print_event", lambda *a, **k: None)
     monkeypatch.setattr(stdin_mod, "apply_meta_params", lambda *a, **k: contextlib.nullcontext())

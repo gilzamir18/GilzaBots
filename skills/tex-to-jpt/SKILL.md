@@ -64,7 +64,7 @@ read the .tex  →  render the pictures  →  build the outline  →  create_pre
 
 Use the script in this skill. It harvests the deck's own preamble — packages,
 `\usetikzlibrary`, `\definecolor`, `\newcommand` — into a `standalone` document,
-compiles it with the tectonic OpalaTex ships, and rasters the result. Compiling
+compiles it with the tectonic GilzaBots ships, and rasters the result. Compiling
 a picture without its preamble either fails cryptically or silently draws the
 wrong thing.
 

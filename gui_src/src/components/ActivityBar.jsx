@@ -206,7 +206,7 @@ export default function ActivityBar({
               position: 'absolute',
               top: '4px',
               right: '4px',
-              background: '#007acc',
+              background: 'var(--vscode-button-bg)',
               color: '#ffffff',
               borderRadius: '50%',
               width: '16px',
@@ -241,7 +241,7 @@ export default function ActivityBar({
         <button
           onClick={() => { if (!isChatToggleDisabled) setIsChatVisible(!isChatVisible); }}
           className={`vscode-activitybar-btn ${isChatVisible || layoutMode === 'chat' || layoutMode === 'chat-bottom' ? 'active' : ''}`}
-          title={t('activityBar.opalatexCodes', 'OpalaTex Chat (Ctrl+T)')}
+          title={t('activityBar.gilzabotsCodes', 'GilzaBots Chat (Ctrl+T)')}
           disabled={isChatToggleDisabled}
           style={{ opacity: isChatToggleDisabled ? 0.5 : 1, cursor: isChatToggleDisabled ? 'not-allowed' : 'pointer' }}
         >

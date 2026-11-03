@@ -273,11 +273,11 @@ def test_send_message_no_longer_exists():
     assert "without performing an action" in schemas[HEARTBEAT_TOOL_NAME]
 
 
-# ── The OpalaTex wiring ──────────────────────────────────────────────────────
+# ── The GilzaBots wiring ──────────────────────────────────────────────────────
 
 def test_the_chat_orchestrator_wires_the_idle_allowance(tmp_path):
-    from opalatex.memgpt_runtime import build_chat_orchestrator
-    from opalatex.project import ProjectData
+    from gilzabots.memgpt_runtime import build_chat_orchestrator
+    from gilzabots.project import ProjectData
 
     agent = build_chat_orchestrator(ProjectData(
         name="t", project_name="t", project_path=str(tmp_path),
@@ -289,8 +289,8 @@ def test_the_chat_orchestrator_wires_the_idle_allowance(tmp_path):
 
 
 def test_a_project_can_retune_the_idle_allowance(tmp_path):
-    from opalatex.memgpt_runtime import build_chat_orchestrator
-    from opalatex.project import ProjectData
+    from gilzabots.memgpt_runtime import build_chat_orchestrator
+    from gilzabots.project import ProjectData
 
     agent = build_chat_orchestrator(ProjectData(
         name="t", project_name="t", project_path=str(tmp_path),
@@ -307,14 +307,14 @@ def test_a_project_can_retune_the_idle_allowance(tmp_path):
 ])
 def test_the_setting_survives_a_project_save(params, expected):
     """Absent from the schema it would be silently dropped on save."""
-    from opalatex.config import sanitize_model_params
+    from gilzabots.config import sanitize_model_params
 
     assert sanitize_model_params(params) == expected
 
 
 def test_the_retired_settings_are_gone_from_the_schema():
     """Leaving them accepted would keep dead knobs in the UI and in saved projects."""
-    from opalatex.config import _AGENT_PARAM_KEYS, _NON_LITELLM_FIELDS, sanitize_model_params
+    from gilzabots.config import _AGENT_PARAM_KEYS, _NON_LITELLM_FIELDS, sanitize_model_params
 
     retired = {"response_mode", "model_controlled_turn_end", "max_narration_steps"}
     assert not (retired & _NON_LITELLM_FIELDS)
@@ -324,7 +324,7 @@ def test_the_retired_settings_are_gone_from_the_schema():
 
 def test_the_setting_never_reaches_the_provider():
     """It is an agent constructor param, not a LiteLLM request parameter."""
-    from opalatex.config import _AGENT_PARAM_KEYS, _NON_LITELLM_FIELDS
+    from gilzabots.config import _AGENT_PARAM_KEYS, _NON_LITELLM_FIELDS
 
     assert "max_idle_heartbeats" in _NON_LITELLM_FIELDS
     assert "max_idle_heartbeats" in _AGENT_PARAM_KEYS
@@ -361,17 +361,17 @@ def test_a_turn_with_no_progress_reports_none():
 
 
 def test_progress_is_folded_above_the_answer():
-    from opalatex.agent_stdin import _fold_turn_progress
+    from gilzabots.agent_stdin import _fold_turn_progress
 
     resp = SimpleNamespace(narration=["Reading.", "Drafting."], final_text="THE ANSWER")
     folded = _fold_turn_progress(resp, "Reading.\n\nDrafting.\n\nTHE ANSWER")
 
-    assert folded == "```opalatex-progress\nReading.\n\nDrafting.\n```\n\nTHE ANSWER"
+    assert folded == "```gilzabots-progress\nReading.\n\nDrafting.\n```\n\nTHE ANSWER"
 
 
 def test_folding_is_skipped_when_the_boundary_no_longer_holds():
     """A correction rewrote the tail: fold blindly and the text gets mangled."""
-    from opalatex.agent_stdin import _fold_turn_progress
+    from gilzabots.agent_stdin import _fold_turn_progress
 
     resp = SimpleNamespace(narration=["Reading."], final_text="THE ANSWER")
     sanitized = "Reading.\n\nTHE ANSWER, corrected"
@@ -381,7 +381,7 @@ def test_folding_is_skipped_when_the_boundary_no_longer_holds():
 
 def test_folding_is_skipped_when_the_progress_carries_a_fence():
     """Nesting a fence inside the progress fence would break the block."""
-    from opalatex.agent_stdin import _fold_turn_progress
+    from gilzabots.agent_stdin import _fold_turn_progress
 
     resp = SimpleNamespace(narration=["Running:\n```sh\nls\n```"], final_text="DONE")
     sanitized = "Running:\n```sh\nls\n```\n\nDONE"
@@ -390,7 +390,7 @@ def test_folding_is_skipped_when_the_progress_carries_a_fence():
 
 
 def test_folding_never_drops_a_character():
-    from opalatex.agent_stdin import _fold_turn_progress
+    from gilzabots.agent_stdin import _fold_turn_progress
 
     resp = SimpleNamespace(narration=["Alpha.", "Beta."], final_text="Gamma.")
     response = "Alpha.\n\nBeta.\n\nGamma."
@@ -402,9 +402,9 @@ def test_folding_never_drops_a_character():
 
 def test_the_progress_markup_is_not_replayed_to_the_model():
     """A model reads its own last turn as an example and imitates the markup."""
-    from opalatex.memgpt_runtime import _strip_progress_fence
+    from gilzabots.memgpt_runtime import _strip_progress_fence
 
-    stored = "```opalatex-progress\nReading.\n\nDrafting.\n```\n\nTHE ANSWER"
+    stored = "```gilzabots-progress\nReading.\n\nDrafting.\n```\n\nTHE ANSWER"
 
     assert _strip_progress_fence(stored) == "THE ANSWER"
     # An answer that merely mentions the word is untouched.
@@ -610,7 +610,7 @@ def test_llm_agent_budget_exits_report_an_exhausted_budget():
 
 
 def test_the_host_labels_a_turn_that_never_answered():
-    from opalatex.agent_stdin import TURN_CUT_SHORT_MARKER, _mark_turn_without_answer
+    from gilzabots.agent_stdin import TURN_CUT_SHORT_MARKER, _mark_turn_without_answer
 
     cut = SimpleNamespace(narration=["I will inspect now."], final_text="", budget_exhausted=True)
     marked = _mark_turn_without_answer(cut, "I will inspect now.")
@@ -626,7 +626,7 @@ def test_the_host_labels_a_turn_that_never_answered():
 
 def test_a_turn_that_stopped_with_steps_left_is_not_blamed_on_the_budget():
     """The old label sent the user to raise a limit the turn never reached."""
-    from opalatex.agent_stdin import (
+    from gilzabots.agent_stdin import (
         TURN_CUT_SHORT_MARKER,
         TURN_NO_ANSWER_MARKER,
         _mark_turn_without_answer,
@@ -656,7 +656,7 @@ def test_the_cut_short_marker_is_unlocalised_and_matches_the_front_end():
     language would stop matching after the user switched to another, and the
     button would silently disappear from turns that still need it.
     """
-    from opalatex.agent_stdin import TURN_CUT_SHORT_MARKER, TURN_NO_ANSWER_MARKER
+    from gilzabots.agent_stdin import TURN_CUT_SHORT_MARKER, TURN_NO_ANSWER_MARKER
 
     assert _front_end_marker("TURN_CUT_SHORT_MARKER") == TURN_CUT_SHORT_MARKER
     assert TURN_CUT_SHORT_MARKER.startswith("[TURN-CUT-SHORT]")
@@ -674,7 +674,7 @@ def test_the_interruption_marker_matches_the_front_end_and_is_a_suffix():
     showed the raw English marker in the chat and offered no continue action.
     Both halves of that contract are asserted here.
     """
-    from opalatex.agent_stdin import INTERRUPTED_AGENT_HISTORY_MARKER
+    from gilzabots.agent_stdin import INTERRUPTED_AGENT_HISTORY_MARKER
 
     assert _front_end_marker("INTERRUPTED_MARKER") == INTERRUPTED_AGENT_HISTORY_MARKER
     assert INTERRUPTED_AGENT_HISTORY_MARKER.startswith("[INTERRUPTED]")
@@ -690,19 +690,19 @@ def test_the_interruption_marker_matches_the_front_end_and_is_a_suffix():
 
 def test_a_legitimate_progress_block_from_the_model_is_left_alone():
     """`progress` is a word a model may fence; the stripper must not eat it."""
-    from opalatex.memgpt_runtime import _strip_progress_fence
+    from gilzabots.memgpt_runtime import _strip_progress_fence
 
     written_by_the_model = "```progress\nstep 1\n```\n\nThat is the example you asked for."
 
     assert _strip_progress_fence(written_by_the_model) == written_by_the_model
     assert _strip_progress_fence(
-        "```opalatex-progress\nReading.\n```\n\nTHE ANSWER"
+        "```gilzabots-progress\nReading.\n```\n\nTHE ANSWER"
     ) == "THE ANSWER"
 
 
 def test_folding_does_not_steal_indentation_from_the_answer():
     """An answer opening with a code block must keep its leading spaces."""
-    from opalatex.agent_stdin import _fold_turn_progress
+    from gilzabots.agent_stdin import _fold_turn_progress
 
     final = "    def f():\n        return 1"
     response = f"Reading.\n\n{final}"
@@ -711,13 +711,13 @@ def test_folding_does_not_steal_indentation_from_the_answer():
     )
 
     assert folded.endswith(final)
-    assert folded == f"```opalatex-progress\nReading.\n```\n\n{final}"
+    assert folded == f"```gilzabots-progress\nReading.\n```\n\n{final}"
 
 
 def test_a_cut_short_turn_is_not_folded():
     """No final answer means no boundary; the marked text is returned whole."""
-    from opalatex.agent_stdin import _fold_turn_progress, _mark_turn_without_answer
-    from opalatex.i18n import set_lang
+    from gilzabots.agent_stdin import _fold_turn_progress, _mark_turn_without_answer
+    from gilzabots.i18n import set_lang
 
     set_lang("en")
     cut = SimpleNamespace(narration=["I will inspect now."], final_text="")
@@ -754,7 +754,7 @@ def test_the_cut_short_notice_points_at_the_control_that_sets_the_budget(locale)
 def test_the_budget_the_notice_names_is_the_one_the_run_uses():
     """The selector's budget travels with the run and wins over the project value."""
     app = open("gui_src/src/App.jsx", encoding="utf-8").read()
-    stdin = open("opalatex/agent_stdin.py", encoding="utf-8").read()
+    stdin = open("gilzabots/agent_stdin.py", encoding="utf-8").read()
 
     assert "max_heartbeats: options.maxHeartbeats !== undefined ? options.maxHeartbeats : resolveEffectiveMaxHeartbeats()" in app
     assert "if (mode === 'custom')" in app, "only Custom defers to the project setting"
@@ -787,7 +787,7 @@ def test_the_heartbeat_prompt_rules_budget_steps_and_avoid_not_a_budget():
 
 def test_agent_step_event_is_emitted_during_turn_iteration():
     """_on_iteration emits agent_step with current step and max_steps."""
-    import opalatex.agent_stdin as agent_stdin
+    import gilzabots.agent_stdin as agent_stdin
 
     emitted_events = []
     prev_hook = agent_stdin.event_hook
@@ -823,7 +823,7 @@ def test_agent_step_event_is_emitted_during_turn_iteration():
 
 def test_heartbeat_mode_override_updates_agent_max_heartbeats():
     """handle_run overrides agent.max_heartbeats when max_heartbeats is passed, and resets on None."""
-    import opalatex.agent_stdin as agent_stdin
+    import gilzabots.agent_stdin as agent_stdin
 
     class DummyMemgpt:
         max_heartbeats = 50
@@ -851,7 +851,7 @@ def test_heartbeat_mode_override_updates_agent_max_heartbeats():
         data = {"max_heartbeats": None}
         req_hb = data.get("max_heartbeats")
         if req_hb is None:
-            from opalatex.config import get_project_agent_params, get_agent_max_heartbeats
+            from gilzabots.config import get_project_agent_params, get_agent_max_heartbeats
             _agent_params = get_project_agent_params()
             dummy_agent.max_heartbeats = int(_agent_params.get("max_heartbeats", get_agent_max_heartbeats("memgpt", 50)))
         assert dummy_agent.max_heartbeats == 50

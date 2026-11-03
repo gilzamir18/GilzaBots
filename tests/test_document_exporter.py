@@ -2,7 +2,7 @@ import os
 from types import SimpleNamespace
 from zipfile import ZipFile
 
-from opalatex import document_exporter
+from gilzabots import document_exporter
 
 
 def test_export_tex_to_docx_invokes_pandoc_and_creates_output(monkeypatch, tmp_path):

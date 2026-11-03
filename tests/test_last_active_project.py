@@ -16,8 +16,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from opalatex.ide_server import AsyncHTTPServer, find_available_port
-from opalatex.ui_settings import load_ui_settings
+from gilzabots.ide_server import AsyncHTTPServer, find_available_port
+from gilzabots.ui_settings import load_ui_settings
 
 
 def _capture(server):
@@ -30,13 +30,13 @@ def _capture(server):
 
 @pytest.mark.asyncio
 async def test_last_project_round_trips_through_list_projects(tmp_path, monkeypatch):
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
-    monkeypatch.setattr("opalatex.config.DEFAULT_DB_PATH", str(tmp_path / "sessions.db"))
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", str(tmp_path / "sessions.db"))
     server = AsyncHTTPServer()
     responses = _capture(server)
     writer = AsyncMock()
 
-    await server.route_api("GET", "/api/opalatex/list-projects", {}, {}, b"", writer)
+    await server.route_api("GET", "/api/gilzabots/list-projects", {}, {}, b"", writer)
     assert responses[-1] == (200, {"projects": [], "last_active_project": ""})
 
     await server.route_api(
@@ -47,13 +47,13 @@ async def test_last_project_round_trips_through_list_projects(tmp_path, monkeypa
     # A fresh session reads it back from disk.
     assert load_ui_settings()["last_active_project"] == "paper_a"
 
-    await server.route_api("GET", "/api/opalatex/list-projects", {}, {}, b"", writer)
+    await server.route_api("GET", "/api/gilzabots/list-projects", {}, {}, b"", writer)
     assert responses[-1][1]["last_active_project"] == "paper_a"
 
 
 @pytest.mark.asyncio
 async def test_last_project_rejects_a_missing_name(tmp_path, monkeypatch):
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
     server = AsyncHTTPServer()
     responses = _capture(server)
     writer = AsyncMock()
@@ -110,7 +110,7 @@ def test_port_probe_skips_a_port_that_is_listening():
 
 @pytest.mark.asyncio
 async def test_client_prefs_round_trip(tmp_path, monkeypatch):
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
     server = AsyncHTTPServer()
     responses = _capture(server)
     writer = AsyncMock()
@@ -133,7 +133,7 @@ async def test_client_prefs_round_trip(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_client_prefs_reject_malformed_changes(tmp_path, monkeypatch):
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
     server = AsyncHTTPServer()
     responses = _capture(server)
     writer = AsyncMock()
@@ -155,9 +155,9 @@ async def test_client_prefs_reject_malformed_changes(tmp_path, monkeypatch):
 
 
 def test_legacy_import_runs_once_and_never_overwrites(tmp_path, monkeypatch):
-    from opalatex.ui_settings import load_client_prefs, update_client_prefs
+    from gilzabots.ui_settings import load_client_prefs, update_client_prefs
 
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
     update_client_prefs({"theme": "dark"})
 
     assert update_client_prefs(
@@ -176,9 +176,9 @@ def test_legacy_import_runs_once_and_never_overwrites(tmp_path, monkeypatch):
 
 
 def test_legacy_import_keeps_a_recorded_last_project(tmp_path, monkeypatch):
-    from opalatex.ui_settings import save_ui_settings, update_client_prefs
+    from gilzabots.ui_settings import save_ui_settings, update_client_prefs
 
-    monkeypatch.setattr("opalatex.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
+    monkeypatch.setattr("gilzabots.ui_settings._SETTINGS_PATH", tmp_path / "ui_settings.json")
     save_ui_settings({"last_active_project": "current"})
     update_client_prefs({"lastActiveProject": "older"}, legacy_import=True)
     assert load_ui_settings()["last_active_project"] == "current"

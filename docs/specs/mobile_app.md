@@ -1,4 +1,4 @@
-# OpalaTex Mobile (Android) — decisions and current state
+# GilzaBots Mobile (Android) — decisions and current state
 
 Status: implemented as a first version (0.1.0) in [`mobile/`](../../mobile/).
 Verified by unit tests, a browser end-to-end check and a debug/release Gradle
@@ -13,8 +13,8 @@ file contract with the desktop is [chats_export.md](chats_export.md).
 | Question | Decision |
 | --- | --- |
 | What the app is | A standalone companion: chat about a project and read its files. No backend of its own. |
-| Where its data comes from | The project folder the desktop mirrors to Google Drive (`OpalaTex/<project>/`). |
-| How its conversations reach the desktop | A per-device journal (`.opalatex/session/devices/<id>.json`), never `chats.json`. |
+| Where its data comes from | The project folder the desktop mirrors to Google Drive (`GilzaBots/<project>/`). |
+| How its conversations reach the desktop | A per-device journal (`.gilzabots/session/devices/<id>.json`), never `chats.json`. |
 | Agent | A small JavaScript loop in the app, not the desktop's MemGPT orchestrator. |
 | Tools | `list_files`, `read_file`, `search_files`, `edit_file`, `create_file`. Writes need approval, as on the desktop. |
 | What it cannot do | Compile LaTeX, run commands, edit `.jpt` decks, checkpoints, git. The system prompt says so. |
@@ -51,7 +51,7 @@ the body back through a Capacitor callback, decoding UTF-8 across buffer
 boundaries. Drive calls stay on `fetch`: Google's APIs allow cross-origin
 requests with a bearer token.
 
-Native requests identify themselves as `OpalaTex-Mobile/<version> (Android
+Native requests identify themselves as `GilzaBots-Mobile/<version> (Android
 <release>)`. `HttpURLConnection` would otherwise send the platform default,
 `Dalvik/2.1.0 (…)`, and ollama.com's edge refuses that with a 403 page before
 the API key is checked (measured: every Dalvik agent → 403; any other agent,
@@ -79,8 +79,8 @@ for the orchestrator (`external_turns`, [chats_export.md §5](chats_export.md)).
 | Question | Decision |
 | --- | --- |
 | API | Google Identity Services `AuthorizationClient` (`play-services-auth` 22.0.0), scope `drive.file` only. |
-| Client id in code | None. Android OAuth clients are matched by package name (`com.opalacoder.opalatex`) and signing-certificate SHA-1. |
-| Which Cloud project | **The same one as the desktop's bundled client.** `drive.file` grants access per application, and Google identifies the application by Cloud project number (the Picker's `setAppId` is "the Cloud project number"). A client in another project would see an empty `OpalaTex` folder. |
+| Client id in code | None. Android OAuth clients are matched by package name (`io.github.gilzamir18.gilzabots`) and signing-certificate SHA-1. |
+| Which Cloud project | **The same one as the desktop's bundled client.** `drive.file` grants access per application, and Google identifies the application by Cloud project number (the Picker's `setAppId` is "the Cloud project number"). A client in another project would see an empty `GilzaBots` folder. |
 | Tokens | One hour; kept in memory for 50 minutes; a 401 clears the cached token and authorizes again silently. |
 | Refresh tokens | None on the device, as Google recommends. |
 | Sign out | `revokeAccess` for the account of the last authorization; the app's local session is dropped either way. |
@@ -94,7 +94,7 @@ opened on the phone is not cached; the agent's own reads (`read_file`,
 
 **Available offline** (a per-project switch at the top of the Files tab)
 downloads every file the phone can show: text files up to 2 MB, PDFs and
-images up to 50 MB each. Internal OpalaTex files are cached separately, and
+images up to 50 MB each. Internal GilzaBots files are cached separately, and
 other formats or larger files stay online and are counted on the card. It runs
 when switched on and after every successful sync, downloading only files whose
 md5 changed and dropping saved copies of files that left the project. It stops
@@ -116,7 +116,7 @@ re-reads the file's md5 from Drive and refuses when it changed since it was read
 (and, for a create, when a file with that name appeared). Drive v3 has no
 conditional write, so this narrows the window to one round trip; a desktop that
 edits in that window still loses nothing, because its sync engine sees both
-sides changed and keeps a conflict copy. Nothing under `.opalatex/` is writable.
+sides changed and keeps a conflict copy. Nothing under `.gilzabots/` is writable.
 
 ## Open items
 

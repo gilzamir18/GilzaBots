@@ -5,7 +5,7 @@ import { useCallback, useRef, useState } from 'react';
  * that offers it.
  *
  * This used to live inside PdfPreview. Nothing in it was PDF-specific — the
- * backend says so itself (opalatex/translation.py: "any caller that has a text
+ * backend says so itself (gilzabots/translation.py: "any caller that has a text
  * snippet and a target language can use it") — and a second copy in the
  * Markdown preview would have been a second place for the request-id race
  * guard to be got wrong.

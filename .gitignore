@@ -12,7 +12,7 @@ build_staging*
 .opalacoder/
 
 # --- Generated frontend build ---
-/opalatex/gui/
+/gilzabots/gui/
 
 # --- Python bytecode and caches ---
 __pycache__/
@@ -33,7 +33,7 @@ __pycache__/
 *.zip
 # ...except the Asset Store catalog: skill and template packages are shipped
 # content, not build output, so they have to stay in the repository.
-!opalatex/assetstore/**/*.zip
+!gilzabots/assetstore/**/*.zip
 !templates/*.zip
 *.tar.gz
 *.7z
@@ -78,7 +78,7 @@ MANIFEST
 # --- PyInstaller ---
 *.manifest
 *.spec
-!OpalaTex.spec
+!GilzaBots.spec
 
 # --- Installer and packaging inputs ---
 *.iss
@@ -155,7 +155,7 @@ venv.bak/
 
 # --- Snap packages (build artifacts) ---
 /*.snap
-.opalatex/
+.gilzabots/
 
 # --- OAuth client injected at build time (see scripts/embed_google_client.py) ---
-/opalatex/cloud/providers/bundled_google_client.json
+/gilzabots/cloud/providers/bundled_google_client.json

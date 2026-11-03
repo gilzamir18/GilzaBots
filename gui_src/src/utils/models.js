@@ -1,6 +1,6 @@
 // Model-id helpers shared by the UI.
 //
-// isLocalModelId mirrors `is_local_model` in opalatex/config.py: a local model
+// isLocalModelId mirrors `is_local_model` in gilzabots/config.py: a local model
 // runs on the user's own machine, where the context window is small and every
 // attachment competes with the conversation for it. Cloud models — including
 // Ollama's own ":cloud" ids — do not have that constraint.

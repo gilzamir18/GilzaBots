@@ -71,7 +71,7 @@ rather than for committing them — this skill's own manifest scores `heavy` for
 exactly that reason. Read the flagged lines before you touch them.
 
 When the text is not in a file (pasted into the context), write it to
-`<project>/.opalatex/_humanize_input.txt` first with `write_file`, scan that, and
+`<project>/.gilzabots/_humanize_input.txt` first with `write_file`, scan that, and
 keep the file as the `before` side of the verification in step 5.
 
 ## 3. Preserve — these outrank everything else
@@ -156,7 +156,7 @@ Then prove the rewrite worked, on the file you actually wrote:
 python "<skill_dir>/scripts/humanize_scan.py" diff "<before>" "<after>"
 ```
 
-Keep a copy of the original at `<project>/.opalatex/_humanize_before_<name>` so
+Keep a copy of the original at `<project>/.gilzabots/_humanize_before_<name>` so
 the `before` side exists and the user can recover the draft. Read the two
 warnings the diff prints:
 

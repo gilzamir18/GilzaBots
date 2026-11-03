@@ -1,5 +1,5 @@
 /**
- * The app's own native plugin (android/app/src/main/java/.../OpalaNativePlugin.java).
+ * The app's own native plugin (android/app/src/main/java/.../GilzaNativePlugin.java).
  *
  * - Google authorization for the `drive.file` scope through Google Identity
  *   Services' AuthorizationClient: the Android OAuth client is matched by
@@ -12,8 +12,8 @@
 
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
-export const OpalaNative = registerPlugin('OpalaNative', {
-  web: () => import('./nativeWeb.js').then((module) => new module.OpalaNativeWeb()),
+export const GilzaNative = registerPlugin('GilzaNative', {
+  web: () => import('./nativeWeb.js').then((module) => new module.GilzaNativeWeb()),
 });
 
 export const isNative = () => Capacitor.isNativePlatform();

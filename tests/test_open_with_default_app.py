@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import pytest
 from unittest.mock import AsyncMock
 
-from opalatex.ide_server import (
+from gilzabots.ide_server import (
     AsyncHTTPServer,
     _desktop_open_command,
     _desktop_open_failure,
@@ -22,9 +22,9 @@ from opalatex.ide_server import (
 )
 
 
-def _enter_snap(monkeypatch, snap_dir="/snap/opalatex/33"):
+def _enter_snap(monkeypatch, snap_dir="/snap/gilzabots/33"):
     monkeypatch.setenv("SNAP", snap_dir)
-    monkeypatch.setenv("SNAP_NAME", "opalatex")
+    monkeypatch.setenv("SNAP_NAME", "gilzabots")
 
 
 def _leave_snap(monkeypatch):
@@ -35,9 +35,9 @@ def _leave_snap(monkeypatch):
 def test_running_in_snap_requires_both_markers(monkeypatch):
     _leave_snap(monkeypatch)
     assert _running_in_snap() is False
-    monkeypatch.setenv("SNAP", "/snap/opalatex/33")
+    monkeypatch.setenv("SNAP", "/snap/gilzabots/33")
     assert _running_in_snap() is False
-    monkeypatch.setenv("SNAP_NAME", "opalatex")
+    monkeypatch.setenv("SNAP_NAME", "gilzabots")
     assert _running_in_snap() is True
 
 
@@ -153,12 +153,12 @@ async def test_snap_keeps_its_own_ld_library_path(monkeypatch, linux_server):
     """That variable is the snap's runtime, not a frozen loader's to strip."""
     server, _responses, launched, _popen, project = linux_server
     _enter_snap(monkeypatch)
-    monkeypatch.setenv("LD_LIBRARY_PATH", "/snap/opalatex/33/lib")
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/snap/gilzabots/33/lib")
     monkeypatch.delenv("LD_LIBRARY_PATH_ORIG", raising=False)
 
     await _call_open_explorer(server, project, "report.pdf", AsyncMock())
 
-    assert launched["env"]["LD_LIBRARY_PATH"] == "/snap/opalatex/33/lib"
+    assert launched["env"]["LD_LIBRARY_PATH"] == "/snap/gilzabots/33/lib"
 
 
 @pytest.mark.asyncio

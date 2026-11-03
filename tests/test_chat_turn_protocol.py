@@ -21,12 +21,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from agenticblocks.blocks.llm.agent import AgentInput, LLMAgentBlock
 from agenticblocks.blocks.llm.memgpt_agent import MemGPTAgentBlock
-from opalatex.memgpt_runtime import (
+from gilzabots.memgpt_runtime import (
     restore_chat_orchestrator_state,
     save_chat_orchestrator_state,
     seed_chat_orchestrator_history,
 )
-from opalatex.project import ProjectData, ProjectStore
+from gilzabots.project import ProjectData, ProjectStore
 
 
 def _tool_call(call_id, name, arguments="{}"):
