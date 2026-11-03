@@ -20,6 +20,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        # macos-latest is an Apple Silicon (arm64) runner, so the macOS asset is
+        # arm64; it used to be published as "macos-x64", which install.sh then
+        # refused on Apple Silicon and which cannot run on an Intel Mac.
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
@@ -64,6 +67,7 @@ jobs:
 
       - name: Build Windows
         if: matrix.os == 'windows-latest'
+        shell: pwsh
         # The Google OAuth client is optional for branch and fork builds only:
         # the step above makes it mandatory for anything published.
         env:
@@ -118,6 +122,7 @@ jobs:
 
       - name: Package Release Assets (Windows)
         if: matrix.os == 'windows-latest'
+        shell: pwsh
         run: |
           Compress-Archive -Path dist\GilzaBots\* -DestinationPath GilzaBots-windows-x64.zip -Force
 
@@ -130,7 +135,7 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           cd dist/GilzaBots
-          zip -r ../../GilzaBots-macos-x64.zip .
+          zip -r ../../GilzaBots-macos-arm64.zip .
 
       - name: Upload Windows Asset
         if: matrix.os == 'windows-latest'
@@ -150,8 +155,8 @@ jobs:
         if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: GilzaBots-macos-x64
-          path: GilzaBots-macos-x64.zip
+          name: GilzaBots-macos-arm64
+          path: GilzaBots-macos-arm64.zip
 
   release:
     needs: build
@@ -174,6 +179,6 @@ jobs:
           files: |
             release-assets/GilzaBots-windows-x64/GilzaBots-windows-x64.zip
             release-assets/GilzaBots-linux-x64/GilzaBots-linux-x64.tar.gz
-            release-assets/GilzaBots-macos-x64/GilzaBots-macos-x64.zip
+            release-assets/GilzaBots-macos-arm64/GilzaBots-macos-arm64.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

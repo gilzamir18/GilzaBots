@@ -131,6 +131,12 @@ fi
 if [[ -f "$MONITORS_AUTOSTART" ]] && grep -Fq "$INSTALL_DIR/GilzaBots" "$MONITORS_AUTOSTART"; then
     rm -f "$MONITORS_AUTOSTART"
 fi
+# macOS: the login service is a LaunchAgent (gilzabots/monitors/service.py).
+MONITORS_PLIST="$HOME/Library/LaunchAgents/io.github.gilzamir18.gilzabots.monitors.plist"
+if [[ -f "$MONITORS_PLIST" ]] && grep -Fq "$INSTALL_DIR/GilzaBots" "$MONITORS_PLIST"; then
+    launchctl unload -w "$MONITORS_PLIST" >/dev/null 2>&1 || true
+    rm -f "$MONITORS_PLIST"
+fi
 pkill -f "^$INSTALL_DIR/GilzaBots monitors " >/dev/null 2>&1 || true
 
 # ~/.local/bin is shared by many applications. Remove our shell initialization

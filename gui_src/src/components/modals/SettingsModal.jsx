@@ -33,6 +33,9 @@ const TRANSLATE_LANGUAGES = [
 const TRANSLATE_CUSTOM = '__custom__';
 const DIRECT_INSTALL_COMMAND = 'curl -fsSL https://raw.githubusercontent.com/gilzamir18/GilzaBots/main/install.sh -o gilzabots-install.sh && bash gilzabots-install.sh';
 const FEEDBACK_ISSUE_URL = 'https://github.com/gilzamir18/GilzaBots/issues/new';
+// The short feedback form (suggestions, criticism, feature ideas). It needs no
+// GitHub account, so it is the primary channel; the issue stays for bug reports.
+const FEEDBACK_FORM_URL = 'https://forms.gle/MsfYN4Yx9Cy8QNAR6';
 
 // IDE global settings modal (theme, font size, tab size, word wrap, minimap, optional deps).
 export default function SettingsModal({
@@ -490,6 +493,12 @@ export default function SettingsModal({
     await showAlert(copied
       ? t('settingsModal.directInstallCopied')
       : t('settingsModal.directInstallCopyFailed'));
+  };
+
+  const openFeedbackForm = async () => {
+    if (!await openExternal(FEEDBACK_FORM_URL)) {
+      await showAlert(t('settingsModal.feedbackOpenFailed', { url: FEEDBACK_FORM_URL }));
+    }
   };
 
   const openFeedbackIssue = async () => {
@@ -1441,9 +1450,14 @@ export default function SettingsModal({
                 <span style={{ fontSize: '12px', lineHeight: 1.5, color: 'var(--vscode-descriptionForeground)' }}>
                   {t('settingsModal.feedbackDescription')}
                 </span>
-                <button className="vscode-button" style={{ alignSelf: 'flex-start' }} onClick={openFeedbackIssue}>
-                  {t('settingsModal.feedbackButton')}
-                </button>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                  <button className="vscode-button" onClick={openFeedbackForm}>
+                    {t('settingsModal.feedbackFormButton')}
+                  </button>
+                  <button className="vscode-button-secondary" onClick={openFeedbackIssue}>
+                    {t('settingsModal.feedbackButton')}
+                  </button>
+                </div>
                 <span style={{ fontSize: '11px', color: 'var(--vscode-descriptionForeground)' }}>
                   {t('settingsModal.feedbackPrivacy')}
                 </span>

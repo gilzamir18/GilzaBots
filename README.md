@@ -95,7 +95,9 @@ sudo snap remove gilzabots
 
 ## Feedback and bug reports
 
-Open **Settings > About > Send feedback on GitHub** inside GilzaBots. The application opens a pre-filled issue at the [GilzaBots issue tracker](https://github.com/gilzamir18/GilzaBots/issues) with version and runtime information. Nothing is submitted automatically, so review the issue and remove private information before publishing it.
+Suggestions, criticism and feature ideas are welcome in the [GilzaBots feedback form](https://forms.gle/MsfYN4Yx9Cy8QNAR6), also available inside GilzaBots under **Settings > About > Send feedback (form)**.
+
+To report a bug, use **Settings > About > Send feedback on GitHub**: the application opens a pre-filled issue at the [GilzaBots issue tracker](https://github.com/gilzamir18/GilzaBots/issues) with version and runtime information. Nothing is submitted automatically, so review the issue and remove private information before publishing it.
 
 ## Command-line interface
 

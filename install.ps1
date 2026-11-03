@@ -180,7 +180,7 @@ $desktopPath     = $wshShell.SpecialFolders("Desktop")
 $desktopShortcut = $wshShell.CreateShortcut("$desktopPath\GilzaBots.lnk")
 $desktopShortcut.TargetPath       = $exePath
 $desktopShortcut.WorkingDirectory = $exeDir
-$desktopShortcut.Description      = "GilzaBots Open-Source AI LaTeX IDE"
+$desktopShortcut.Description      = "GilzaBots: free, open-source AI agent for your projects"
 $desktopShortcut.IconLocation     = "$exePath,0"
 $desktopShortcut.Save()
 
@@ -191,7 +191,7 @@ if (-not (Test-Path $startMenuDir)) {
 $startMenuShortcut = $wshShell.CreateShortcut("$startMenuDir\GilzaBots.lnk")
 $startMenuShortcut.TargetPath       = $exePath
 $startMenuShortcut.WorkingDirectory = $exeDir
-$startMenuShortcut.Description      = "GilzaBots Open-Source AI LaTeX IDE"
+$startMenuShortcut.Description      = "GilzaBots: free, open-source AI agent for your projects"
 $startMenuShortcut.IconLocation     = "$exePath,0"
 $startMenuShortcut.Save()
 

@@ -958,7 +958,7 @@ A monitor is a stored, deterministic watcher: *what* to check (`timer`, `http`, 
 
 ## 3. Publisher and Donations
 
-GilzaBots has no marketing site. Its public surfaces are the GitHub repository (`https://github.com/gilzamir18/GilzaBots`), whose issue tracker is the contact and feedback channel (Settings > About > *Send feedback on GitHub*, the snap's `contact` field), and its GitHub Releases, from which the installers download. The OpalaTex site (`opalacoder.com`) and its `dev@opalacoder.com` address belong to the predecessor project and are not referenced.
+GilzaBots has no marketing site. Its public surfaces are the GitHub repository (`https://github.com/gilzamir18/GilzaBots`), whose issue tracker is the contact and bug-report channel (Settings > About > *Send feedback on GitHub*, the snap's `contact` field). General feedback — suggestions, criticism, feature ideas — goes to a short Google Form (`FEEDBACK_FORM_URL` in `SettingsModal.jsx`, Settings > About > *Send feedback (form)*, linked from the README), which needs no GitHub account, and its GitHub Releases, from which the installers download. The OpalaTex site (`opalacoder.com`) and its `dev@opalacoder.com` address belong to the predecessor project and are not referenced.
 
 ### 3.1 Donation Flow
 

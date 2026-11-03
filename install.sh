@@ -25,7 +25,7 @@ case "$OS_NAME" in
         TEMP_FILE="/tmp/gilzabots_release.tar.gz"
         ;;
     Darwin)
-        ASSET_NAME="GilzaBots-macos-x64.zip"
+        ASSET_NAME="GilzaBots-macos-arm64.zip"
         TEMP_FILE="/tmp/gilzabots_release.zip"
         ;;
     *)
@@ -34,11 +34,17 @@ case "$OS_NAME" in
         ;;
 esac
 
-case "$ARCH_NAME" in
-    x86_64|amd64)
+# The release carries one asset per system: x64 for Linux, and arm64 (Apple
+# Silicon) for macOS, because GitHub's macOS runner is arm64.
+case "$OS_NAME:$ARCH_NAME" in
+    Linux:x86_64|Linux:amd64|Darwin:arm64)
         ;;
-    *)
-        echo "Unsupported CPU architecture: $ARCH_NAME. This installer currently requires an x64 release asset." >&2
+    Linux:*)
+        echo "Unsupported CPU architecture: $ARCH_NAME. The Linux release is built for x64 only." >&2
+        exit 1
+        ;;
+    Darwin:*)
+        echo "Unsupported CPU architecture: $ARCH_NAME. The macOS release is built for Apple Silicon (arm64) only." >&2
         exit 1
         ;;
 esac
@@ -190,7 +196,7 @@ cat > "$DESKTOP_DIR/gilzabots.desktop" << EOF
 Version=1.0
 Type=Application
 Name=GilzaBots
-Comment=GilzaBots Open-Source AI LaTeX IDE
+Comment=GilzaBots: free, open-source AI agent for your projects
 Exec=$INSTALL_DIR/GilzaBots
 $ICON_LINE
 Terminal=false
