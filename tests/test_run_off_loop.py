@@ -10,7 +10,6 @@ following the call has run — the point it landed at before.
 """
 
 import asyncio
-import sys
 import threading
 
 import pytest
@@ -90,8 +89,7 @@ async def test_a_cancel_during_the_call_lands_at_the_next_await():
 
     assert completed == [True]
     assert log == [("after", 42)], "the code following the call runs before the cancel lands"
-    if sys.version_info >= (3, 11):
-        assert task.cancelling() == 1
+    assert task.cancelling() == 1
 
 
 @pytest.mark.asyncio

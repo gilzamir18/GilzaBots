@@ -7,7 +7,7 @@ name = "gilzabots"
 version = "0.2.33"
 description = "Autonomous coding agent with interactive planning and modular execution"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
     { name = "Gilzamir Gomes" }
@@ -24,7 +24,8 @@ dependencies = [
     "tenacity>=8.0",
     # MCP connectors (agenticblocks/tools/mcp_client.py, gilzabots/connectors/) use the
     # 2.x client API (`mcp.Client`, `mcp_types`, the OAuth client provider), verified
-    # against 2.3.0. 2.x depends on httpx2, which requires Python >= 3.11.
+    # against 2.3.0. 2.x depends on httpx2, which requires Python >= 3.11 -- the
+    # reason `requires-python` is 3.11.
     "mcp>=2.3.0",
     "python-dotenv>=1.0.0",
     "rich>=13.0.0",

@@ -231,9 +231,7 @@ def spec_from_tool(tool: Any) -> MCPToolSpec:
 
 def _root_cause(exc: BaseException) -> BaseException:
     """The first real error inside (possibly nested) exception groups."""
-    # Duck-typed: BaseExceptionGroup is builtin only from Python 3.11, and anyio
-    # raises the `exceptiongroup` backport's class on 3.10.
-    while isinstance(getattr(exc, "exceptions", None), (list, tuple)) and exc.exceptions:
+    while isinstance(exc, BaseExceptionGroup) and exc.exceptions:
         exc = exc.exceptions[0]
     return exc
 

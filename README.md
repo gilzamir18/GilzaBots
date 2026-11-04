@@ -13,7 +13,7 @@
 <p align="center">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-6d5ce8">
   <img alt="Platforms: Linux and Windows" src="https://img.shields.io/badge/platform-Linux%20%7C%20Windows-6d5ce8">
-  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-6d5ce8">
+  <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-6d5ce8">
   <img alt="Interface: English and Brazilian Portuguese" src="https://img.shields.io/badge/UI-English%20%7C%20Portugu%C3%AAs-6d5ce8">
 </p>
 
@@ -361,7 +361,7 @@ irm https://raw.githubusercontent.com/gilzamir18/GilzaBots/main/uninstall.ps1 | 
 
 ## 🛠️ Development
 
-Requirements: **Python 3.10 or newer**, **Node.js/npm** and **Git**.
+Requirements: **Python 3.11 or newer**, **Node.js/npm** and **Git**.
 
 <details open>
 <summary><b>Bash (Linux/macOS)</b></summary>
