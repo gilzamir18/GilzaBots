@@ -1852,11 +1852,6 @@
       "folder": "Pasta"
     },
     "presets": {
-      "x": {
-        "name": "X (sua conta)",
-        "description": "Entre no X e deixe o assistente ler e buscar posts, e postar e repostar em seu nome, pelo servidor MCP hospedado do X.",
-        "setup": "Clique em Conectar e entre no X pelo navegador. As regras do X continuam valendo: nada de likes ou follows automatizados, e respostas geradas por IA precisam de aprovação do X."
-      },
       "x-readonly": {
         "name": "X (somente leitura, token do app)",
         "description": "Servidor MCP hospedado do X com um bearer token só do app: apenas endpoints de leitura, nada em seu nome.",
@@ -1909,7 +1904,6 @@
         "setup": "Requer o uv (uvx) instalado: https://docs.astral.sh/uv/"
       }
     },
-    "presetUnavailable": "Indisponível neste build do GilzaBots (ele não inclui o app que este serviço exige).",
     "fieldScope": "Escopos OAuth",
     "scopePlaceholder": "vazio = o que o servidor pedir"
   }

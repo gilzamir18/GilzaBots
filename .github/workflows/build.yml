@@ -73,7 +73,6 @@ jobs:
         env:
           GILZABOTS_GDRIVE_CLIENT_ID: ${{ secrets.GILZABOTS_GDRIVE_CLIENT_ID }}
           GILZABOTS_GDRIVE_CLIENT_SECRET: ${{ secrets.GILZABOTS_GDRIVE_CLIENT_SECRET }}
-          GILZABOTS_X_CLIENT_ID: ${{ secrets.GILZABOTS_X_CLIENT_ID }}
         run: .\build_exe.ps1
 
       # PyInstaller bundles a library only if the build machine has it; a missing
@@ -102,7 +101,6 @@ jobs:
         env:
           GILZABOTS_GDRIVE_CLIENT_ID: ${{ secrets.GILZABOTS_GDRIVE_CLIENT_ID }}
           GILZABOTS_GDRIVE_CLIENT_SECRET: ${{ secrets.GILZABOTS_GDRIVE_CLIENT_SECRET }}
-          GILZABOTS_X_CLIENT_ID: ${{ secrets.GILZABOTS_X_CLIENT_ID }}
         run: |
           chmod +x build_exe.sh
           ./build_exe.sh
@@ -121,26 +119,6 @@ jobs:
             exit 1
           fi
           echo "OAuth client packaged at $found"
-
-      # The X connector signs in only through the X app a release carries
-      # (gilzabots/connectors/bundled_clients.py). Optional until the secret
-      # exists; once it does, the packaged file must be there.
-      - name: Verify the packaged app carries the X app (when configured)
-        if: startsWith(github.ref, 'refs/tags/') || github.event.inputs.tag != ''
-        shell: bash
-        env:
-          GILZABOTS_X_CLIENT_ID: ${{ secrets.GILZABOTS_X_CLIENT_ID }}
-        run: |
-          if [ -z "$GILZABOTS_X_CLIENT_ID" ]; then
-            echo "::warning::GILZABOTS_X_CLIENT_ID is not set: this release cannot connect to X."
-            exit 0
-          fi
-          found=$(find dist -name bundled_oauth_clients.json | head -1)
-          if [ -z "$found" ]; then
-            echo "::error::The packaged app has no bundled_oauth_clients.json. The X connector would ship unable to sign in."
-            exit 1
-          fi
-          echo "X app packaged at $found"
 
       - name: Package Release Assets (Windows)
         if: matrix.os == 'windows-latest'

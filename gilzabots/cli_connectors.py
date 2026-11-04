@@ -21,7 +21,7 @@ _DETAILS = (
     "Examples:\n"
     "  /connectors                                   list connectors and their state\n"
     "  /connectors presets                           the pre-configured servers\n"
-    "  /connectors add-preset x                      sign in to X in the browser\n"
+    "  /connectors add-preset x-docs                 X's developer documentation\n"
     "  /connectors add-preset github --bearer <token>\n"
     "  /connectors add-preset filesystem --arg folder=~/notes\n"
     "  /connectors add-preset notion                 then: /connectors connect notion\n"
@@ -113,12 +113,9 @@ def _parse_add_preset(args: list[str]) -> tuple[dict, str]:
                          "[--arg name=value]  (see /connectors presets)")
     key, rest = args[0], args[1:]
     try:
-        preset = presets.get_preset(key)
+        presets.get_preset(key)
     except KeyError:
         raise ValueError(f"unknown preset '{key}'. See /connectors presets.") from None
-    if not preset.available():
-        raise ValueError(f"preset '{key}' is not available in this build: it needs the app GilzaBots ships "
-                         "for that service, and this build does not include it.")
     values: dict = {}
     connector_id = name = ""
     for i in range(0, len(rest), 2):
@@ -152,8 +149,6 @@ def _print_presets() -> None:
             else f"--{item['kind']} {item['name']}=<value>" for item in preset["inputs"]
         )
         missing = "" if preset["requirement_found"] else f"  (needs {preset['requires']}, not found)"
-        if not preset["available"]:
-            missing += "  (not available in this build)"
         T.info(f"{preset['key']:<12} {_escape(preset['name'])} — {_escape(preset['description'])}{missing}")
         if needs:
             T.info(f"{'':<12} add with: /connectors add-preset {preset['key']} {_escape(needs)}")

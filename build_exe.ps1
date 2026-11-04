@@ -73,16 +73,6 @@ if ($env:GILZABOTS_GDRIVE_CLIENT_ID) {
     Write-Host "GILZABOTS_GDRIVE_CLIENT_ID nao definido - build sem cliente OAuth embutido."
 }
 
-# Com GILZABOTS_X_CLIENT_ID definido, o build embute o app do GilzaBots no X e o
-# conector do X passa a conectar so com o login do usuario.
-$connectorClientArgs = @()
-if ($env:GILZABOTS_X_CLIENT_ID) {
-    python scripts/embed_connector_clients.py --from-env
-    $connectorClientArgs = @("--add-data=gilzabots/connectors/bundled_oauth_clients.json;gilzabots/connectors")
-} else {
-    Write-Host "GILZABOTS_X_CLIENT_ID nao definido - build sem o app do X embutido."
-}
-
 Write-Host "`n[4/4] Empacotando com PyInstaller..."
 # Find winpty-agent.exe dynamically to avoid hardcoding .venv path
 $winptyAgentPath = python -c "import winpty, os; print(os.path.join(os.path.dirname(winpty.__file__), 'winpty-agent.exe'))"
@@ -97,7 +87,6 @@ $winptyAgentPath = python -c "import winpty, os; print(os.path.join(os.path.dirn
 # Multimedia and more. See PROJECT_DESIGN.md §2.16.1.
 pyinstaller --name "GilzaBots" `
             @googleClientArgs `
-            @connectorClientArgs `
             --windowed `
             --icon="AppIcons/GilzaBots.ico" `
             --add-data="gilzabots/gui;gilzabots/gui" `

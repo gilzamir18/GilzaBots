@@ -10,11 +10,9 @@ Every endpoint here was checked against the live service when it was added
 `agenticblocks.tools.mcp_client.MCPClientBridge`, the OAuth ones by reading their
 protected-resource and authorization-server metadata. ``auth="oauth"`` is only
 used where the authorization server supports dynamic client registration or
-client metadata documents, which GilzaBots can use without a registered app, or
-where the build ships GilzaBots' own app for the service (``bundled_client``):
-X supports neither, so its preset signs in through the X app a release carries
-(bundled_clients.py) and the user only logs in to X. GitHub supports neither
-either and takes a personal access token.
+client metadata documents, which GilzaBots can use without a registered app.
+Services that support neither take a token (GitHub, X read-only). There is no
+preset for acting on a user's X account: see PROJECT_DESIGN 2.25 for why.
 
 The texts are English defaults; the desktop translates them by preset key
 (``connectors.presets.<key>`` in the locale files).
@@ -44,9 +42,6 @@ class Preset:
     docs_url: str = ""
     #: The executable a stdio preset needs on PATH (``npx``, ``uvx``).
     requires: str = ""
-    #: The OAuth client this build ships for the service (bundled_clients.py), for
-    #: a service that accepts no other way in. Without it the preset is unavailable.
-    bundled_client: str = ""
 
     def to_dict(self) -> dict:
         data = {
@@ -61,40 +56,10 @@ class Preset:
             "requires": self.requires,
         }
         data["requirement_found"] = bool(shutil.which(self.requires)) if self.requires else True
-        data["available"] = self.available()
         return data
-
-    def available(self) -> bool:
-        if not self.bundled_client:
-            return True
-        from .bundled_clients import bundled_client_id
-
-        return bool(bundled_client_id(self.bundled_client))
 
 
 PRESETS: tuple[Preset, ...] = (
-    Preset(
-        key="x",
-        name="X (your account)",
-        category="social",
-        description=(
-            "Sign in to X and let the assistant read and search posts, and post and repost as you, "
-            "through X's hosted MCP server."
-        ),
-        connector={
-            "id": "x", "name": "X", "transport": "http", "url": "https://api.x.com/mcp",
-            "auth": "oauth", "approval": "always",
-            # X advertises every scope it has, billing and direct messages included;
-            # request only what reading and posting need (offline.access: refresh token).
-            "oauth_scope": "tweet.read tweet.write users.read offline.access",
-        },
-        setup=(
-            "Click Connect and sign in to X in your browser. X's rules still apply: no automated likes "
-            "or follows, and AI-generated replies need X's approval."
-        ),
-        docs_url="https://docs.x.com/tools/mcp",
-        bundled_client="x",
-    ),
     Preset(
         key="x-readonly",
         name="X (read-only, app token)",

@@ -1851,7 +1851,6 @@
     "presetArg": {
       "folder": "Folder"
     },
-    "presetUnavailable": "Not available in this build of GilzaBots (it does not include the app this service requires).",
     "fieldScope": "OAuth scopes",
     "scopePlaceholder": "empty = what the server asks for"
   }

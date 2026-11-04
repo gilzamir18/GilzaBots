@@ -720,23 +720,31 @@ Um **conector** liga o GilzaBots a um serviço externo por meio de um **servidor
 Context Protocol). As ferramentas que o servidor oferece — publicar um post, ler issues,
 buscar notas — passam a ser ferramentas que o assistente pode usar no chat.
 
-**Adicionando.** Abra **Conectores** (ícone de cabo na barra de atividades) → **Adicionar
-conector**. O **catálogo** no topo tem entradas prontas — X (sua conta, somente leitura ou a
-documentação de desenvolvedor), GitHub, Notion, Linear, Sentry, Hugging Face, DeepWiki, Context7,
-uma pasta local e busca de páginas web: escolha uma, preencha o que ela pede (um token, o client
-id do seu app, uma pasta) e salve. Ou configure qualquer outro servidor manualmente:
+**Pelo catálogo.** Abra **Conectores** (ícone de cabo na barra de atividades) → **Adicionar
+conector**. O **catálogo** no topo tem entradas prontas: escolha uma, preencha o que ela pede e
+salve.
+
+- **Notion, Linear, Sentry** — OAuth: o navegador abre para você entrar assim que salvar.
+- **GitHub, X (somente leitura)** — pedem um token (um personal access token do GitHub, ou o
+  bearer token do seu app no X).
+- **Documentação do X, Hugging Face, DeepWiki, Context7** — abertos, nada para preencher.
+- **Arquivos (uma pasta local), Fetch** — rodam no seu computador; precisam do Node.js (`npx`)
+  ou do uv (`uvx`).
+
+**Manualmente**, para qualquer outro servidor:
 
 - **URL remota ou local** — o endereço do servidor (`https://…/mcp`; `http://` simples só para
   `localhost`). Escolha a autenticação que o serviço usa: **OAuth** (você entra pelo
-  navegador, como ao autorizar o Google Drive), um **token bearer**, ou nenhuma.
+  navegador, como ao autorizar o Google Drive), um **token bearer**, ou nenhuma. Com OAuth, o
+  GilzaBots se registra sozinho quando o serviço permite; se o serviço exigir um app
+  registrado por você, informe o **client id** desse app e, se quiser, os **escopos** a pedir.
 - **Comando local** — um servidor que o GilzaBots inicia no seu computador (por exemplo `npx`
   com seus argumentos, um por linha). Ele roda com as suas permissões: use apenas comandos
   em que você confia.
 
-Depois clique em **Conectar**. No OAuth, o navegador abre a página de consentimento do
-serviço; depois que você permite o acesso, o conector aparece como *conectado* e lista as
-ferramentas. Em **Ferramentas que o agente pode usar** você pode manter só as que quiser — um
-servidor pode oferecer centenas.
+Depois clique em **Conectar** (conectores OAuth conectam ao salvar). O conector aparece como
+*conectado* e lista as ferramentas. Em **Ferramentas que o agente pode usar** você pode manter
+só as que quiser — um servidor pode oferecer centenas.
 
 **Aprovação.** Por padrão (**Sempre perguntar**), cada chamada mostra um pedido de aprovação
 com os argumentos exatos — o texto de um post, o destinatário de uma mensagem — mesmo no modo
@@ -744,12 +752,27 @@ auto. Com **Seguir o modo do chat**, as chamadas se comportam como as ferramenta
 (auto executa, edit pergunta, plan bloqueia). Turnos de monitores em segundo plano nunca
 podem usar um conector em *Sempre perguntar*.
 
+### Sua conta do X
+
+O X só aceita login por meio de um app registrado nele e cobra o uso da API do dono do app,
+por isso o GilzaBots não traz um: você usa o seu (e paga o seu próprio uso).
+
+1. Em **developer.x.com**, crie um projeto e um app, e defina um limite de gastos.
+2. Em **User authentication settings** do app: OAuth 2.0 ativado, tipo **Native App**,
+   permissões **Read and write**, e estas três Callback URLs:
+   `http://127.0.0.1:47821/oauth/callback`, `http://127.0.0.1:47822/oauth/callback`,
+   `http://127.0.0.1:47823/oauth/callback`.
+3. Copie o **OAuth 2.0 Client ID** (um Native App não tem secret).
+4. No GilzaBots, **Adicionar conector** manualmente: URL `https://api.x.com/mcp`, autenticação
+   **OAuth**, o seu **client id**, escopos `tweet.read tweet.write users.read offline.access`,
+   aprovação **Sempre perguntar**. Salve e entre no X pelo navegador.
+
+As regras do próprio X continuam valendo: nada de likes ou follows automatizados, e respostas
+geradas por IA precisam de aprovação do X; usar um servidor MCP não muda isso. Para só ler, a
+entrada **X (somente leitura)** do catálogo usa o bearer token do seu app.
+
 **Bom saber.**
 
-- **X**: escolha *X (sua conta)* no catálogo, clique em Salvar e entre no X pelo navegador —
-  nada para digitar. As regras do próprio X continuam valendo: nada de likes ou follows
-  automatizados, e respostas geradas por IA precisam de aprovação do X; usar um servidor MCP
-  não muda isso.
 - Descrições e resultados das ferramentas vêm do servidor; o assistente os trata como dados.
 - Se um conector disser que precisa de autorização, abra Conectores e clique em **Conectar**
   de novo. **Sair** apaga as credenciais salvas.

@@ -46,6 +46,7 @@
 - [Quick start](#-quick-start)
 - [The workspace](#%EF%B8%8F-the-workspace)
 - [Monitors](#-monitors)
+- [Connectors (MCP)](#-connectors-mcp)
 - [Command-line interface](#%EF%B8%8F-command-line-interface)
 - [Uninstall](#%EF%B8%8F-uninstall)
 - [Feedback and bug reports](#-feedback-and-bug-reports)
@@ -262,6 +263,45 @@ From a terminal, `gilzabots monitors` (or `/monitors` inside the CLI) lists and 
 
 ---
 
+## 🔌 Connectors (MCP)
+
+Connectors let the assistant use external services through [MCP](https://modelcontextprotocol.io) (Model Context Protocol) servers. Whatever tools a server offers become tools of the chat agent.
+
+**Add one:** open **Connectors** (cable icon in the activity bar) → **Add connector**.
+
+- **From the catalog**: pick an entry and fill in what it asks for. OAuth services (Notion, Linear, Sentry) open your browser to sign in as soon as you save. Services that need a token (GitHub, X read-only) ask for it. Open ones (X developer docs, Hugging Face, DeepWiki, Context7) need nothing. Local ones (a folder of your files, web fetching) need Node.js or uv.
+- **By hand**, for any other server:
+  - **Remote or local URL**: the server's `https://…/mcp` address (plain `http://` only for `localhost`), with OAuth, a bearer token or no authentication. For OAuth, GilzaBots registers itself automatically when the server allows it. Otherwise enter the client id of an app you registered with the service, and optionally the scopes to request.
+  - **Local command (stdio)**: the command that starts the server and its arguments, one per line, plus any environment variables it needs.
+
+Then click **Connect** and choose, under **Tools the agent may use**, which of the server's tools the assistant may hold.
+
+**Approval.** By default every call shows an approval prompt with its exact arguments, even in auto mode (**Always ask**). **Follow the chat mode** makes calls behave like the built-in tools.
+
+**Your X account.** X only accepts sign-in through an app you register with it, and bills API usage to that app's owner, so GilzaBots does not ship one. To let the assistant read and post on your account:
+
+1. At [developer.x.com](https://developer.x.com), create a project and an app, and set a spending limit (usage is billed to you).
+2. Under *User authentication settings*, configure:
+   - OAuth 2.0 on;
+   - type **Native App**;
+   - permissions **Read and write**;
+   - callback URLs `http://127.0.0.1:47821/oauth/callback`, `http://127.0.0.1:47822/oauth/callback` and `http://127.0.0.1:47823/oauth/callback`.
+3. Copy the app's **OAuth 2.0 Client ID**. A Native App has no secret.
+4. In GilzaBots, add a connector by hand:
+   - URL `https://api.x.com/mcp`;
+   - authentication **OAuth**;
+   - your client id;
+   - scopes `tweet.read tweet.write users.read offline.access`;
+   - approval **Always ask**.
+
+   Save, then sign in to X in the browser.
+
+X's own rules still apply: no automated likes or follows, and AI-generated replies need X's approval. For reading only, the **X (read-only)** catalog entry takes your app's bearer token instead.
+
+From a terminal, `/connectors` inside the CLI does the same (`/help /connectors`).
+
+---
+
 ## ⌨️ Command-line interface
 
 The same agent, projects and skills, in a terminal instead of a window.
@@ -439,6 +479,7 @@ Authentication is handled by the local SSH client, preferably with an SSH key or
 ## 🔐 Security and credentials
 
 - API keys configured in the application are local user data and must not be committed.
+- Connector secrets (tokens, header values, environment variables) and OAuth credentials stay on your machine in owner-only files; the Connectors panel never shows a stored secret again.
 - Environment files, private keys, credentials, databases, logs, build outputs and local runtime data are excluded by `.gitignore`.
 - Report a suspected leaked credential privately to the maintainers. Revoke and rotate any credential that may have entered Git history: deleting it only from the latest commit is not enough.
 

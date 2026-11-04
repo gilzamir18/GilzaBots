@@ -297,9 +297,8 @@ export default function ConnectorsModal({ onClose }) {
               <div key={category} style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
                 <span style={{ fontSize: '11px', opacity: 0.7, minWidth: 90 }}>{t(`connectors.categories.${category}`, category)}</span>
                 {items.map(preset => (
-                  <button key={preset.key} type="button" disabled={!preset.available}
-                    title={preset.available ? presetText(preset, 'description') : t('connectors.presetUnavailable')}
-                    style={{ ...(form.presetKey === preset.key ? primaryButtonStyle : buttonStyle), ...(preset.available ? {} : { opacity: 0.5, cursor: 'not-allowed' }) }}
+                  <button key={preset.key} type="button" title={presetText(preset, 'description')}
+                    style={form.presetKey === preset.key ? primaryButtonStyle : buttonStyle}
                     onClick={() => { setError(''); setForm(formFromPreset(preset)); }}>
                     {presetText(preset, 'name')}
                   </button>

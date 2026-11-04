@@ -697,32 +697,55 @@ A **connector** links GilzaBots to an external service through an **MCP server**
 Context Protocol). Whatever tools the server offers — publishing a post, reading issues,
 searching notes — become tools the assistant can use in chat.
 
-**Adding one.** Open **Connectors** (cable icon in the activity bar) → **Add connector**. The
-**catalog** at the top has ready-made entries — X (your account, read-only, or the developer
-docs), GitHub, Notion, Linear, Sentry, Hugging Face, DeepWiki, Context7, a local folder and web
-fetching: pick one, fill in what it asks for (a token, your app's client id, a folder) and save.
-Or configure any other server by hand:
+**From the catalog.** Open **Connectors** (cable icon in the activity bar) → **Add connector**.
+The **catalog** at the top has ready-made entries: pick one, fill in what it asks for and save.
+
+- **Notion, Linear, Sentry** — OAuth: your browser opens to sign in as soon as you save.
+- **GitHub, X (read-only)** — ask for a token (a GitHub personal access token, or your X app's
+  bearer token).
+- **X developer docs, Hugging Face, DeepWiki, Context7** — open, nothing to fill in.
+- **Files (a local folder), Fetch** — run on your computer; need Node.js (`npx`) or uv (`uvx`).
+
+**By hand**, for any other server:
 
 - **Remote or local URL** — the server's address (`https://…/mcp`; plain `http://` only for
   `localhost`). Choose the authentication the service uses: **OAuth** (you sign in through
-  your browser, like authorizing Google Drive), a **bearer token**, or none.
+  your browser, like authorizing Google Drive), a **bearer token**, or none. With OAuth,
+  GilzaBots registers itself when the service allows it; if the service requires an app you
+  registered with it, enter that app's **client id**, and optionally the **scopes** to request.
 - **Local command** — a server GilzaBots starts on your computer (for example `npx` with
   its arguments, one per line). It runs with your permissions: only use commands you trust.
 
-Then click **Connect**. For OAuth, your browser opens the service's consent page; after you
-allow access, the connector shows *connected* and lists its tools. Under **Tools the
-agent may use** you can keep only the ones you want — a server may offer hundreds.
+Then click **Connect** (OAuth connectors connect on save). The connector shows *connected* and
+lists its tools. Under **Tools the agent may use** you can keep only the ones you want — a
+server may offer hundreds.
 
 **Approval.** By default (**Always ask**) every call shows an approval prompt with the
 exact arguments — the text of a post, the recipient of a message — even in auto mode. With
 **Follow the chat mode**, calls behave like the built-in tools (auto runs, edit asks, plan
 blocks). Background monitor turns can never use an *Always ask* connector.
 
+### Your X account
+
+X only accepts sign-in through an app you register with it, and bills API usage to the app's
+owner, so GilzaBots does not ship one: you use your own (and pay your own usage).
+
+1. At **developer.x.com**, create a project and an app, and set a spending limit.
+2. In the app's **User authentication settings**: OAuth 2.0 on, type **Native App**,
+   permissions **Read and write**, and these three callback URLs:
+   `http://127.0.0.1:47821/oauth/callback`, `http://127.0.0.1:47822/oauth/callback`,
+   `http://127.0.0.1:47823/oauth/callback`.
+3. Copy the **OAuth 2.0 Client ID** (a Native App has no secret).
+4. In GilzaBots, **Add connector** by hand: URL `https://api.x.com/mcp`, authentication
+   **OAuth**, your **client id**, scopes `tweet.read tweet.write users.read offline.access`,
+   approval **Always ask**. Save, and sign in to X in your browser.
+
+X's own rules still apply: no automated likes or follows, and AI-generated replies need X's
+approval; using an MCP server does not change that. To only read, the **X (read-only)**
+catalog entry takes your app's bearer token instead.
+
 **Good to know.**
 
-- **X**: pick *X (your account)* in the catalog, click Save and log in to X in your browser —
-  nothing to type. X's own rules still apply: no automated likes or follows, and AI-generated
-  replies need X's approval; using an MCP server does not change that.
 - Tool descriptions and results come from the server; the assistant treats them as data.
 - If a connector says it needs authorization, open Connectors and click **Connect** again.
   **Sign out** deletes the stored credentials.
