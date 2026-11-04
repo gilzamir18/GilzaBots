@@ -746,10 +746,10 @@ podem usar um conector em *Sempre perguntar*.
 
 **Bom saber.**
 
-- As regras do próprio serviço continuam valendo. O X (Twitter), por exemplo, proíbe likes e
-  follows automatizados e exige aprovação dele para respostas geradas por IA; usar um
-  servidor MCP não muda isso. Cada usuário precisa do próprio acesso de desenvolvedor onde o
-  serviço exigir.
+- **X**: escolha *X (sua conta)* no catálogo, clique em Salvar e entre no X pelo navegador —
+  nada para digitar. As regras do próprio X continuam valendo: nada de likes ou follows
+  automatizados, e respostas geradas por IA precisam de aprovação do X; usar um servidor MCP
+  não muda isso.
 - Descrições e resultados das ferramentas vêm do servidor; o assistente os trata como dados.
 - Se um conector disser que precisa de autorização, abra Conectores e clique em **Conectar**
   de novo. **Sair** apaga as credenciais salvas.

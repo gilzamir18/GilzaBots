@@ -219,6 +219,38 @@ async def test_oauth_connect_refresh_and_reauthorization(protected_server, monke
 
 
 @pytest.mark.asyncio
+async def test_a_shipped_app_signs_in_without_registration_and_with_narrow_scopes(protected_server, monkeypatch):
+    """The X path: a pre-registered public client supplied by the build, PKCE, chosen scopes."""
+    from mcp.shared.auth import OAuthClientInformationFull
+
+    url, provider = protected_server
+    provider.clients["shipped-app"] = OAuthClientInformationFull(
+        client_id="shipped-app",
+        redirect_uris=[oauth.redirect_uri(p) for p in oauth.LOOPBACK_PORTS],
+        grant_types=["authorization_code", "refresh_token"],
+        response_types=["code"],
+        token_endpoint_auth_method="none",
+        scope="tweet.read tweet.write users.read offline.access",
+    )
+    registrations_before = set(provider.clients)
+    monkeypatch.setenv("GILZABOTS_X_CLIENT_ID", "shipped-app")
+    opened = []
+    monkeypatch.setattr(oauth, "open_in_browser", _consenting_browser(opened))
+    # The X preset's settings, pointed at the test server.
+    store.create_connector({"id": "x", "name": "X", "url": url, "auth": "oauth", "preset": "x",
+                            "oauth_scope": "tweet.read users.read offline.access"})
+    manager = get_manager()
+    specs = await manager.connect("x", interactive=True)
+    assert [s.name for s in specs] == ["whoami"]
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(opened[0]).query)
+    assert query["client_id"] == ["shipped-app"]
+    assert query["scope"] == ["tweet.read users.read offline.access"]
+    assert set(provider.clients) == registrations_before  # nothing was registered
+    assert (await manager.call_tool("x", "whoami", {})).content == ["authorized caller"]
+    await manager.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_a_refused_consent_is_reported(protected_server, monkeypatch):
     url, _provider = protected_server
 

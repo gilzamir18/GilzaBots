@@ -107,7 +107,11 @@ packages = ["gilzabots", "agenticblocks"]
 # Cloud console. `artifacts` is the exception list for exactly this: generated
 # files that must be packaged. A missing file simply does not match, so a
 # checkout without credentials still builds.
-artifacts = ["gilzabots/cloud/providers/bundled_google_client.json"]
+artifacts = [
+    "gilzabots/cloud/providers/bundled_google_client.json",
+    # The X app of the MCP connectors (scripts/embed_connector_clients.py), same reason.
+    "gilzabots/connectors/bundled_oauth_clients.json",
+]
 
 [tool.hatch.build.targets.wheel.force-include]
 "config.yaml" = "gilzabots/config.yaml"

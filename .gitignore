@@ -159,3 +159,5 @@ venv.bak/
 
 # --- OAuth client injected at build time (see scripts/embed_google_client.py) ---
 /gilzabots/cloud/providers/bundled_google_client.json
+# --- MCP connector OAuth clients injected at build time (scripts/embed_connector_clients.py) ---
+/gilzabots/connectors/bundled_oauth_clients.json

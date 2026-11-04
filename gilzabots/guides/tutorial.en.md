@@ -720,9 +720,9 @@ blocks). Background monitor turns can never use an *Always ask* connector.
 
 **Good to know.**
 
-- The service's own rules still apply. X (Twitter), for example, forbids automated likes
-  and follows and requires its approval for AI-generated replies; using an MCP server does
-  not change that. Each user needs their own developer access where the service requires it.
+- **X**: pick *X (your account)* in the catalog, click Save and log in to X in your browser —
+  nothing to type. X's own rules still apply: no automated likes or follows, and AI-generated
+  replies need X's approval; using an MCP server does not change that.
 - Tool descriptions and results come from the server; the assistant treats them as data.
 - If a connector says it needs authorization, open Connectors and click **Connect** again.
   **Sign out** deletes the stored credentials.

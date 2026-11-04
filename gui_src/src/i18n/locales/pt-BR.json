@@ -1854,8 +1854,8 @@
     "presets": {
       "x": {
         "name": "X (sua conta)",
-        "description": "Servidor MCP hospedado do X (api.x.com/mcp) com a sua conta: ler e buscar posts, postar e repostar em seu nome. Roda pela ponte oficial xurl do X.",
-        "setup": "Crie um app no X Developer Console com OAuth 2.0 ativado, registre a URI de redirecionamento http://localhost:8080/callback e copie aqui o client id e o secret. Na primeira conexão o xurl abre o navegador para você entrar no X e depois guarda o token. O uso da API é cobrado na sua conta de desenvolvedor, e as regras de automação do X valem: nada de likes ou follows automatizados, e respostas geradas por IA precisam de aprovação do X. Requer Node.js (npx)."
+        "description": "Entre no X e deixe o assistente ler e buscar posts, e postar e repostar em seu nome, pelo servidor MCP hospedado do X.",
+        "setup": "Clique em Conectar e entre no X pelo navegador. As regras do X continuam valendo: nada de likes ou follows automatizados, e respostas geradas por IA precisam de aprovação do X."
       },
       "x-readonly": {
         "name": "X (somente leitura, token do app)",
@@ -1908,6 +1908,9 @@
         "description": "Buscar uma página web e convertê-la em Markdown.",
         "setup": "Requer o uv (uvx) instalado: https://docs.astral.sh/uv/"
       }
-    }
+    },
+    "presetUnavailable": "Indisponível neste build do GilzaBots (ele não inclui o app que este serviço exige).",
+    "fieldScope": "Escopos OAuth",
+    "scopePlaceholder": "vazio = o que o servidor pedir"
   }
 }

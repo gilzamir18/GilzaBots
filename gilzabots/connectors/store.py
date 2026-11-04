@@ -38,6 +38,8 @@ APPROVAL_POLICIES = ("always", "mode")
 #: function-calling APIs cap names at 64 characters.
 CONNECTOR_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,23}$")
 _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+# RFC 6749 §3.3 scope-token characters.
+_SCOPE_TOKEN_RE = re.compile(r"^[\x21\x23-\x5B\x5D-\x7E]+$")
 _HEADER_NAME_RE = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]+$")
 _MAX_NAME = 80
 DEFAULT_CONNECT_TIMEOUT = 60
@@ -66,6 +68,10 @@ class Connector:
     #: documents. Empty: GilzaBots registers itself.
     oauth_client_id: str = ""
     oauth_client_secret: str = ""
+    #: Space-separated scopes to request instead of everything the server offers
+    #: (an authorization server may advertise far more than the agent needs: X
+    #: offers billing and direct messages). Empty: the server's own selection.
+    oauth_scope: str = ""
     command: str = ""
     args: list[str] = field(default_factory=list)
     env: dict[str, str] = field(default_factory=dict)
@@ -73,7 +79,7 @@ class Connector:
     enabled: bool = True
     approval: str = "always"
     #: Seconds to wait for the server to start and answer the handshake. A bridge
-    #: that logs the user in during startup (X's xurl) needs minutes.
+    #: that logs the user in during startup needs minutes.
     connect_timeout: int = DEFAULT_CONNECT_TIMEOUT
     #: ``None``: every tool the server lists. A list: only those (remote names).
     enabled_tools: list[str] | None = None
@@ -82,6 +88,9 @@ class Connector:
     tools: list[dict] = field(default_factory=list)
     tools_refreshed_at: float | None = None
     created_at: float = 0.0
+    #: The catalog entry this connector was created from (`presets.py`), if any.
+    #: A preset may supply the OAuth client GilzaBots ships for its service.
+    preset: str = ""
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -94,7 +103,7 @@ class Connector:
     def endpoint_signature(self) -> tuple:
         """What identifies the server; changing it invalidates credentials and the catalog."""
         return (self.transport, self.url, self.command, tuple(self.args), self.auth,
-                self.oauth_client_id)
+                self.oauth_client_id, self.oauth_scope)
 
 
 def connectors_path() -> str:
@@ -179,6 +188,12 @@ def validate(connector: Connector) -> None:
         )
     if connector.auth == "bearer" and not connector.bearer_token:
         raise ConnectorError("Bearer authentication needs a token.")
+    if connector.oauth_scope:
+        if connector.auth != "oauth":
+            raise ConnectorError("OAuth scopes only apply to OAuth authentication.")
+        for token in connector.oauth_scope.split():
+            if not _SCOPE_TOKEN_RE.match(token):
+                raise ConnectorError(f"'{token}' is not a valid OAuth scope.")
     if connector.auth != "oauth" and (connector.oauth_client_id or connector.oauth_client_secret):
         raise ConnectorError("An OAuth client id only applies to OAuth authentication.")
     if connector.oauth_client_secret and not connector.oauth_client_id:
@@ -267,7 +282,7 @@ def _string_list(value: Any, label: str) -> list[str]:
 
 
 def _apply_fields(connector: Connector, data: dict) -> Connector:
-    for key in ("name", "transport", "url", "auth", "command", "cwd", "approval", "oauth_client_id"):
+    for key in ("name", "transport", "url", "auth", "command", "cwd", "approval", "oauth_client_id", "preset"):
         if key in data and data[key] is not None:
             setattr(connector, key, str(data[key]).strip())
     if "enabled" in data:
@@ -287,6 +302,8 @@ def _apply_fields(connector: Connector, data: dict) -> Connector:
         connector.bearer_token = str(data["bearer_token"]).strip()
     if data.get("clear_bearer_token"):
         connector.bearer_token = ""
+    if "oauth_scope" in data and data["oauth_scope"] is not None:
+        connector.oauth_scope = " ".join(str(data["oauth_scope"]).split())
     if data.get("oauth_client_secret"):
         connector.oauth_client_secret = str(data["oauth_client_secret"]).strip()
     if data.get("clear_oauth_client_secret"):
@@ -301,6 +318,7 @@ def _apply_fields(connector: Connector, data: dict) -> Connector:
     if connector.auth != "oauth":
         connector.oauth_client_id = ""
         connector.oauth_client_secret = ""
+        connector.oauth_scope = ""
     return connector
 
 

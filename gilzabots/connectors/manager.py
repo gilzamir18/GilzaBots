@@ -166,7 +166,8 @@ class ConnectionManager:
         connector = store.get_connector(connector_id)
         async with self._lock(connector_id):
             await self._close(connector_id)
-            flow = AuthorizationFlow(interactive=interactive and connector.auth == "oauth")
+            flow = AuthorizationFlow(interactive=interactive and connector.auth == "oauth",
+                                     scope=connector.oauth_scope)
             self._set(connector_id, status="connecting", error="", needs_authorization=False)
             try:
                 flow.prepare()

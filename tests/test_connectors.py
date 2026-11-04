@@ -451,7 +451,8 @@ def _dummy_values(preset):
     return values
 
 
-def test_every_preset_becomes_a_valid_connector(tmp_path):
+def test_every_preset_becomes_a_valid_connector(tmp_path, monkeypatch):
+    monkeypatch.setenv("GILZABOTS_X_CLIENT_ID", "x-app-id")
     from gilzabots.connectors import presets
 
     keys = [p.key for p in presets.PRESETS]
@@ -470,23 +471,89 @@ def test_every_preset_becomes_a_valid_connector(tmp_path):
 def test_missing_preset_inputs_are_named():
     from gilzabots.connectors import presets
 
-    assert presets.missing_inputs("x", {"CLIENT_ID": "a"}) == ["CLIENT_SECRET"]
+    assert presets.missing_inputs("x", {}) == []  # the user types nothing for X
     assert presets.missing_inputs("github", {}) == ["bearer"]
     assert presets.missing_inputs("notion", {}) == []
     data = presets.connector_from_preset("filesystem", {"folder": "~/notes"}, connector_id="notes")
     assert data["id"] == "notes" and data["args"][-1] == "~/notes"
 
 
-def test_the_x_preset_matches_xs_documented_bridge():
-    """docs.x.com/tools/mcp: npx -y @xdevplatform/xurl mcp https://api.x.com/mcp, CLIENT_ID/SECRET, >= 300 s."""
+def test_the_x_preset_signs_in_with_oauth_and_asks_the_user_for_nothing():
     from gilzabots.connectors import presets
 
     x = presets.get_preset("x")
-    assert x.connector["command"] == "npx"
-    assert x.connector["args"] == ["-y", "@xdevplatform/xurl", "mcp", "https://api.x.com/mcp"]
-    assert [i["name"] for i in x.inputs] == ["CLIENT_ID", "CLIENT_SECRET"]
-    assert x.connector["connect_timeout"] >= 300
-    assert x.connector["approval"] == "always"
+    assert x.connector["transport"] == "http" and x.connector["url"] == "https://api.x.com/mcp"
+    assert x.connector["auth"] == "oauth" and x.inputs == ()
+    assert x.bundled_client == "x" and x.connector["approval"] == "always"
+    # X advertises billing, DMs and blocks; only reading and posting are requested.
+    assert set(x.connector["oauth_scope"].split()) == {"tweet.read", "tweet.write", "users.read", "offline.access"}
+
+
+def test_the_x_preset_needs_the_shipped_app(monkeypatch):
+    from gilzabots.connectors import bundled_clients, presets
+
+    monkeypatch.delenv("GILZABOTS_X_CLIENT_ID", raising=False)
+    monkeypatch.setattr(bundled_clients, "bundled_clients_path", lambda: "/nonexistent/bundled.json")
+    assert not presets.get_preset("x").available()
+    monkeypatch.setenv("GILZABOTS_X_CLIENT_ID", "x-app-id")
+    assert presets.get_preset("x").available()
+    assert bundled_clients.bundled_client_id("x") == "x-app-id"
+
+
+def test_the_shipped_client_file_is_read(tmp_path, monkeypatch):
+    from gilzabots.connectors import bundled_clients
+
+    path = tmp_path / "bundled.json"
+    path.write_text(json.dumps({"x": {"client_id": "from-file"}}), encoding="utf-8")
+    monkeypatch.delenv("GILZABOTS_X_CLIENT_ID", raising=False)
+    monkeypatch.setattr(bundled_clients, "bundled_clients_path", lambda: str(path))
+    assert bundled_clients.bundled_client_id("x") == "from-file"
+    monkeypatch.setenv("GILZABOTS_X_CLIENT_ID", "from-env")
+    assert bundled_clients.bundled_client_id("x") == "from-env"
+
+
+def test_embed_script_writes_the_file_the_app_reads(tmp_path, monkeypatch):
+    import importlib.util
+
+    from gilzabots.connectors import bundled_clients
+
+    spec = importlib.util.spec_from_file_location("embed", ROOT / "scripts" / "embed_connector_clients.py")
+    embed = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(embed)
+    target = tmp_path / "bundled_oauth_clients.json"
+    monkeypatch.setattr(embed, "TARGET", str(target))
+    monkeypatch.setattr(bundled_clients, "bundled_clients_path", lambda: str(target))
+    monkeypatch.delenv("GILZABOTS_X_CLIENT_ID", raising=False)
+    assert embed.main([]) == 1
+    assert embed.main(["--x-client-id", "abc"]) == 0
+    assert bundled_clients.bundled_client_id("x") == "abc"
+    assert embed.main(["--clear"]) == 0 and not target.exists()
+
+
+def test_without_the_shipped_app_x_fails_with_a_reason(monkeypatch):
+    from gilzabots.connectors import bundled_clients
+    from gilzabots.connectors.oauth import AuthorizationFailed, AuthorizationFlow, build_provider
+
+    monkeypatch.delenv("GILZABOTS_X_CLIENT_ID", raising=False)
+    monkeypatch.setattr(bundled_clients, "bundled_clients_path", lambda: "/nonexistent/bundled.json")
+    connector = store.Connector(id="x", name="X", url="https://api.x.com/mcp", auth="oauth", preset="x")
+    with pytest.raises(AuthorizationFailed, match="does not include its app"):
+        build_provider(connector, AuthorizationFlow(interactive=False))
+
+
+def test_the_requested_scope_replaces_the_advertised_one():
+    from urllib.parse import parse_qs, urlsplit
+
+    from gilzabots.connectors.oauth import with_scope
+
+    url = ("https://x.com/i/oauth2/authorize?response_type=code&client_id=c&state=s"
+           "&code_challenge=cc&scope=tweet.read+dm.write+developer.billing.write&resource=r")
+    query = parse_qs(urlsplit(with_scope(url, "tweet.read offline.access")).query)
+    assert query["scope"] == ["tweet.read offline.access"]
+    assert query["state"] == ["s"] and query["code_challenge"] == ["cc"] and query["resource"] == ["r"]
+    assert "prompt" not in query
+    assert parse_qs(urlsplit(with_scope(url, "openid offline_access")).query)["prompt"] == ["consent"]
+    assert with_scope(url, "") == url
 
 
 def test_every_preset_is_translated():
@@ -515,12 +582,25 @@ async def test_api_lists_the_presets():
     assert isinstance(by_key["x"]["requirement_found"], bool)
 
 
+def test_cli_add_preset_x_needs_nothing_but_the_shipped_app(monkeypatch):
+    from gilzabots.cli_connectors import _parse_add_preset
+    from gilzabots.connectors import bundled_clients
+
+    monkeypatch.delenv("GILZABOTS_X_CLIENT_ID", raising=False)
+    monkeypatch.setattr(bundled_clients, "bundled_clients_path", lambda: "/nonexistent/bundled.json")
+    with pytest.raises(ValueError, match="not available in this build"):
+        _parse_add_preset(["x"])
+    monkeypatch.setenv("GILZABOTS_X_CLIENT_ID", "x-app-id")
+    data, _ = _parse_add_preset(["x"])
+    assert data["preset"] == "x" and data["auth"] == "oauth" and "oauth_client_id" not in data
+
+
 def test_cli_add_preset_parser():
     from gilzabots.cli_connectors import _parse_add_preset
 
-    data, key = _parse_add_preset(["x", "--env", "CLIENT_ID=i", "--env", "CLIENT_SECRET=s"])
-    assert key == "x" and data["env"] == [{"name": "CLIENT_ID", "value": "i"}, {"name": "CLIENT_SECRET", "value": "s"}]
-    with pytest.raises(ValueError, match="CLIENT_SECRET"):
-        _parse_add_preset(["x", "--env", "CLIENT_ID=i"])
+    data, key = _parse_add_preset(["github", "--bearer", "tok"])
+    assert key == "github" and data["bearer_token"] == "tok" and data["preset"] == "github"
+    with pytest.raises(ValueError, match="bearer"):
+        _parse_add_preset(["github"])
     with pytest.raises(ValueError, match="unknown preset"):
         _parse_add_preset(["nope"])

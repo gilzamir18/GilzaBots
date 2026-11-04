@@ -230,6 +230,12 @@ parts:
       else
         echo "WARNING: no bundled_google_client.json in the source tree; this snap ships without a Google OAuth client and Cloud sync will not connect."
       fi
+      # Same for the X app of the MCP connectors (scripts/embed_connector_clients.py).
+      if [ -f gilzabots/connectors/bundled_oauth_clients.json ]; then
+        "$CRAFT_PART_INSTALL/bin/python" -c "import os, gilzabots.connectors as c; f = os.path.join(os.path.dirname(c.__file__), 'bundled_oauth_clients.json'); assert os.path.isfile(f), 'The build dropped bundled_oauth_clients.json: the X connector would ship unable to sign in'"
+      else
+        echo "WARNING: no bundled_oauth_clients.json in the source tree; this snap ships without the X app and the X connector will be unavailable."
+      fi
 
       # The venv above was made by the gnome SDK's python3, a build-only snap, so
       # pyvenv.cfg names it as `home`. At runtime that path does not exist, and

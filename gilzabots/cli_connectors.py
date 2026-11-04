@@ -21,7 +21,7 @@ _DETAILS = (
     "Examples:\n"
     "  /connectors                                   list connectors and their state\n"
     "  /connectors presets                           the pre-configured servers\n"
-    "  /connectors add-preset x --env CLIENT_ID=<id> --env CLIENT_SECRET=<secret>\n"
+    "  /connectors add-preset x                      sign in to X in the browser\n"
     "  /connectors add-preset github --bearer <token>\n"
     "  /connectors add-preset filesystem --arg folder=~/notes\n"
     "  /connectors add-preset notion                 then: /connectors connect notion\n"
@@ -113,9 +113,12 @@ def _parse_add_preset(args: list[str]) -> tuple[dict, str]:
                          "[--arg name=value]  (see /connectors presets)")
     key, rest = args[0], args[1:]
     try:
-        presets.get_preset(key)
+        preset = presets.get_preset(key)
     except KeyError:
         raise ValueError(f"unknown preset '{key}'. See /connectors presets.") from None
+    if not preset.available():
+        raise ValueError(f"preset '{key}' is not available in this build: it needs the app GilzaBots ships "
+                         "for that service, and this build does not include it.")
     values: dict = {}
     connector_id = name = ""
     for i in range(0, len(rest), 2):
@@ -149,6 +152,8 @@ def _print_presets() -> None:
             else f"--{item['kind']} {item['name']}=<value>" for item in preset["inputs"]
         )
         missing = "" if preset["requirement_found"] else f"  (needs {preset['requires']}, not found)"
+        if not preset["available"]:
+            missing += "  (not available in this build)"
         T.info(f"{preset['key']:<12} {_escape(preset['name'])} — {_escape(preset['description'])}{missing}")
         if needs:
             T.info(f"{'':<12} add with: /connectors add-preset {preset['key']} {_escape(needs)}")
@@ -240,7 +245,11 @@ async def cmd_connectors(state: REPLState, args: list[str]) -> str:
             setup = presets.get_preset(key).setup
             if setup:
                 T.info(_escape(setup))
-            T.success(f"Connector '{connector.id}' added. Connect it with /connectors connect {connector.id}")
+            T.success(f"Connector '{connector.id}' added.")
+            if connector.auth == "oauth":
+                await _connect(connector.id)
+            else:
+                T.info(f"Connect it with /connectors connect {connector.id}")
             changed = True
         elif action == "add":
             connector = store.create_connector(_parse_add(rest))

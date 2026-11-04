@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import urllib.parse
 from typing import Callable, Optional
 
 from ..cloud.oauth import DEFAULT_AUTH_TIMEOUT, LoopbackReceiver, open_in_browser
@@ -103,14 +104,45 @@ def client_metadata(bound_port: int):
     )
 
 
+def resolved_client_id(connector: Connector) -> str:
+    """The pre-registered client to use: the user's, else the one shipped for the connector's preset."""
+    if connector.oauth_client_id:
+        return connector.oauth_client_id
+    if connector.preset:
+        from .presets import get_preset
+
+        try:
+            shipped = get_preset(connector.preset).bundled_client
+        except KeyError:
+            shipped = ""
+        if shipped:
+            from .bundled_clients import bundled_client_id
+
+            return bundled_client_id(shipped)
+    return ""
+
+
+def requires_shipped_client(connector: Connector) -> bool:
+    """Whether the connector's service only works through the client GilzaBots ships."""
+    if connector.oauth_client_id or not connector.preset:
+        return False
+    from .presets import get_preset
+
+    try:
+        return bool(get_preset(connector.preset).bundled_client)
+    except KeyError:
+        return False
+
+
 def preset_client(connector: Connector):
-    """The connector's pre-registered client, if the user configured one."""
-    if not connector.oauth_client_id:
+    """The pre-registered client: the user's own, or the one this build ships for the preset."""
+    client_id = resolved_client_id(connector)
+    if not client_id:
         return None
     from mcp.shared.auth import OAuthClientInformationFull
 
     return OAuthClientInformationFull(
-        client_id=connector.oauth_client_id,
+        client_id=client_id,
         client_secret=connector.oauth_client_secret or None,
         redirect_uris=[redirect_uri(port) for port in LOOPBACK_PORTS],
         grant_types=["authorization_code", "refresh_token"],
@@ -142,8 +174,11 @@ class AuthorizationFlow:
     """
 
     def __init__(self, *, interactive: bool, timeout: float = DEFAULT_AUTH_TIMEOUT,
-                 open_url: Optional[Callable[[str], bool]] = None):
+                 open_url: Optional[Callable[[str], bool]] = None, scope: str = ""):
         self.interactive = interactive
+        #: Scopes to request instead of the SDK's selection (the connector's
+        #: ``oauth_scope``); empty keeps the SDK's.
+        self.scope = scope
         self.timeout = timeout
         self.open_url = open_url
         self.status = "idle"  # idle | waiting | authorized | failed | cancelled
@@ -180,6 +215,7 @@ class AuthorizationFlow:
                 "This connector needs the user's authorization. Ask the user to open Connectors and "
                 "click Connect."
             )
+        authorization_url = with_scope(authorization_url, self.scope)
         self.authorization_url = authorization_url
         self.status = "waiting"
         try:
@@ -212,10 +248,38 @@ class AuthorizationFlow:
                                        iss=params.get("iss"))
 
 
+def with_scope(authorization_url: str, scope: str) -> str:
+    """``authorization_url`` requesting ``scope`` instead of the SDK's selection.
+
+    The SDK requests whatever the protected resource advertises (MCP's scope
+    selection rule), which for X means billing, direct messages and blocks. The
+    scope appears only in the authorization request -- neither the code exchange
+    nor a refresh sends one -- so narrowing it here is the whole change. The rest
+    of the request (state, PKCE challenge, redirect URI, resource) is untouched.
+    """
+    if not scope:
+        return authorization_url
+    parts = urllib.parse.urlsplit(authorization_url)
+    query = [(key, value) for key, value in urllib.parse.parse_qsl(parts.query, keep_blank_values=True)
+             if key not in ("scope", "prompt")]
+    query.append(("scope", scope))
+    # The SDK's own rule, applied to the new scope: OIDC requires prompt=consent
+    # when offline_access is requested.
+    if "offline_access" in scope.split():
+        query.append(("prompt", "consent"))
+    return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(query)))
+
+
 def build_provider(connector: Connector, flow: AuthorizationFlow):
     """The SDK's OAuth provider for ``connector``, wired to ``flow`` and its stored credentials."""
     from mcp.client.auth import OAuthClientProvider
 
+    if requires_shipped_client(connector) and not resolved_client_id(connector):
+        raise AuthorizationFailed(
+            f"This build of GilzaBots does not include its app for '{connector.name}', which the "
+            "service requires for signing in. Official releases include it; a build made from source "
+            "needs the client id set at build time (see PROJECT_DESIGN 2.25)."
+        )
     storage = FileTokenStorage(connector.id, preset_client=preset_client(connector))
     provider = OAuthClientProvider(
         server_url=connector.url,
@@ -223,7 +287,7 @@ def build_provider(connector: Connector, flow: AuthorizationFlow):
         storage=storage,
         redirect_handler=flow.redirect_handler,
         callback_handler=flow.callback_handler,
-        client_metadata_url=None if connector.oauth_client_id else client_metadata_url(),
+        client_metadata_url=None if resolved_client_id(connector) else client_metadata_url(),
     )
     # See credentials.py: restore the absolute expiry the SDK does not persist, so
     # an expired token is refreshed instead of triggering a full authorization.

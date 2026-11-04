@@ -34,7 +34,7 @@ const STATUS_COLORS = {
 const emptyForm = () => ({
   id: '', name: '', transport: 'http', url: '', auth: 'none', bearerToken: '',
   oauthClientId: '', oauthClientSecret: '', headers: [], command: '', args: '', env: [], cwd: '',
-  approval: 'always', enabled: true, connectTimeout: 60, presetKey: '', presetArgs: {},
+  approval: 'always', enabled: true, connectTimeout: 60, presetKey: '', presetArgs: {}, oauthScope: '',
 });
 
 const PRESET_CATEGORIES = ['social', 'productivity', 'development', 'local'];
@@ -48,7 +48,7 @@ const formFromPreset = (preset) => {
     ...emptyForm(),
     id: c.id, name: c.name, transport: c.transport, url: c.url || '', auth: c.auth || 'none',
     command: c.command || '', args: (c.args || []).join('\n'), approval: c.approval || 'always',
-    connectTimeout: c.connect_timeout || 60,
+    connectTimeout: c.connect_timeout || 60, oauthScope: c.oauth_scope || '',
     env: envInputs.map(i => ({ name: i.name, value: '', stored: false })),
     presetKey: preset.key,
     presetArgs: Object.fromEntries(preset.inputs.filter(i => i.kind === 'arg').map(i => [i.name, ''])),
@@ -62,7 +62,7 @@ const formFromConnector = (c) => ({
   command: c.command || '', args: (c.args || []).join('\n'),
   env: (c.env || []).map(e => ({ name: e.name, value: '', stored: e.set })),
   cwd: c.cwd || '', approval: c.approval, enabled: c.enabled, connectTimeout: c.connect_timeout || 60,
-  presetKey: '', presetArgs: {},
+  presetKey: '', presetArgs: {}, oauthScope: c.oauth_scope || '',
   hasBearerToken: c.has_bearer_token, hasOauthClientSecret: c.has_oauth_client_secret,
 });
 
@@ -219,11 +219,15 @@ export default function ConnectorsModal({ onClose }) {
       name: form.name.trim() || form.id.trim(), transport: form.transport, approval: form.approval, enabled: form.enabled,
       connect_timeout: Number(form.connectTimeout) || 60,
     };
-    if (editing === 'new') payload.id = form.id.trim();
+    if (editing === 'new') {
+      payload.id = form.id.trim();
+      if (form.presetKey) payload.preset = form.presetKey;
+    }
     if (form.transport === 'http') {
       Object.assign(payload, { url: form.url.trim(), auth: form.auth, headers: rowsForApi(form.headers), command: '', args: [], env: [], cwd: '' });
       if (form.auth === 'bearer' && form.bearerToken) payload.bearer_token = form.bearerToken;
       if (form.auth === 'oauth') {
+        payload.oauth_scope = form.oauthScope.trim();
         payload.oauth_client_id = form.oauthClientId.trim();
         if (form.oauthClientSecret) payload.oauth_client_secret = form.oauthClientSecret;
         if (!form.oauthClientId.trim()) payload.clear_oauth_client_secret = true;
@@ -259,7 +263,11 @@ export default function ConnectorsModal({ onClose }) {
     setBusy(true); setError('');
     try {
       if (editing === 'new') {
-        await post('/api/connectors/create', { connector: buildPayload() });
+        const created = await post('/api/connectors/create', { connector: buildPayload() });
+        // Saving an OAuth connector is asking to use it: go straight to the sign-in.
+        if (created.connector?.auth === 'oauth' && created.connector?.enabled) {
+          await post('/api/connectors/connect', { id: created.connector.id });
+        }
       } else {
         await post('/api/connectors/update', { id: editing, connector: buildPayload() });
       }
@@ -289,8 +297,9 @@ export default function ConnectorsModal({ onClose }) {
               <div key={category} style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center' }}>
                 <span style={{ fontSize: '11px', opacity: 0.7, minWidth: 90 }}>{t(`connectors.categories.${category}`, category)}</span>
                 {items.map(preset => (
-                  <button key={preset.key} type="button" title={presetText(preset, 'description')}
-                    style={form.presetKey === preset.key ? primaryButtonStyle : buttonStyle}
+                  <button key={preset.key} type="button" disabled={!preset.available}
+                    title={preset.available ? presetText(preset, 'description') : t('connectors.presetUnavailable')}
+                    style={{ ...(form.presetKey === preset.key ? primaryButtonStyle : buttonStyle), ...(preset.available ? {} : { opacity: 0.5, cursor: 'not-allowed' }) }}
                     onClick={() => { setError(''); setForm(formFromPreset(preset)); }}>
                     {presetText(preset, 'name')}
                   </button>
@@ -360,6 +369,10 @@ export default function ConnectorsModal({ onClose }) {
           {form.auth === 'oauth' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <p style={{ margin: 0, fontSize: '11px', opacity: 0.75 }}>{t('connectors.oauthHint')}</p>
+              <label style={labelStyle}>{t('connectors.fieldScope')}
+                <input style={fieldStyle} value={form.oauthScope} placeholder={t('connectors.scopePlaceholder')}
+                  onChange={e => set({ oauthScope: e.target.value })} />
+              </label>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px' }}>
                 <label style={labelStyle}>{t('connectors.fieldClientId')}
                   <input style={fieldStyle} value={form.oauthClientId} placeholder={t('connectors.optional')} onChange={e => set({ oauthClientId: e.target.value })} />

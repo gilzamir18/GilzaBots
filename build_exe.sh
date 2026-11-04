@@ -97,6 +97,17 @@ else
     echo "GILZABOTS_GDRIVE_CLIENT_ID nao definido - build sem cliente OAuth embutido."
 fi
 
+# Com GILZABOTS_X_CLIENT_ID definido, o build embute o app do GilzaBots no X e o
+# conector do X passa a conectar so com o login do usuario. Sem ele, o conector
+# do X aparece como indisponivel neste build (gilzabots/connectors/bundled_clients.py).
+CONNECTOR_CLIENT_DATA=""
+if [ -n "$GILZABOTS_X_CLIENT_ID" ]; then
+    python scripts/embed_connector_clients.py --from-env
+    CONNECTOR_CLIENT_DATA="--add-data=gilzabots/connectors/bundled_oauth_clients.json:gilzabots/connectors"
+else
+    echo "GILZABOTS_X_CLIENT_ID nao definido - build sem o app do X embutido."
+fi
+
 echo -e "\n[4/4] Empacotando com PyInstaller..."
 # A sintaxe de --add-data no Linux/macOS usa dois pontos (:)
 # Qt is collected by PyInstaller's own PyQt6 hooks, which take only the modules
@@ -108,6 +119,7 @@ echo -e "\n[4/4] Empacotando com PyInstaller..."
 # QuickControls2, Multimedia and more. See PROJECT_DESIGN.md §2.16.1.
 pyinstaller --name "GilzaBots" \
             $GOOGLE_CLIENT_DATA \
+            $CONNECTOR_CLIENT_DATA \
             --windowed \
             --icon="AppIcons/GilzaBots.ico" \
             --add-data="gilzabots/gui:gilzabots/gui" \

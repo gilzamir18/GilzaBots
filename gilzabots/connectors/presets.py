@@ -10,8 +10,11 @@ Every endpoint here was checked against the live service when it was added
 `agenticblocks.tools.mcp_client.MCPClientBridge`, the OAuth ones by reading their
 protected-resource and authorization-server metadata. ``auth="oauth"`` is only
 used where the authorization server supports dynamic client registration or
-client metadata documents, which GilzaBots can use without a registered app;
-services that support neither (X's API, GitHub) take a token instead.
+client metadata documents, which GilzaBots can use without a registered app, or
+where the build ships GilzaBots' own app for the service (``bundled_client``):
+X supports neither, so its preset signs in through the X app a release carries
+(bundled_clients.py) and the user only logs in to X. GitHub supports neither
+either and takes a personal access token.
 
 The texts are English defaults; the desktop translates them by preset key
 (``connectors.presets.<key>`` in the locale files).
@@ -41,6 +44,9 @@ class Preset:
     docs_url: str = ""
     #: The executable a stdio preset needs on PATH (``npx``, ``uvx``).
     requires: str = ""
+    #: The OAuth client this build ships for the service (bundled_clients.py), for
+    #: a service that accepts no other way in. Without it the preset is unavailable.
+    bundled_client: str = ""
 
     def to_dict(self) -> dict:
         data = {
@@ -55,7 +61,15 @@ class Preset:
             "requires": self.requires,
         }
         data["requirement_found"] = bool(shutil.which(self.requires)) if self.requires else True
+        data["available"] = self.available()
         return data
+
+    def available(self) -> bool:
+        if not self.bundled_client:
+            return True
+        from .bundled_clients import bundled_client_id
+
+        return bool(bundled_client_id(self.bundled_client))
 
 
 PRESETS: tuple[Preset, ...] = (
@@ -64,29 +78,22 @@ PRESETS: tuple[Preset, ...] = (
         name="X (your account)",
         category="social",
         description=(
-            "X's hosted MCP server (api.x.com/mcp) with your account: read and search posts, "
-            "post and repost as you. Runs through X's official xurl bridge."
+            "Sign in to X and let the assistant read and search posts, and post and repost as you, "
+            "through X's hosted MCP server."
         ),
         connector={
-            "id": "x", "name": "X", "transport": "stdio", "command": "npx",
-            "args": ["-y", "@xdevplatform/xurl", "mcp", "https://api.x.com/mcp"],
-            "approval": "always",
-            # The bridge waits for the first browser login during startup.
-            "connect_timeout": 300,
+            "id": "x", "name": "X", "transport": "http", "url": "https://api.x.com/mcp",
+            "auth": "oauth", "approval": "always",
+            # X advertises every scope it has, billing and direct messages included;
+            # request only what reading and posting need (offline.access: refresh token).
+            "oauth_scope": "tweet.read tweet.write users.read offline.access",
         },
-        inputs=(
-            {"kind": "env", "name": "CLIENT_ID", "secret": False},
-            {"kind": "env", "name": "CLIENT_SECRET", "secret": True},
-        ),
         setup=(
-            "Create an app in the X Developer Console with OAuth 2.0 enabled, register the redirect "
-            "URI http://localhost:8080/callback, and copy its client id and secret here. On the first "
-            "connection xurl opens your browser to log in to X, then keeps the token. API usage is "
-            "billed to your developer account, and X's automation rules apply: no automated likes or "
-            "follows, and AI-generated replies need X's approval. Needs Node.js (npx)."
+            "Click Connect and sign in to X in your browser. X's rules still apply: no automated likes "
+            "or follows, and AI-generated replies need X's approval."
         ),
         docs_url="https://docs.x.com/tools/mcp",
-        requires="npx",
+        bundled_client="x",
     ),
     Preset(
         key="x-readonly",
@@ -238,6 +245,7 @@ def connector_from_preset(key: str, values: dict[str, Any] | None = None, *, con
     preset = get_preset(key)
     values = dict(values or {})
     data = {key_: (list(value) if isinstance(value, list) else value) for key_, value in preset.connector.items()}
+    data["preset"] = preset.key
     if connector_id:
         data["id"] = connector_id
     if name:
