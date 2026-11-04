@@ -775,11 +775,20 @@ export default function EditorPanel({
 
   const selectedFileRef = useRef(selectedFile);
   selectedFileRef.current = selectedFile;
-  const initialEditorContentRef = useRef(fileContent ?? '');
-
-  useEffect(() => {
-    initialEditorContentRef.current = fileContent ?? '';
-  }, [selectedFile]);
+  // The content Monaco creates a file's model with. @monaco-editor/react reads
+  // `defaultValue` in the very commit whose `path` names a file it has no model
+  // for yet, so it has to be the new file's content in that render. It used to
+  // be refreshed by an effect, which runs after that commit: the new file's
+  // model was created holding the previous file's text, and while the editor
+  // kept keyboard focus (the sync below leaves a focused editor alone) the tab
+  // showed — and the next tab switch cached — the other file's content. It is
+  // keyed on the file rather than following every keystroke, since it is only
+  // ever read when a model is created.
+  const editorDefaultValue = useMemo(
+    () => fileContent ?? '',
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedFile],
+  );
 
   const localEditorRef = useRef(null);
   const monacoRef = useRef(null);
@@ -978,12 +987,26 @@ export default function EditorPanel({
     if (hadTextFocus) editor.focus();
   }, []);
 
+  // The file whose buffer the Monaco model was last brought in line with.
+  const syncedEditorFileRef = useRef(null);
+
   useEffect(() => {
     if (isDiffMode || isRichTextMode || isWysiwygMode || isPreviewMode) return;
     const editor = localEditorRef.current;
     if (!editor) return;
-    if (editor.hasTextFocus?.()) return;
-    if (pendingEditorValueRef.current !== null) return;
+    // While the user types, the model is ahead of `fileContent` (it is
+    // committed on a debounce), so a focused editor or a pending commit is left
+    // alone. A file switch is not typing: the model now on screen is the new
+    // file's — one Monaco kept from an earlier visit, possibly older than the
+    // buffer — and must show that file's buffer even when the switch did not
+    // take the focus away, as when an agent's open_file swaps the tab under
+    // the user's cursor.
+    const switchedFile = syncedEditorFileRef.current !== selectedFile;
+    syncedEditorFileRef.current = selectedFile;
+    if (!switchedFile) {
+      if (editor.hasTextFocus?.()) return;
+      if (pendingEditorValueRef.current !== null) return;
+    }
     syncEditorValue(editor, fileContent);
   }, [fileContent, isDiffMode, isRichTextMode, isWysiwygMode, isPreviewMode, selectedFile, syncEditorValue]);
 
@@ -1425,7 +1448,7 @@ export default function EditorPanel({
         path={selectedFile}
         language={getLanguage(selectedFile)}
         theme={theme === 'light' ? 'light' : 'vs-dark'}
-        defaultValue={initialEditorContentRef.current}
+        defaultValue={editorDefaultValue}
         beforeMount={handleBeforeMount}
         onChange={scheduleEditorContentCommit}
         onMount={handleMount}
@@ -1550,7 +1573,7 @@ export default function EditorPanel({
           path={selectedFile}
           language={getLanguage(selectedFile)}
           theme={theme === 'light' ? 'light' : 'vs-dark'}
-          defaultValue={initialEditorContentRef.current}
+          defaultValue={editorDefaultValue}
           beforeMount={handleBeforeMount}
           onChange={scheduleEditorContentCommit}
           onMount={handleMount}

@@ -49,6 +49,7 @@ GUI_SRC = os.path.dirname(os.path.dirname(HERE))
 HARNESS_PATH = "/test/browser/harness.html"
 CHAT_PATH = "/test/browser/chat.html"
 PDF_PATH = "/test/browser/pdf.html"
+EDITOR_PATH = "/test/browser/editor.html"
 
 # Wide enough that the IDE surfaces under test lay out as they do on a desktop.
 WINDOW = (1440, 900)
@@ -892,6 +893,101 @@ async def check_chat_message_edit(page: Page, check: Checks) -> None:
           await page.js(f"!({MESSAGE_EDITOR_JS}) && window.__editCalls.length === 2"))
 
 
+async def check_editor_file_switch(page: Page, check: Checks) -> None:
+    """Monaco shows the file the tab names, even when the switch keeps focus.
+
+    `@monaco-editor/react` creates a file's model from `defaultValue` in the
+    commit that first names its `path`. The panel refreshed that value in an
+    effect, which runs after the commit, so the new file's model was created
+    holding the *previous* file's text. A later sync repaired it — unless the
+    editor had keyboard focus, which that sync deliberately leaves alone so it
+    never fights the user's typing. A click on the file tree takes the focus
+    away; an agent's `open_file` does not. Observed: the agent wrote an HTML
+    file and opened it while the cursor sat in a Python file, and the HTML tab
+    showed the Python source; the next tab switch cached that text as the HTML
+    file's buffer, one Ctrl+S away from overwriting the file on disk. Only a
+    browser runs Monaco's model lifecycle and real focus, so this lives here.
+    """
+    base = page.url.split(HARNESS_PATH)[0]
+    await page.cmd("Page.navigate", {"url": f"{base}{EDITOR_PATH}"})
+    py, html = "src/regressao.py", "src/anim/gradient.html"
+    py_text = "import random\n\nXd = [[1, 60], [1, 80]]\n"
+    html_text = "<!DOCTYPE html>\n<html><body>gradient</body></html>\n"
+    state = "window.__editor()"
+
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        if await page.rect(".editor-fixture-file"):
+            break
+        await asyncio.sleep(0.2)
+    else:
+        check("editor harness loads", False, "the file list never rendered")
+        return
+    row = await page.rect(f'.editor-fixture-file[data-path="{py}"]')
+    await page.click(row["cx"], row["cy"])
+    deadline = time.time() + 60          # Monaco itself loads on first use
+    while time.time() < deadline:
+        if await page.js("!!window.__ready && !!document.querySelector('.monaco-editor .view-lines')"):
+            break
+        await asyncio.sleep(0.2)
+    else:
+        check("editor harness loads", False, "Monaco never mounted")
+        return
+    await asyncio.sleep(0.6)
+
+    lines = await page.rect(".monaco-editor .view-lines")
+    await page.click(lines["x"] + 40, lines["y"] + 8)
+    await asyncio.sleep(SETTLE)
+    if not check("the editor holds the keyboard focus", await page.js(f"{state}.focused")):
+        return
+
+    # The agent's open_file: no click, the focus stays in Monaco.
+    await page.js(f"window.__open({json.dumps(html)})")
+    await asyncio.sleep(0.8)
+    now = await page.js(state)
+    check("a new file opened under focus shows its own text",
+          now["model"] == html and now["text"] == html_text,
+          f"model {now['model']!r} holds {now['text'][:30]!r}")
+
+    await page.js(f"window.__open({json.dumps(py)})")
+    await asyncio.sleep(0.6)
+    await page.js(f"window.__open({json.dumps(html)})")
+    await asyncio.sleep(0.6)
+    now = await page.js(state)
+    check("switching back keeps each file's buffer",
+          now["cached"].get(py) == py_text and now["cached"].get(html) == html_text
+          and now["text"] == html_text,
+          f"cached html {now['cached'].get(html, '')[:30]!r}")
+
+    # A hidden tab whose buffer moved on (the agent rewrote the file) reuses
+    # the model Monaco kept from the earlier visit, which is now stale.
+    await page.js(f"window.__open({json.dumps(py)})")
+    await asyncio.sleep(0.6)
+    rewritten = "<!DOCTYPE html>\n<html><body>rewritten</body></html>\n"
+    await page.js(f"window.__setCached({json.dumps(html)}, {json.dumps(rewritten)})")
+    await asyncio.sleep(SETTLE)
+    lines = await page.rect(".monaco-editor .view-lines")
+    await page.click(lines["x"] + 40, lines["y"] + 8)
+    await asyncio.sleep(SETTLE)
+    await page.js(f"window.__open({json.dumps(html)})")
+    await asyncio.sleep(0.6)
+    now = await page.js(state)
+    check("a revisited tab shows its current buffer",
+          now["focused"] and now["text"] == rewritten,
+          f"focused={now['focused']} text {now['text'][:40]!r}")
+
+    # The sync still leaves the user's own typing alone.
+    await page.key("End", 35, code="End")
+    await page.type_text("<!-- typed -->")
+    await asyncio.sleep(0.05)
+    typed = await page.js(f"{state}.text")
+    await asyncio.sleep(0.6)
+    now = await page.js(state)
+    check("typing in the focused editor is kept",
+          "<!-- typed -->" in typed and now["text"] == typed and now["buffer"] == typed,
+          f"text {now['text'][-30:]!r}")
+
+
 SUITE = (
     check_terminal_selection,
     check_pdf_tab_switch,
@@ -899,6 +995,7 @@ SUITE = (
     check_pdf_lookup,
     check_pdf_translation_popup,
     check_chat_message_edit,
+    check_editor_file_switch,
 )
 
 
