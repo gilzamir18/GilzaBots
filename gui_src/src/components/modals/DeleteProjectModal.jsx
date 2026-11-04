@@ -13,7 +13,7 @@ export default function DeleteProjectModal({ projectToDelete, cloudLink, onCance
   if (!projectToDelete) return null;
 
   return (
-    <div className="vscode-modal-overlay" style={{ zIndex: 1000, backdropFilter: 'blur(4px)' }}>
+    <div className="vscode-modal-overlay" style={{ zIndex: 1000 }}>
       <div className="vscode-modal" style={{
         padding: '28px 32px',
         maxWidth: '420px',

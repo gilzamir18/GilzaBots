@@ -1986,6 +1986,11 @@ input:focus, select:focus, textarea:focus {
 }
 
 /* Modal */
+/* No backdrop-filter on a full-window overlay, here or inline. Under software
+   compositing (--disable-gpu, the Linux default and Windows' "off" graphics
+   mode) blurring the whole app re-blurs it on every frame anything beneath
+   repaints: measured in QtWebEngine at ~326 ms per frame (p95 650 ms) against
+   ~26 ms without it, which made the directory picker stutter and flicker. */
 .vscode-modal-overlay {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;

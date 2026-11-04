@@ -11,7 +11,7 @@ export default function DirPickerModal({ dirPicker, onNavigate, onConfirm, onClo
   return (
     <div
       className="vscode-modal-overlay"
-      style={{ zIndex: 1100, backdropFilter: 'blur(3px)' }}
+      style={{ zIndex: 1100 }}
       onClick={onClose}
     >
       <div

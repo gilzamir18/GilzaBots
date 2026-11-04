@@ -21,6 +21,7 @@ import pytest
 from gilzabots.ide_server import AsyncHTTPServer
 from gilzabots.project import (
     CHAT_REASONING_EFFORTS,
+    NEW_CHAT_REASONING_EFFORT,
     ChatNotFoundError,
     ProjectStore,
 )
@@ -35,6 +36,10 @@ def store(tmp_path):
     )
     store.create_chat("myproj", "first", "First Chat")
     store.create_chat("myproj", "second", "Second Chat")
+    # New chats start at NEW_CHAT_REASONING_EFFORT; most tests below are about a
+    # chat that follows the catalog, so both are handed back to it explicitly.
+    store.set_chat_reasoning_effort("myproj", "first", "")
+    store.set_chat_reasoning_effort("myproj", "second", "")
     return store
 
 
@@ -64,7 +69,17 @@ def _register(tmp_path, monkeypatch, model_id, provider="ollama", **fields):
 # ── Storage ──────────────────────────────────────────────────────────────────
 
 
-def test_a_chat_follows_the_catalog_until_an_effort_is_set(store):
+def test_a_new_chat_starts_at_low_effort(tmp_path):
+    store = ProjectStore(db_path=str(tmp_path / "fresh.db"))
+    store.create(name="p", mode="auto", model="ollama/thinker", project_path=str(tmp_path))
+
+    assert NEW_CHAT_REASONING_EFFORT == "low"
+    assert store.create_chat("p", "c1", "Chat") == "low"
+    assert store.get_chat_reasoning_effort("p", "c1") == "low"
+    assert store.load("p", chat_id="c1").chat_reasoning_effort == "low"
+
+
+def test_a_chat_with_a_cleared_effort_follows_the_catalog(store):
     assert store.get_chat_reasoning_effort("myproj", "first") == ""
     assert store.load("myproj").chat_reasoning_effort == ""
     assert store.list_chat_reasoning_efforts("myproj") == {}
@@ -285,6 +300,25 @@ def test_the_endpoint_stores_the_effort_and_the_chat_list_reports_it(store, api)
         {"id": "second", "name": "Second Chat", "reasoning_effort": "high"},
         {"id": "first", "name": "First Chat", "reasoning_effort": ""},
     ]
+
+
+def test_the_create_endpoint_reports_the_effort_a_new_chat_starts_with(store, monkeypatch):
+    monkeypatch.setattr("gilzabots.config.DEFAULT_DB_PATH", store.db_path)
+    server = AsyncHTTPServer()
+    responses = []
+    server.send_response = lambda _w, status, body, ctype="text/plain": responses.append(
+        (status, json.loads(body.decode("utf-8")))
+    )
+
+    asyncio.run(server.route_api(
+        "POST", "/api/chat/create", {}, {},
+        json.dumps({"project_name": "myproj", "chat_name": "Third"}).encode("utf-8"), AsyncMock(),
+    ))
+
+    status, body = responses[-1]
+    assert status == 200
+    assert (body["name"], body["reasoning_effort"]) == ("Third", "low")
+    assert store.get_chat_reasoning_effort("myproj", body["id"]) == "low"
 
 
 def test_the_endpoint_clears_the_effort_with_an_empty_value(store, api):

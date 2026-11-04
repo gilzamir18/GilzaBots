@@ -442,7 +442,8 @@ export default function App() {
   const [providerWait, setProviderWait] = useState(null);
   // Whatever ended the turn (answer, error, interruption) also ended the wait.
   useEffect(() => { if (!isAgentRunning) setProviderWait(null); }, [isAgentRunning]);
-  const [heartbeatMode, setHeartbeatModeState] = useState(() => getPreference('chatHeartbeatMode') || 'medium');
+  // Low is the default budget; a longer one is something the user opts into.
+  const [heartbeatMode, setHeartbeatModeState] = useState(() => getPreference('chatHeartbeatMode') || 'low');
   const setHeartbeatMode = (mode) => {
     setHeartbeatModeState(mode);
     setPreference('chatHeartbeatMode', mode);
@@ -456,7 +457,7 @@ export default function App() {
       const projHb = activeProject?.model_params?.max_heartbeats;
       return projHb !== undefined && projHb !== null && projHb !== '' ? parseInt(projHb, 10) : null;
     }
-    return 50;
+    return 20;
   };
   const [isInlineRunning, setIsInlineRunning] = useState(false);
   // Refreshes an already-open Review panel after the backend has safely closed

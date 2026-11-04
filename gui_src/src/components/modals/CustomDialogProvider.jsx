@@ -115,7 +115,7 @@ export function CustomDialogProvider({ children }) {
     <CustomDialogContext.Provider value={{ showAlert, showConfirm, showPrompt }}>
       {children}
       {dialog && (
-        <div className="vscode-modal-overlay" style={{ zIndex: 9999, backdropFilter: 'blur(4px)' }} role="presentation" onMouseDown={handleCancel}>
+        <div className="vscode-modal-overlay" style={{ zIndex: 9999 }} role="presentation" onMouseDown={handleCancel}>
           <div 
             className="vscode-modal" 
             role="alertdialog" 

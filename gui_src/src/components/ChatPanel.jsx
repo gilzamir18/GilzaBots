@@ -128,7 +128,7 @@ export default function ChatPanel({
   agentStepInfo = { step: 0, maxSteps: null },
   // Set while the model's provider has been silent past the backend threshold.
   providerWait = null,
-  heartbeatMode = 'medium',
+  heartbeatMode = 'low',
   setHeartbeatMode,
   queuedMessages = [],
   onCancelQueuedMessage,
@@ -1376,7 +1376,7 @@ export default function ChatPanel({
         color: 'var(--vscode-descriptionForeground, #999999)',
       },
     ];
-    const currentOption = heartbeatOptions.find(opt => opt.key === heartbeatMode) || heartbeatOptions[1];
+    const currentOption = heartbeatOptions.find(opt => opt.key === heartbeatMode) || heartbeatOptions[0];
     const currentButtonLabel = heartbeatMode === 'custom'
       ? `${currentOption.label} (${projectHeartbeats})`
       : `${currentOption.label} (${currentOption.heartbeats})`;
@@ -2022,6 +2022,7 @@ export default function ChatPanel({
             onEditModels={onEditModels}
             onRefreshModels={onRefreshModels}
             disabled={!activeProject}
+            placeholder={t('chatPanel.workerSameAsOrchestrator', 'Same as orchestrator')}
           />
         </div>
       </div>

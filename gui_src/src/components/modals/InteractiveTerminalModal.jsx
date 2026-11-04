@@ -179,7 +179,7 @@ export default function InteractiveTerminalModal({ request, onConfirm, activePro
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1000,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+      background: 'rgba(0,0,0,0.55)',
       animation: 'fadeIn 0.15s ease',
     }}>
       <div style={{

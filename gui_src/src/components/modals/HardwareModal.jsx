@@ -88,7 +88,7 @@ export default function HardwareModal({ onClose }) {
     <div style={{
       position: 'fixed', inset: 0, zIndex: 2000,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(5px)',
+      background: 'rgba(0,0,0,0.6)',
       animation: 'fadeIn 0.2s ease',
     }}>
       <div className="vscode-modal" style={{

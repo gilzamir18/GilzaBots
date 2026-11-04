@@ -3237,8 +3237,8 @@ class AsyncHTTPServer:
                 self.send_response(writer, 400, b'{"error":"project_name and chat_name required"}', "application/json")
                 return
             chat_id = str(uuid.uuid4())
-            store.create_chat(project_name, chat_id, chat_name)
-            self.send_response(writer, 200, json.dumps({"id": chat_id, "name": chat_name}).encode(), "application/json")
+            effort = store.create_chat(project_name, chat_id, chat_name)
+            self.send_response(writer, 200, json.dumps({"id": chat_id, "name": chat_name, "reasoning_effort": effort}).encode(), "application/json")
 
         # 6a-bis. Built-in tutorial chat.
         #

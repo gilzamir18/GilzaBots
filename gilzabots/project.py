@@ -163,6 +163,11 @@ LEGACY_MAIN_CHAT_NAME = "Main Chat"
 #: which is what clearing the override already does.
 CHAT_REASONING_EFFORTS = ("low", "medium", "high", "xhigh")
 
+#: The effort a brand-new chat starts with. Deep reasoning is opt-in per chat:
+#: the selector raises it, and clearing it hands the chat back to the catalog.
+#: A branch does not start fresh -- it inherits its source chat's effort.
+NEW_CHAT_REASONING_EFFORT = "low"
+
 
 def normalize_chat_reasoning_effort(value) -> str:
     """Return *value* as a stored chat reasoning effort, or raise ``ValueError``.
@@ -1918,10 +1923,16 @@ class ProjectStore:
         with _conn(self.db_path) as conn:
             conn.execute("UPDATE project_chats SET core_memory = ? WHERE project = ? AND id = ?", (core_memory, name, chat_id))
 
-    def create_chat(self, name: str, chat_id: str, chat_name: str) -> None:
+    def create_chat(self, name: str, chat_id: str, chat_name: str) -> str:
+        """Create an empty chat and return the reasoning effort it starts with."""
         now = datetime.now(timezone.utc).isoformat()
+        effort = NEW_CHAT_REASONING_EFFORT
         with _conn(self.db_path) as conn:
-            conn.execute("INSERT INTO project_chats (id, project, name, created_at, core_memory) VALUES (?,?,?,?,?)", (chat_id, name, chat_name, now, ""))
+            conn.execute(
+                "INSERT INTO project_chats (id, project, name, created_at, core_memory, reasoning_effort) VALUES (?,?,?,?,?,?)",
+                (chat_id, name, chat_name, now, "", effort),
+            )
+        return effort
 
     def delete_chat(self, name: str, chat_id: str) -> None:
         # Any chat may be deleted, the last one included: a project with no

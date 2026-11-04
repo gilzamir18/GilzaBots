@@ -66,7 +66,7 @@ export default function MoveToModal({ moveModal, files, isFileInsidePath, onConf
   return (
     <div
       className="vscode-modal-overlay"
-      style={{ zIndex: 1100, backdropFilter: 'blur(3px)' }}
+      style={{ zIndex: 1100 }}
       onClick={onClose}
     >
       <div
