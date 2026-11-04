@@ -126,15 +126,17 @@ def _escape(text: str) -> str:
 class LoopbackReceiver:
     """A one-shot HTTP listener on 127.0.0.1 that captures the OAuth redirect.
 
-    Binds an ephemeral port: the provider's registered redirect URI is
-    ``http://127.0.0.1`` with any port, and a fixed port would collide with
-    whatever else the machine is running.
+    Binds an ephemeral port by default: the provider's registered redirect URI
+    is ``http://127.0.0.1`` with any port, and a fixed port would collide with
+    whatever else the machine is running. A caller whose provider matches the
+    redirect URI exactly, port included, passes ``port`` instead; binding then
+    raises ``OSError`` when that port is taken, so the caller can try another.
     """
 
-    def __init__(self):
+    def __init__(self, port: int = 0):
         self.created_at = time.monotonic()
         handler = type("_Handler", (_RedirectHandler,), {"receiver": self})
-        self._server = HTTPServer(("127.0.0.1", 0), handler)
+        self._server = HTTPServer(("127.0.0.1", int(port)), handler)
         self._server.timeout = 1.0
         self._event = threading.Event()
         self._params: dict[str, str] = {}

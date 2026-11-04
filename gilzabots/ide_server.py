@@ -942,6 +942,25 @@ class AsyncHTTPServer:
         task = self.active_agent_task
         return task is not None and not task.done()
 
+    def _refresh_live_orchestrator(self) -> None:
+        """Rebuild the live chat orchestrator so it holds the current tool set.
+
+        Used after a change to the MCP connectors (PROJECT_DESIGN 2.25). A running
+        turn keeps the orchestrator it was built with; the next one is built from
+        the store anyway, so only an idle orchestrator is rebuilt here.
+        """
+        if self._agent_turn_active():
+            return
+        import gilzabots.agent_stdin as agent_stdin
+        live = agent_stdin.current_project
+        if live is None or agent_stdin.current_memgpt is None:
+            return
+        from .memgpt_runtime import build_chat_orchestrator
+        from .tools import set_project_context
+        live_store = agent_stdin.current_store
+        set_project_context(live, live_store)
+        agent_stdin.current_memgpt = build_chat_orchestrator(live, live_store)
+
     def _refuse_during_agent_turn(self, writer) -> bool:
         """Answer 409 and return True when an agent turn owns the project state.
 
@@ -2324,6 +2343,13 @@ class AsyncHTTPServer:
                 path, method, data, query,
                 turn_active=self._agent_turn_active(),
                 focus_window=_focus_main_window,
+            )
+            self.send_response(writer, status, json.dumps(body, default=str).encode('utf-8'), "application/json")
+
+        elif path == '/api/connectors' or path.startswith('/api/connectors/'):
+            from gilzabots.connectors import api as connectors_api
+            status, body = await connectors_api.handle(
+                path, method, data, query, refresh_agent=self._refresh_live_orchestrator,
             )
             self.send_response(writer, status, json.dumps(body, default=str).encode('utf-8'), "application/json")
 

@@ -26,7 +26,8 @@
     "projectSettingsBadge": "P",
     "projectSettingsDisabled": "Abra um projeto para alterar suas configurações",
     "monitors": "Monitores",
-    "monitorsNewEvents": "Monitores: {{count}} evento(s) novo(s)"
+    "monitorsNewEvents": "Monitores: {{count}} evento(s) novo(s)",
+    "connectors": "Conectores (MCP)"
   },
   "tutorial": {
     "menuTitle": "Tópicos do tutorial",
@@ -1764,5 +1765,149 @@
     "formHint": "Usa OpenRouter? Entre pelo navegador para gerar uma chave e carregar o modelo gratuito padrão (openrouter/free) automaticamente.",
     "connectedWithFreeModel": "Conectado a {{label}} e modelo gratuito {{modelId}} carregado.",
     "failed": "Falha ao entrar com o OpenRouter."
+  },
+  "connectors": {
+    "title": "Conectores",
+    "intro": "Conecte o GilzaBots a serviços externos por meio de servidores MCP (Model Context Protocol). As ferramentas deles passam a ser ferramentas do agente do chat. Por padrão, cada chamada pede sua aprovação e mostra os argumentos. Conecte apenas servidores em que você confia: descrições e resultados das ferramentas vêm do servidor.",
+    "add": "Adicionar conector",
+    "addTitle": "Novo conector",
+    "editTitle": "Editar {{name}}",
+    "empty": "Nenhum conector ainda.",
+    "loadFailed": "Não foi possível carregar os conectores: {{error}}",
+    "fieldId": "Id",
+    "fieldIdHint": "Letras minúsculas, dígitos, - ou _. As ferramentas aparecem como mcp__<id>__<ferramenta>.",
+    "fieldName": "Nome",
+    "fieldTransport": "Tipo de servidor",
+    "transportHttp": "URL remota ou local (Streamable HTTP)",
+    "transportStdio": "Comando local (stdio)",
+    "fieldApproval": "Aprovação",
+    "approvalAlways": "Sempre perguntar",
+    "approvalMode": "Seguir o modo do chat",
+    "approvalAlwaysHint": "Cada chamada mostra um pedido de aprovação com os argumentos, mesmo no modo auto. Recomendado para serviços que agem nas suas contas.",
+    "approvalModeHint": "As chamadas seguem o modo do chat como as ferramentas nativas: auto executa, edit pergunta, plan bloqueia.",
+    "fieldUrl": "URL do servidor",
+    "fieldAuth": "Autenticação",
+    "authNone": "Nenhuma",
+    "authOauth": "OAuth (login pelo navegador)",
+    "authBearer": "Token bearer",
+    "oauthHint": "O GilzaBots se registra no servidor de autorização do serviço. Preencha um client id só se o serviço exigir um app registrado por você.",
+    "fieldClientId": "Client id OAuth",
+    "fieldClientSecret": "Client secret OAuth",
+    "fieldBearer": "Token",
+    "fieldHeaders": "Cabeçalhos HTTP extras",
+    "fieldCommand": "Comando",
+    "fieldArgs": "Argumentos (um por linha)",
+    "fieldEnv": "Variáveis de ambiente",
+    "fieldCwd": "Pasta de trabalho",
+    "fieldEnabled": "Ligado",
+    "stdioWarning": "Um servidor local executa este comando no seu computador com as suas permissões. Use apenas comandos em que você confia.",
+    "optional": "opcional",
+    "keepStored": "salvo — deixe vazio para manter",
+    "value": "valor",
+    "addRow": "Adicionar",
+    "connect": "Conectar",
+    "reconnect": "Reconectar",
+    "disconnect": "Desconectar",
+    "signOut": "Sair",
+    "signOutHint": "Desconectar e apagar as credenciais OAuth salvas",
+    "turnOn": "Ligar",
+    "turnOff": "Desligar",
+    "confirmDelete": "Excluir conector",
+    "authorizingBrowser": "Aguardando você autorizar o GilzaBots no navegador…",
+    "authorizingNoBrowser": "Não foi possível abrir um navegador. Abra a página de autorização pelo link abaixo.",
+    "openAuthorization": "Abrir a página de autorização",
+    "chooseTools": "Ferramentas que o agente pode usar",
+    "noToolsYet": "Conecte uma vez para listar as ferramentas deste servidor.",
+    "toolsSelected": "{{count}} de {{total}} selecionadas",
+    "selectAll": "Todas",
+    "selectNone": "Nenhuma",
+    "readOnlyHint": "somente leitura (segundo o servidor)",
+    "toolCount": "{{count}}/{{total}} ferramentas",
+    "status": {
+      "connected": "conectado",
+      "connecting": "conectando…",
+      "authorizing": "aguardando autorização",
+      "error": "erro",
+      "disconnected": "desconectado",
+      "off": "desligado"
+    },
+    "authLabel": {
+      "none": "sem autenticação",
+      "oauth": "OAuth",
+      "bearer": "token bearer"
+    },
+    "catalogTitle": "Começar pelo catálogo",
+    "catalogHint": "Escolher um preenche o formulário abaixo; complete o que ele pede e salve. Você também pode configurar qualquer outro servidor MCP manualmente.",
+    "docsLink": "Documentação de configuração",
+    "requirementMissing": "{{command}} não foi encontrado neste computador; instale antes de conectar.",
+    "presetMissing": "Preencha: {{names}}",
+    "fieldConnectTimeout": "Tempo limite de conexão (segundos)",
+    "categories": {
+      "social": "Social",
+      "productivity": "Produtividade",
+      "development": "Desenvolvimento",
+      "local": "Neste computador"
+    },
+    "presetArg": {
+      "folder": "Pasta"
+    },
+    "presets": {
+      "x": {
+        "name": "X (sua conta)",
+        "description": "Servidor MCP hospedado do X (api.x.com/mcp) com a sua conta: ler e buscar posts, postar e repostar em seu nome. Roda pela ponte oficial xurl do X.",
+        "setup": "Crie um app no X Developer Console com OAuth 2.0 ativado, registre a URI de redirecionamento http://localhost:8080/callback e copie aqui o client id e o secret. Na primeira conexão o xurl abre o navegador para você entrar no X e depois guarda o token. O uso da API é cobrado na sua conta de desenvolvedor, e as regras de automação do X valem: nada de likes ou follows automatizados, e respostas geradas por IA precisam de aprovação do X. Requer Node.js (npx)."
+      },
+      "x-readonly": {
+        "name": "X (somente leitura, token do app)",
+        "description": "Servidor MCP hospedado do X com um bearer token só do app: apenas endpoints de leitura, nada em seu nome.",
+        "setup": "Copie o Bearer Token do app na página \"Keys and tokens\" do seu app no X."
+      },
+      "x-docs": {
+        "name": "Documentação do X",
+        "description": "Buscar e ler a documentação da API do X. Não precisa de conta."
+      },
+      "github": {
+        "name": "GitHub",
+        "description": "Servidor MCP remoto do GitHub: repositórios, issues, pull requests e mais.",
+        "setup": "Crie um personal access token fine-grained no GitHub (Settings → Developer settings) só com os repositórios e permissões que o agente deve ter."
+      },
+      "notion": {
+        "name": "Notion",
+        "description": "Buscar, ler e editar suas páginas e bancos de dados do Notion.",
+        "setup": "Clique em Conectar e entre no Notion pelo navegador."
+      },
+      "linear": {
+        "name": "Linear",
+        "description": "Encontrar, criar e atualizar issues e projetos do Linear.",
+        "setup": "Clique em Conectar e entre no Linear pelo navegador."
+      },
+      "sentry": {
+        "name": "Sentry",
+        "description": "Consultar issues, erros e releases do Sentry.",
+        "setup": "Clique em Conectar e entre no Sentry pelo navegador."
+      },
+      "huggingface": {
+        "name": "Hugging Face",
+        "description": "Buscar modelos, datasets e Spaces no Hugging Face Hub."
+      },
+      "deepwiki": {
+        "name": "DeepWiki",
+        "description": "Fazer perguntas sobre repositórios públicos do GitHub e ler a documentação gerada deles."
+      },
+      "context7": {
+        "name": "Context7",
+        "description": "Documentação atualizada e exemplos de código de bibliotecas de programação."
+      },
+      "filesystem": {
+        "name": "Arquivos (uma pasta local)",
+        "description": "Ler e escrever arquivos em uma pasta do seu computador que você escolhe.",
+        "setup": "Escolha a pasta que o servidor pode acessar; ele não alcança nada fora dela. Requer Node.js (npx)."
+      },
+      "fetch": {
+        "name": "Fetch (páginas web)",
+        "description": "Buscar uma página web e convertê-la em Markdown.",
+        "setup": "Requer o uv (uvx) instalado: https://docs.astral.sh/uv/"
+      }
+    }
   }
 }

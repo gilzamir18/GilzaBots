@@ -73,6 +73,7 @@ import InteractiveTerminalModal from './components/modals/InteractiveTerminalMod
 import AskModal from './components/modals/AskModal';
 import HardwareModal from './components/modals/HardwareModal';
 import MonitorsModal from './components/modals/MonitorsModal';
+import ConnectorsModal from './components/modals/ConnectorsModal';
 import useMonitorBridge from './hooks/useMonitorBridge';
 import AssetStoreModal from './components/modals/AssetStoreModal';
 import CloudSyncModal from './components/modals/CloudSyncModal';
@@ -607,6 +608,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isHardwareModalOpen, setIsHardwareModalOpen] = useState(false);
   const [isMonitorsModalOpen, setIsMonitorsModalOpen] = useState(false);
+  const [isConnectorsModalOpen, setIsConnectorsModalOpen] = useState(false);
   const [isAssetStoreOpen, setIsAssetStoreOpen] = useState(false);
   const [isCloudSyncOpen, setIsCloudSyncOpen] = useState(false);
   const [isCloudDownloadOpen, setIsCloudDownloadOpen] = useState(false);
@@ -4919,6 +4921,7 @@ export default function App() {
           onEditModels={() => setShowEditModelsModal(true)}
           onOpenHardware={() => setIsHardwareModalOpen(true)}
           onOpenMonitors={() => setIsMonitorsModalOpen(true)}
+          onOpenConnectors={() => setIsConnectorsModalOpen(true)}
           monitorsUnseenEvents={monitorUnseenEvents}
           onOpenAssetStore={() => setIsAssetStoreOpen(true)}
           onOpenCloudSync={() => setIsCloudSyncOpen(true)}
@@ -5481,6 +5484,9 @@ export default function App() {
             showMonitorChat({ project: event.project, chat_id: event.chat_id });
           }}
         />
+      )}
+      {isConnectorsModalOpen && (
+        <ConnectorsModal onClose={() => setIsConnectorsModalOpen(false)} />
       )}
       {isHardwareModalOpen && (
         <HardwareModal onClose={() => setIsHardwareModalOpen(false)} />

@@ -167,6 +167,7 @@ COMMAND_GROUPS: dict[str, tuple[str, ...]] = {
     "help_group_vcs": ("/commit", "/undo", "/checkpoints", "/restoreckp", "/removechk"),
     "help_group_build": ("/compile",),
     "help_group_monitors": ("/monitors",),
+    "help_group_connectors": ("/connectors",),
 }
 
 
@@ -1235,3 +1236,4 @@ async def cmd_exit(_state: REPLState, _args: list[str]) -> str:
 # Provider connections and catalog models register themselves into `_registry`.
 # Imported at the end so the registry above already exists when they do.
 from . import cli_catalog  # noqa: E402,F401  (import for side effect)
+from . import cli_connectors  # noqa: E402,F401  (import for side effect)

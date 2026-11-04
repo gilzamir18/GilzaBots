@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Files, GitBranch, MessageSquare, Settings, Cpu, LayoutTemplate, LayoutGrid, PanelBottom, Terminal, History, Columns2, Store, GraduationCap, Cloud, CloudOff, Plug, Radar } from 'lucide-react';
+import { Files, GitBranch, MessageSquare, Settings, Cpu, LayoutTemplate, LayoutGrid, PanelBottom, Terminal, History, Columns2, Store, GraduationCap, Cloud, CloudOff, Plug, Radar, Cable } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   ACTIVITY_BAR_DEFAULT_DENSITY,
@@ -20,6 +20,7 @@ export default function ActivityBar({
   onEditModels,
   onOpenHardware,
   onOpenMonitors,
+  onOpenConnectors,
   monitorsUnseenEvents = 0,
   onOpenAssetStore,
   onOpenCloudSync,
@@ -301,6 +302,15 @@ export default function ActivityBar({
               fontSize: 9, fontWeight: 700, lineHeight: '14px', textAlign: 'center',
             }}>{monitorsUnseenEvents > 99 ? '99+' : monitorsUnseenEvents}</span>
           )}
+        </button>
+
+        <button
+          onClick={onOpenConnectors}
+          className="vscode-activitybar-btn"
+          title={t('activityBar.connectors', 'Connectors (MCP)')}
+          aria-label={t('activityBar.connectors', 'Connectors (MCP)')}
+        >
+          <Cable size={density.secondaryIconSize} />
         </button>
 
         <button

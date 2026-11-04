@@ -434,6 +434,75 @@ class UserCancelException(BaseException):
     pass
 
 
+def _allowed_for_session(name: str) -> bool:
+    """Whether the user answered "always" for ``name`` earlier in this session."""
+    if _PROJECT_SESSION and hasattr(_PROJECT_SESSION, "results"):
+        return name in _PROJECT_SESSION.results.get("allowed_tools", [])
+    return False
+
+
+async def _ask_tool_permission(name: str, question: str) -> str | None:
+    """Ask the user whether ``name`` may run; ``None`` means it may.
+
+    Every front-end answers the same way (agent_stdin.request_user_input): the
+    GUI over HTTP, the stdin protocol with an `input_response` command, the CLI
+    with a terminal prompt. Anything but a yes is a refusal, returned as the
+    "Execution blocked" message the model receives instead of the tool's result.
+    """
+    from gilzabots.agent_stdin import request_user_input
+    try:
+        raw = await request_user_input(
+            question,
+            options=["yes", "no", "always"],
+            default="yes",
+            input_type="confirm",
+        )
+        ans = str(raw).strip().lower()
+    except asyncio.TimeoutError:
+        # An unanswered permission request is not permission.
+        ans = "no"
+
+    if ans not in ("yes", "y", "s", "sim", "true", "1", "always", "a"):
+        _DENIED_TOOLS.add(name)
+        return f"Execution blocked: The user denied permission to use '{name}'. Choose a safe alternative or explain what is needed."
+
+    if ans in ("always", "a"):
+        if _PROJECT_SESSION and hasattr(_PROJECT_SESSION, "results"):
+            if "allowed_tools" not in _PROJECT_SESSION.results:
+                _PROJECT_SESSION.results["allowed_tools"] = []
+            if name not in _PROJECT_SESSION.results["allowed_tools"]:
+                _PROJECT_SESSION.results["allowed_tools"].append(name)
+    return None
+
+
+async def authorize_external_tool_call(name: str, question: str, *, always_ask: bool) -> str | None:
+    """The permission gate for a tool that is not one of GilzaBots' own.
+
+    Used by MCP connector tools (PROJECT_DESIGN 2.25). The chat's mode applies as
+    for a native tool that is not safe -- ``plan`` blocks, ``edit`` asks, ``auto``
+    runs -- except that ``always_ask`` makes ``auto`` ask too: a connector the user
+    marked "always ask" acts outside this machine, where an action cannot be undone
+    by a checkpoint. An "always" answer is remembered either way. Returns ``None``
+    when the call may proceed, else the "Execution blocked" message.
+    """
+    mode = getattr(_PROJECT_SESSION, "mode", "auto") if _PROJECT_SESSION else "auto"
+    if mode == "plan":
+        return "Execution blocked: In 'plan' mode, only reading, memory and communication tools are available."
+    if mode == "auto" and not always_ask:
+        return None
+    if _allowed_for_session(name):
+        return None
+    if name in _DENIED_TOOLS:
+        return f"Execution blocked: You already asked to use '{name}' and the user DENIED it. Do not try again."
+    # A monitor's turn has nobody to ask (PROJECT_DESIGN 2.24).
+    from .agent_stdin import unattended_refusal, unattended_turn
+    if unattended_turn() is not None:
+        return "Execution blocked: " + unattended_refusal(
+            f"'{name}' needs the user's approval, which cannot be asked now"
+        )
+    return await _ask_tool_permission(name, question)
+
+
 def gilzabots_tool(name: str, description: str, is_safe: bool = False):
     """
     Decorator that wraps the agenticblocks tool.
@@ -456,10 +525,8 @@ def gilzabots_tool(name: str, description: str, is_safe: bool = False):
                 return "Execution blocked: In 'plan' mode, only reading, memory and communication tools are available."
                 
             # Check if this tool was set to 'always allow'
-            if _PROJECT_SESSION and hasattr(_PROJECT_SESSION, "results"):
-                allowed_tools = _PROJECT_SESSION.results.get("allowed_tools", [])
-                if name in allowed_tools:
-                    return True
+            if _allowed_for_session(name):
+                return True
 
             if name in _DENIED_TOOLS:
                 return f"Execution blocked: You already asked to use '{name}' and the user DENIED it. Do not try again."
@@ -501,35 +568,9 @@ def gilzabots_tool(name: str, description: str, is_safe: bool = False):
             if isinstance(res, str):
                 if res.startswith("Execution blocked"):
                     return res
-                
-                # Ask the user for permission. Every front-end answers this the
-                # same way (agent_stdin.request_user_input): the GUI over HTTP,
-                # the stdin protocol with an `input_response` command, the CLI
-                # with a terminal prompt.
-                import asyncio
-                from gilzabots.agent_stdin import request_user_input
-                try:
-                    raw = await request_user_input(
-                        res,
-                        options=["yes", "no", "always"],
-                        default="yes",
-                        input_type="confirm",
-                    )
-                    ans = str(raw).strip().lower()
-                except asyncio.TimeoutError:
-                    # An unanswered permission request is not permission.
-                    ans = "no"
-
-                if ans not in ("yes", "y", "s", "sim", "true", "1", "always", "a"):
-                    _DENIED_TOOLS.add(name)
-                    return f"Execution blocked: The user denied permission to use '{name}'. Choose a safe alternative or explain what is needed."
-                    
-                if ans in ("always", "a"):
-                    if _PROJECT_SESSION and hasattr(_PROJECT_SESSION, "results"):
-                        if "allowed_tools" not in _PROJECT_SESSION.results:
-                            _PROJECT_SESSION.results["allowed_tools"] = []
-                        if name not in _PROJECT_SESSION.results["allowed_tools"]:
-                            _PROJECT_SESSION.results["allowed_tools"].append(name)
+                refusal = await _ask_tool_permission(name, res)
+                if refusal is not None:
+                    return refusal
 
             try:
                 if is_async:

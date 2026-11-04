@@ -1531,6 +1531,7 @@ def chat_orchestrator_system_prompt(project, store=None) -> str:
     )
 
     from .monitors.agent_tools import MONITORS_PROMPT_BLOCK
+    from .connectors.agent_tools import connectors_prompt_block
 
     system_prompt = (
         f"{_current_date_instruction()}\n\n"
@@ -1539,6 +1540,7 @@ def chat_orchestrator_system_prompt(project, store=None) -> str:
         f"{catalog}\n"
         f"{_HELPER_POLICY_BLOCKS[orchestrator_policy]}\n"
         f"{MONITORS_PROMPT_BLOCK}"
+        f"{connectors_prompt_block()}"
         f"{native_tool_block}"
         f"{tutorial_block}"
         f"{surface_block}"
@@ -1752,6 +1754,11 @@ def build_chat_orchestrator(project, store=None) -> MemGPTAgentBlock:
     orchestrator_tools.extend(
         wrap_tool(tool) for tool in get_workspace_action_tools()
     )
+    # MCP connectors the user registered (PROJECT_DESIGN 2.25), from their cached
+    # catalogs: building the agent opens no connection. Not in the planning list,
+    # where the permission gate would block every call anyway.
+    from .connectors.agent_tools import build_connector_tools
+    orchestrator_tools.extend(wrap_tool(tool) for tool in build_connector_tools())
     if enable_achievements:
         from .tools import update_achievements_memory
         orchestrator_tools.append(wrap_tool(update_achievements_memory))

@@ -247,6 +247,7 @@ Recognized commands:
 * `/thoughts [on|off]` / `/tools [on|off]`: show or hide reasoning and tool calls *(command-line interface only)*
 * `/compile [file.tex]`: compile the project with Tectonic *(command-line interface only)*
 * `/monitors [list|info|pause|resume|cancel|test]`: manage the background monitors, the same as `gilzabots monitors` *(command-line interface only)*
+* `/connectors [list|add|add-stdio|connect|disconnect|tools|on|off|approval|remove]`: manage the MCP connectors, external services whose tools you can use; in the desktop app the same is done in the Connectors panel *(command-line interface only)*
 * `/exit` or `/quit`: exit GilzaBots
 
 If the user types a command without `/`, guide them to use the slashed form in normal text instead of executing or guessing.

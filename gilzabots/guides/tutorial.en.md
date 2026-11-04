@@ -495,6 +495,9 @@ Beyond basic LaTeX file editing, GilzaBots includes powerful built-in tools and 
 - **Monitor Agents (Experimental)** — background watchers that notify you, or wake a chat
   so the assistant resumes a task, when something happens — even with the window closed.
   See *What are monitor agents, and how do I use them?*
+- **Connectors (MCP)** — let the assistant use external services (a social network, an
+  issue tracker, a local server) through MCP servers you connect. See *How do I connect
+  external services (MCP connectors)?*
 
 ## docker-sandbox :: What is the Docker sandbox and how does it work?
 
@@ -687,6 +690,43 @@ The service stops by itself after a while when there is nothing left to watch.
 - If notifications do not appear, use **Test notification** (or
   `gilzabots monitors notify-test`), and check `gilzabots monitors daemon --status`. The
   service writes a log at `<GilzaBots data folder>/monitors/daemon.log`.
+
+## connectors :: How do I connect external services (MCP connectors)?
+
+A **connector** links GilzaBots to an external service through an **MCP server** (Model
+Context Protocol). Whatever tools the server offers — publishing a post, reading issues,
+searching notes — become tools the assistant can use in chat.
+
+**Adding one.** Open **Connectors** (cable icon in the activity bar) → **Add connector**. The
+**catalog** at the top has ready-made entries — X (your account, read-only, or the developer
+docs), GitHub, Notion, Linear, Sentry, Hugging Face, DeepWiki, Context7, a local folder and web
+fetching: pick one, fill in what it asks for (a token, your app's client id, a folder) and save.
+Or configure any other server by hand:
+
+- **Remote or local URL** — the server's address (`https://…/mcp`; plain `http://` only for
+  `localhost`). Choose the authentication the service uses: **OAuth** (you sign in through
+  your browser, like authorizing Google Drive), a **bearer token**, or none.
+- **Local command** — a server GilzaBots starts on your computer (for example `npx` with
+  its arguments, one per line). It runs with your permissions: only use commands you trust.
+
+Then click **Connect**. For OAuth, your browser opens the service's consent page; after you
+allow access, the connector shows *connected* and lists its tools. Under **Tools the
+agent may use** you can keep only the ones you want — a server may offer hundreds.
+
+**Approval.** By default (**Always ask**) every call shows an approval prompt with the
+exact arguments — the text of a post, the recipient of a message — even in auto mode. With
+**Follow the chat mode**, calls behave like the built-in tools (auto runs, edit asks, plan
+blocks). Background monitor turns can never use an *Always ask* connector.
+
+**Good to know.**
+
+- The service's own rules still apply. X (Twitter), for example, forbids automated likes
+  and follows and requires its approval for AI-generated replies; using an MCP server does
+  not change that. Each user needs their own developer access where the service requires it.
+- Tool descriptions and results come from the server; the assistant treats them as data.
+- If a connector says it needs authorization, open Connectors and click **Connect** again.
+  **Sign out** deletes the stored credentials.
+- From the terminal: `/connectors` (see `/help /connectors`).
 
 ## cloud-for-big-data :: When should I use cloud models?
 

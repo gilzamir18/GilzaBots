@@ -208,6 +208,7 @@ _STRINGS = {
         "cli_unfinished_turn_detected": "An unfinished agent turn was detected in this chat.",
         "tool_permission_question": "The agent wants to use the tool '{tool}'. Allow it?",
         "command_permission_question": "The agent wants to run the command: '{command}'. Allow it?",
+        "connector_tool_permission_question": "The agent wants to call '{tool}' on the connector '{connector}' with:\n{arguments}\nAllow it?",
 
         # -- Model catalog and provider connections (cli_catalog.py)
         "cli_providers_header": "Provider connections (credentials shared by the models under them):",
@@ -307,6 +308,7 @@ _STRINGS = {
         "help_group_vcs": "Changes and checkpoints",
         "help_group_build": "Compilation",
         "help_group_monitors": "Monitors",
+        "help_group_connectors": "Connectors (MCP)",
         "help_group_other": "Other",
         "help_more": "Type /help <command> for its arguments and examples, e.g. /help /models.",
     },
@@ -515,6 +517,7 @@ _STRINGS = {
         "cli_unfinished_turn_detected": "Foi detectado um turno de agente não finalizado neste chat.",
         "tool_permission_question": "O agente quer usar a ferramenta '{tool}'. Permitir?",
         "command_permission_question": "O agente quer executar o comando: '{command}'. Permitir?",
+        "connector_tool_permission_question": "O agente quer chamar '{tool}' no conector '{connector}' com:\n{arguments}\nPermitir?",
 
         # -- Catálogo de modelos e conexões (cli_catalog.py)
         "cli_providers_header": "Conexões de provedor (credenciais compartilhadas pelos modelos sob elas):",
@@ -614,6 +617,7 @@ _STRINGS = {
         "help_group_vcs": "Alterações e checkpoints",
         "help_group_build": "Compilação",
         "help_group_monitors": "Monitores",
+        "help_group_connectors": "Conectores (MCP)",
         "help_group_other": "Outros",
         "help_more": "Digite /help <comando> para ver argumentos e exemplos, por exemplo /help /models.",
     }

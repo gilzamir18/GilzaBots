@@ -515,6 +515,9 @@ avançadas:
 - **Agentes Monitores (Experimental)** — observadores em segundo plano que avisam você, ou
   acordam um chat para o assistente retomar uma tarefa, quando algo acontece — mesmo com a
   janela fechada. Veja *O que são os agentes monitores e como usá-los?*
+- **Conectores (MCP)** — deixam o assistente usar serviços externos (uma rede social, um
+  rastreador de issues, um servidor local) por meio de servidores MCP que você conecta. Veja
+  *Como conecto serviços externos (conectores MCP)?*
 
 ## docker-sandbox :: O que é o sandbox Docker e como ele funciona?
 
@@ -710,6 +713,47 @@ há mais nada para observar.
 - Se as notificações não aparecem, use **Testar notificação** (ou
   `gilzabots monitors notify-test`) e confira `gilzabots monitors daemon --status`. O
   serviço grava um log em `<pasta de dados do GilzaBots>/monitors/daemon.log`.
+
+## connectors :: Como conecto serviços externos (conectores MCP)?
+
+Um **conector** liga o GilzaBots a um serviço externo por meio de um **servidor MCP** (Model
+Context Protocol). As ferramentas que o servidor oferece — publicar um post, ler issues,
+buscar notas — passam a ser ferramentas que o assistente pode usar no chat.
+
+**Adicionando.** Abra **Conectores** (ícone de cabo na barra de atividades) → **Adicionar
+conector**. O **catálogo** no topo tem entradas prontas — X (sua conta, somente leitura ou a
+documentação de desenvolvedor), GitHub, Notion, Linear, Sentry, Hugging Face, DeepWiki, Context7,
+uma pasta local e busca de páginas web: escolha uma, preencha o que ela pede (um token, o client
+id do seu app, uma pasta) e salve. Ou configure qualquer outro servidor manualmente:
+
+- **URL remota ou local** — o endereço do servidor (`https://…/mcp`; `http://` simples só para
+  `localhost`). Escolha a autenticação que o serviço usa: **OAuth** (você entra pelo
+  navegador, como ao autorizar o Google Drive), um **token bearer**, ou nenhuma.
+- **Comando local** — um servidor que o GilzaBots inicia no seu computador (por exemplo `npx`
+  com seus argumentos, um por linha). Ele roda com as suas permissões: use apenas comandos
+  em que você confia.
+
+Depois clique em **Conectar**. No OAuth, o navegador abre a página de consentimento do
+serviço; depois que você permite o acesso, o conector aparece como *conectado* e lista as
+ferramentas. Em **Ferramentas que o agente pode usar** você pode manter só as que quiser — um
+servidor pode oferecer centenas.
+
+**Aprovação.** Por padrão (**Sempre perguntar**), cada chamada mostra um pedido de aprovação
+com os argumentos exatos — o texto de um post, o destinatário de uma mensagem — mesmo no modo
+auto. Com **Seguir o modo do chat**, as chamadas se comportam como as ferramentas nativas
+(auto executa, edit pergunta, plan bloqueia). Turnos de monitores em segundo plano nunca
+podem usar um conector em *Sempre perguntar*.
+
+**Bom saber.**
+
+- As regras do próprio serviço continuam valendo. O X (Twitter), por exemplo, proíbe likes e
+  follows automatizados e exige aprovação dele para respostas geradas por IA; usar um
+  servidor MCP não muda isso. Cada usuário precisa do próprio acesso de desenvolvedor onde o
+  serviço exigir.
+- Descrições e resultados das ferramentas vêm do servidor; o assistente os trata como dados.
+- Se um conector disser que precisa de autorização, abra Conectores e clique em **Conectar**
+  de novo. **Sair** apaga as credenciais salvas.
+- No terminal: `/connectors` (veja `/help /connectors`).
 
 ## cloud-for-big-data :: Quando devo usar modelos em nuvem?
 
