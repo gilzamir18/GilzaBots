@@ -641,6 +641,15 @@ do usuário no Windows); você
 pode desligar no painel de Monitores. O serviço para sozinho depois de um tempo quando não
 há mais nada para observar.
 
+- **Ícone na bandeja** — enquanto o serviço roda, um ícone do GilzaBots na bandeja do
+  sistema mostra que ele está trabalhando em segundo plano, mesmo com a janela fechada
+  (fechar a janela continua fechando a janela). O menu mostra os monitores ativos e os
+  eventos novos (um ponto vermelho marca os não vistos) e oferece **Abrir o GilzaBots**,
+  **Painel de Monitores…**, **Pausar todos os monitores** / **Retomar monitores** e
+  **Encerrar o serviço em segundo plano** (os monitores então esperam até o GilzaBots ser
+  aberto ou você entrar na sessão de novo). No Ubuntu ele usa a extensão *Ubuntu
+  AppIndicators*, ligada por padrão; o GNOME puro precisa da extensão AppIndicator.
+  Desligue em **Ícone na bandeja** no painel de Monitores ou com `gilzabots monitors tray off`.
 - **Notificações** — as nativas: a central de notificações do GNOME/KDE no Linux, toasts
   no Windows, a Central de Notificações no macOS. Clicar numa notificação (no Linux e no
   Windows) abre o GilzaBots no chat a que ela pertence.
@@ -663,12 +672,12 @@ há mais nada para observar.
   tarefa* ou *Observação*), gatilho, última verificação, último valor e erros, com
   **Pausar/Retomar**, **Testar** (verifica agora sem alterar nada), **Cancelar/Remover**,
   o histórico de cada monitor, um formulário de **Novo monitor**, o estado do serviço,
-  **Iniciar no login** e **Testar notificação**.
+  **Iniciar no login**, **Ícone na bandeja** e **Testar notificação**.
 - **No chat** — peça ao assistente para listar, pausar ou cancelar monitores
   (`list_monitors`, `pause_monitor`, `cancel_monitor`).
 - **No terminal** — `gilzabots monitors list`, `info <id>`, `pause <id>`, `resume <id>`,
   `cancel <id>`, `test <id>`, `daemon --status`,
-  `service status|install|uninstall`, `notify-test`; `/monitors` faz o mesmo dentro do
+  `service status|install|uninstall`, `tray status|on|off`, `notify-test`; `/monitors` faz o mesmo dentro do
   `gilzabots --cli`.
 
 ### Cuidados

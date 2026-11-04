@@ -265,6 +265,19 @@ class TestStore:
         assert upgraded.get_wake(wake_id)["new_chat"] == 1
         assert upgraded.get_wake(upgraded.enqueue_wake(monitor, "p", "d"))["new_chat"] == 0
 
+    def test_a_database_from_an_earlier_version_gains_lineage_and_view(self, tmp_path):
+        import sqlite3
+
+        path = str(tmp_path / "old.db")
+        st.MonitorStore(db_path=path)
+        with sqlite3.connect(path) as conn:
+            conn.execute("ALTER TABLE monitors DROP COLUMN lineage_root_id")
+            conn.execute("ALTER TABLE open_requests DROP COLUMN view")
+        upgraded = st.MonitorStore(db_path=path)
+        assert upgraded.create_monitor(_wake_spec())["lineage_root_id"] == ""
+        upgraded.add_open_request("", "", "", view="monitors")
+        assert upgraded.take_open_request()["view"] == "monitors"
+
     def test_events_are_bounded(self, mstore):
         monitor = mstore.create_monitor(_spec())
         for index in range(st.MAX_EVENTS_PER_MONITOR + 20):
@@ -1154,7 +1167,7 @@ class TestUnattendedTurn:
         }))
         assert captured["id"] == recurring["id"]
         assert agent_stdin.unattended_monitor_id() is None
-        assert f"woken by monitor {recurring['id']}" in captured["result"]
+        assert f"descends from monitor {recurring['id']}" in captured["result"]
         assert "remains active" in captured["result"]
         assert [m["id"] for m in mstore.list_monitors()] == [recurring["id"]]
 
@@ -1164,8 +1177,66 @@ class TestUnattendedTurn:
             "chat_id": "chat-wake",
             "monitor_wake": recurring["name"],
         }))
-        assert f"woken by monitor {recurring['id']}" in captured["result"]
+        assert f"descends from monitor {recurring['id']}" in captured["result"]
         assert [m["id"] for m in mstore.list_monitors()] == [recurring["id"]]
+
+    def test_a_turn_woken_by_a_recurring_monitor_can_wait_once_for_its_own_result(
+            self, session, mstore, monkeypatch):
+        """Reported: the analysis a recurring monitor triggered could not wait for the file it produced."""
+        from gilzabots import agent_stdin
+
+        recurring = mstore.create_monitor(_wake_spec(
+            name="Daily analysis",
+            action={"type": "resume_chat", "prompt": "run the analysis", "chat": "new"},
+            repeat=True,
+        ))
+        session.current_chat_id = "chat-wake"
+        register = _tools()["register_monitor"]
+        captured = {}
+
+        async def fake_body(_data):
+            captured["result"] = await captured["call"]()
+
+        monkeypatch.setattr(agent_stdin, "_handle_run", fake_body)
+
+        def run_woken_by(monitor, call):
+            captured["call"] = call
+            asyncio.run(agent_stdin.handle_run({
+                "project_name": "proj", "chat_id": "chat-wake",
+                "monitor_wake": monitor["name"], "monitor_wake_id": monitor["id"],
+            }))
+            return captured["result"]
+
+        # The default of wake_in='same_chat' fires once: allowed, and it remembers its lineage.
+        result = run_woken_by(recurring, lambda: register(
+            name="report ready", interval_seconds=60, check_type="timer", resume_prompt="summarize the report",
+        ))
+        assert result.startswith("Registered monitor mon_"), result
+        wait = next(m for m in mstore.list_monitors() if m["name"] == "report ready")
+        assert wait["repeat"] is False and wait["lineage_root_id"] == recurring["id"]
+
+        # The turn the one-off wait wakes still descends from the active recurring monitor:
+        # it cannot start a recurring monitor either, but can chain another one-off wait.
+        mstore.set_status(wait["id"], st.STATUS_COMPLETED, "fired")
+        refused = run_woken_by(wait, lambda: register(
+            name="Daily analysis (next)", interval_seconds=3600, resume_prompt="run it again", wake_in="new_chat",
+        ))
+        assert f"descends from monitor {recurring['id']}" in refused and "once=true" in refused
+        chained = run_woken_by(wait, lambda: register(
+            name="second step", interval_seconds=60, check_type="timer", resume_prompt="finish",
+        ))
+        assert chained.startswith("Registered monitor mon_"), chained
+        second = next(m for m in mstore.list_monitors() if m["name"] == "second step")
+        assert second["lineage_root_id"] == recurring["id"]
+
+        # Once the recurring monitor ends, its descendants are ordinary turns again.
+        mstore.set_status(recurring["id"], st.STATUS_CANCELLED, "cancelled")
+        freed = run_woken_by(wait, lambda: register(
+            name="weekly digest", interval_seconds=3600, resume_prompt="write the digest", wake_in="new_chat",
+        ))
+        assert freed.startswith("Registered monitor mon_"), freed
+        digest = next(m for m in mstore.list_monitors() if m["name"] == "weekly digest")
+        assert digest["repeat"] is True and digest["lineage_root_id"] == ""
 
     def test_a_woken_turn_can_register_a_followup_once_its_task_wait_ended(self, session, mstore, clock, monkeypatch):
         from gilzabots import agent_stdin

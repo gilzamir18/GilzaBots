@@ -15,7 +15,7 @@ export const MONITOR_POLL_MS = 4000;
  *  - hands it a wake-up of that project when no turn is running. The wake-up
  *    runs as an ordinary turn (`runWake`), streamed in the chat it belongs to,
  *    and its outcome is reported back so a refused one returns to the queue;
- *  - delivers a notification click (`openChat`) and the latest monitor events
+ *  - delivers a notification click or a tray-icon request (`openChat`) and the latest monitor events
  *    with how many are unseen (`onEvents`).
  *
  * Callbacks are read through a ref: the poll loop is started once per project,

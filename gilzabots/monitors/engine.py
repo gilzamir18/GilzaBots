@@ -116,7 +116,9 @@ def wake_prompt(monitor: dict, event: str, value: Any, variables: dict, error: s
             f"Monitor status: \"{monitor['name']}\" ({monitor['id']}) is recurring and remains active "
             f"(it checks every {monitor.get('interval_seconds')} s on its own). Do NOT call register_monitor "
             "to re-create or renew this monitor, even if the instructions above ask to maintain recurrence -- "
-            "the original monitor continues running, and re-registering it creates duplicate monitors."
+            "the original monitor continues running, and re-registering it creates duplicate monitors. "
+            "You may register a monitor that fires once (once=true) for another purpose of this turn, such as "
+            "waiting for a result your work produces."
         )
         tail = "Do not call register_monitor to renew this monitor; end your turn once you have replied."
     elif new_chat:

@@ -214,7 +214,18 @@ def daemon_status() -> dict:
             "other_folder": backend.foreign_owner() if backend else None,
         },
         "log": log_path(),
+        "tray": _tray_status(running),
     }
+
+
+def _tray_status(running: bool) -> dict:
+    from . import store as st
+    from .tray import tray_status
+
+    try:
+        return tray_status(st.MonitorStore(), running)
+    except Exception as exc:
+        return {"enabled": True, "state": "failed", "reason": str(exc)}
 
 
 def _home_environment() -> dict[str, str]:
@@ -645,13 +656,15 @@ def ensure_daemon_running(store=None, *, wait: float = 0.0) -> dict:
 GUI_ALIVE_SECONDS = 20.0
 
 
-def open_chat(store, project: str, chat_id: str, project_path: str = "") -> dict:
+def open_chat(store, project: str, chat_id: str, project_path: str = "", view: str = "") -> dict:
     """Show a chat: in the running window, or by starting one.
 
     The request is queued for the window's poll in both cases, so a window
-    that is still starting picks it up as soon as it is ready.
+    that is still starting picks it up as soon as it is ready. With no project
+    it only raises the window; *view* names something to open besides the chat
+    (``"monitors"``: the Monitors panel).
     """
-    store.add_open_request(project, project_path, chat_id)
+    store.add_open_request(project, project_path, chat_id, view)
     if store.live_hosts("gui", GUI_ALIVE_SECONDS):
         return {"launched": False}
     if project:

@@ -8,7 +8,7 @@ every few seconds. The poll is how the window
 - claims a wake-up of its project when it is idle, and runs it as an ordinary
   turn the user sees streaming (``App.jsx``); it reports the outcome with
   ``/api/monitors/wake/finish``;
-- receives a notification click (``open_requests``).
+- receives a notification click or a request from the tray icon (``open_requests``).
 
 A wake-up the window runs is marked ``monitor_wake`` like one the daemon runs,
 so it asks nothing outside its chat either (``agent_stdin.unattended_turn``).
@@ -123,6 +123,11 @@ async def handle(path: str, method: str, data: dict, query: dict, *,
 
         result = await asyncio.to_thread(set_autostart, store, bool(data.get("enabled")))
         return (200 if result.get("ok") else 500), result
+
+    if path == "/api/monitors/tray" and method == "POST":
+        from .tray import set_tray_enabled
+
+        return 200, set_tray_enabled(store, bool(data.get("enabled")))
 
     if path == "/api/monitors/daemon/start" and method == "POST":
         from .service import ensure_daemon_running

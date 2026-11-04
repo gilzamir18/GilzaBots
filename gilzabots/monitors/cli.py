@@ -8,6 +8,7 @@ User commands::
     gilzabots monitors pause|resume|cancel|delete|test <id>
     gilzabots monitors daemon [--status | --stop]
     gilzabots monitors service status|install|uninstall
+    gilzabots monitors tray status|on|off
     gilzabots monitors notify-test
 
 Internal commands (started by the daemon or the OS)::
@@ -15,6 +16,7 @@ Internal commands (started by the daemon or the OS)::
     gilzabots monitors run-wake <wake-id>
     gilzabots monitors llm-check <monitor-id>
     gilzabots monitors open <gilzabots-monitor:...>
+    gilzabots monitors tray run --daemon-pid <pid>
 """
 from __future__ import annotations
 
@@ -67,6 +69,10 @@ def _parser() -> argparse.ArgumentParser:
 
     service = sub.add_parser("service", help="The login service that starts the daemon")
     service.add_argument("action", choices=("status", "install", "uninstall"))
+
+    tray = sub.add_parser("tray", help="The daemon's tray icon: status, on, off ('run' is internal)")
+    tray.add_argument("action", choices=("status", "on", "off", "run"))
+    tray.add_argument("--daemon-pid", type=int, default=0, help="(internal, with 'run') the daemon to follow")
 
     sub.add_parser("notify-test", help="Show a test desktop notification")
 
@@ -216,6 +222,21 @@ def _cmd_daemon(store: st.MonitorStore, args) -> int:
     return run_daemon()
 
 
+def _cmd_tray(store: st.MonitorStore, args) -> int:
+    from . import service, tray
+
+    if args.action == "run":
+        pid = args.daemon_pid or int(service.read_state().get("pid") or 0)
+        if not pid or not service.daemon_running():
+            print("The monitor daemon is not running; the tray icon belongs to it.", file=sys.stderr)
+            return 1
+        return tray.run_tray(pid)
+    if args.action in ("on", "off"):
+        tray.set_tray_enabled(store, args.action == "on")
+    print(json.dumps(tray.tray_status(store, service.daemon_running()), indent=2))
+    return 0
+
+
 def _cmd_service(store: st.MonitorStore, args) -> int:
     from . import service
 
@@ -294,6 +315,7 @@ _COMMANDS = {
     "add": _cmd_add,
     "daemon": _cmd_daemon,
     "service": _cmd_service,
+    "tray": _cmd_tray,
     "notify-test": _cmd_notify_test,
     "run-wake": _cmd_run_wake,
     "llm-check": _cmd_llm_check,

@@ -1621,6 +1621,18 @@
     "startDaemon": "Start",
     "startAtLogin": "Start at login",
     "autostartFailed": "Could not change the login service: {{error}}",
+    "trayIcon": "Tray icon",
+    "trayIconHint": "While the monitor service runs, an icon in the system tray shows it and opens GilzaBots, pauses the monitors or stops the service.",
+    "trayFailed": "Could not change the tray icon: {{error}}",
+    "trayState": {
+      "running": "shown",
+      "stopped": "appears when the service runs",
+      "disabled": "off",
+      "no_qt": "unavailable",
+      "no_session": "waiting for the desktop",
+      "no_tray": "the desktop has no tray",
+      "failed": "failed"
+    },
     "testNotification": "Test notification",
     "testNotificationBody": "Desktop notifications from GilzaBots monitors work.",
     "testNotificationSent": "Notification sent through {{backend}}.",

@@ -3951,6 +3951,8 @@ export default function App() {
     }
   };
   const showMonitorChat = (target) => {
+    // The tray icon's "Monitors panel"; a request with no project only raises the window.
+    if (target?.view === 'monitors') setIsMonitorsModalOpen(true);
     if (!target?.project) return;
     setIsChatVisible(true);
     if (activeProject?.name === target.project) {

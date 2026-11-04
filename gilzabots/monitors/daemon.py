@@ -11,10 +11,13 @@ One per user (``service.DaemonLock``). Every ``POLL_SECONDS`` it
    this process, because a turn binds the project, store and orchestrator in
    module globals and the daemon serves every project;
 4. reconciles: a claimed wake-up whose process died is closed, so nothing waits
-   on a process that no longer exists.
+   on a process that no longer exists;
+5. keeps its tray icon running where the desktop has a tray
+   (``tray.TraySupervisor``), a process of its own that ends with the daemon.
 
 It exits on its own after ``IDLE_EXIT_SECONDS`` with nothing to do -- no active
-monitor, no wake-up, no child, no recent notification whose
+monitor, no monitor paused from the tray icon (its *Resume* must stay
+reachable), no wake-up, no child, no recent notification whose
 click it should still be able to receive. Registering a monitor starts it
 again (``service.ensure_daemon_running``).
 """
@@ -34,6 +37,7 @@ from . import store as st
 from .engine import MonitorEngine
 from .notify import Notifier, NotifyError, default_notifier, open_uri, parse_open_uri
 from .process import gilzabots_command, pid_alive
+from .tray import TraySupervisor, paused_from_tray
 
 POLL_SECONDS = 1.0
 IDLE_EXIT_SECONDS = 15 * 60
@@ -66,8 +70,10 @@ class MonitorDaemon:
     def __init__(self, store: st.MonitorStore, *, notifier: Notifier | None = None,
                  engine: MonitorEngine | None = None, clock=time.time,
                  child_argv=None, idle_exit_seconds: float = IDLE_EXIT_SECONDS,
-                 fingerprint=service.code_fingerprint):
+                 fingerprint=service.code_fingerprint, tray: TraySupervisor | None = None):
         self.store = store
+        #: None runs without an icon (tests, and a daemon that never had a desktop).
+        self.tray = tray
         self.clock = clock
         self.notifier = notifier or default_notifier(gilzabots_command() + ["monitors", "open"])
         if engine is None:
@@ -183,6 +189,7 @@ class MonitorDaemon:
     def busy(self) -> bool:
         return bool(
             self.store.count_active()
+            or paused_from_tray(self.store)
             or self.children
             or self.store.list_wakes((st.WAKE_PENDING, st.WAKE_CLAIMED))
             or self.store.undelivered_notifications()
@@ -200,6 +207,8 @@ class MonitorDaemon:
         self.reap_children()
         self.dispatch_wakes()
         self.reconcile()
+        if self.tray is not None:
+            self.tray.step()
         if self.busy():
             self._last_busy = self.clock()
 
@@ -238,6 +247,9 @@ class MonitorDaemon:
                     print(f"[monitors] step failed: {exc}", file=sys.stderr, flush=True)
                 await asyncio.sleep(POLL_SECONDS)
         finally:
+            # Before a restart on new code too: the new daemon starts its own icon.
+            if self.tray is not None:
+                self.tray.close()
             self.notifier.stop()
             self.store.remove_host(HOST_KIND, os.getpid())
 
@@ -249,7 +261,7 @@ def run_daemon() -> int:
         print("[monitors] another monitor daemon is already running.", flush=True)
         return 0
     store = st.MonitorStore()
-    daemon = MonitorDaemon(store)
+    daemon = MonitorDaemon(store, tray=TraySupervisor(store))
     service.write_state({"pid": os.getpid(), "started_at": time.time(), "version": __version__})
 
     def _terminate(*_args) -> None:

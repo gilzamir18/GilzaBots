@@ -188,13 +188,8 @@ async def register(spec: dict, *, run_probe: bool = True) -> tuple[dict, dict | 
     return monitor, observed, daemon
 
 
-def _active_waking_monitor(store: st.MonitorStore, project) -> dict | None:
-    """When this turn was woken by a monitor that is still active, return it.
-
-    A recurring monitor stays ``active`` after firing and schedules its next
-    check itself; a wake-up turn that registers another monitor to "keep it
-    going" creates duplicates on every cycle.
-    """
+def _waking_monitor(store: st.MonitorStore, project) -> dict | None:
+    """The monitor whose wake-up started this turn, in whatever state it is now."""
     from gilzabots.agent_stdin import unattended_monitor_id, unattended_turn
 
     wake_name = unattended_turn()
@@ -204,7 +199,7 @@ def _active_waking_monitor(store: st.MonitorStore, project) -> dict | None:
     if wake_id:
         monitor = store.get_monitor(wake_id)
         if monitor is not None:
-            return monitor if monitor["status"] == st.STATUS_ACTIVE else None
+            return monitor
     project_name = getattr(project, "name", "") or ""
     chat_id = getattr(project, "current_chat_id", "") or ""
     if project_name and chat_id:
@@ -212,12 +207,33 @@ def _active_waking_monitor(store: st.MonitorStore, project) -> dict | None:
             if wake.get("chat_id") == chat_id and wake.get("monitor_id"):
                 monitor = store.get_monitor(wake["monitor_id"])
                 if monitor is not None:
-                    return monitor if monitor["status"] == st.STATUS_ACTIVE else None
+                    return monitor
     wanted = wake_name.casefold()
     for monitor in store.list_monitors((st.STATUS_ACTIVE,), project=project_name or None):
         if monitor["name"].casefold() == wanted:
             return monitor
     return None
+
+
+def _recurring_root(store: st.MonitorStore, waking: dict | None) -> dict | None:
+    """The recurring monitor this turn descends from, while it is still active.
+
+    A recurring monitor stays ``active`` after firing and schedules its next
+    check itself. A turn it woke -- or a turn woken by a monitor registered
+    from such a turn (``lineage_root_id``) -- that registered another
+    recurring monitor to "keep it going" would add one more every cycle. Such
+    a turn may still register monitors that fire once: those end by
+    themselves, so they cannot accumulate.
+    """
+    if waking is None:
+        return None
+    root_id = waking.get("lineage_root_id") or (waking["id"] if waking.get("repeat") else "")
+    if not root_id:
+        return None
+    root = waking if root_id == waking["id"] else store.get_monitor(root_id)
+    if root is None or root["status"] != st.STATUS_ACTIVE:
+        return None
+    return root
 
 
 def _find_duplicate_active(store: st.MonitorStore, spec: dict) -> dict | None:
@@ -301,8 +317,9 @@ def build_monitor_tools():
             "holds. Leave it out for the default: once for wake_in='same_chat' (a task wait), recurring otherwise "
             "(watches, and wake_in='new_chat', which opens a new chat at every firing). Follow what the user asked. "
             "A recurring monitor remains active and fires again on its own schedule -- never tell resume_prompt "
-            "to call register_monitor again, and never call register_monitor in a woken chat while the original "
-            "monitor continues.\n"
+            "to call register_monitor again, and never re-create or renew it from a chat it woke. A turn woken "
+            "by a recurring monitor may register only monitors that fire once (once=true), such as a wait for a "
+            "result of its own work.\n"
             "check_type: 'timer' (no check, just wake after first_check_seconds/interval), 'http' (GET url; "
             "json_path like 'USDBRL.bid' or regex extracts the value), 'command' (shell command in the project; "
             "value is its output), 'file' (path; watch='mtime' or 'content'), 'llm' (a model answers question "
@@ -354,14 +371,18 @@ def build_monitor_tools():
                 sessions_db=getattr(project_store, "db_path", "") or "",
             )
             store = _store()
-            waking = _active_waking_monitor(store, project)
-            if waking is not None:
-                return (
-                    f"register_monitor was not run: this turn was woken by monitor {waking['id']} "
-                    f"\"{waking['name']}\", which is recurring and remains active "
-                    f"(next check at {_when(waking.get('next_check_at'))}, every {waking['interval_seconds']} s). "
-                    "Do not re-register it; finish this turn's task and reply."
-                )
+            root = _recurring_root(store, _waking_monitor(store, project))
+            if root is not None:
+                if spec["repeat"]:
+                    return (
+                        f"register_monitor was not run: this turn descends from monitor {root['id']} "
+                        f"\"{root['name']}\", which is recurring and remains active "
+                        f"(next check at {_when(root.get('next_check_at'))}, every {root['interval_seconds']} s). "
+                        "A monitor registered here must fire once (once=true), so it cannot pile up at every "
+                        "cycle -- for example, a wait for a result this turn's own work produces. Do not use it "
+                        "to renew or re-create the recurring monitor, which keeps running on its own."
+                    )
+                spec["lineage_root_id"] = root["id"]
             duplicate = _find_duplicate_active(store, spec)
             if duplicate is not None:
                 return (
@@ -474,7 +495,9 @@ MONITORS_PROMPT_BLOCK = (
     "opens a fresh chat for each wake-up instead, for recurring work that should not crowd this "
     "conversation. A recurring monitor (once=False or wake_in='new_chat') stays active and schedules "
     "every cycle itself: never instruct resume_prompt to call register_monitor again, and in a woken "
-    "chat never re-register a monitor that is still active.\n"
+    "chat never re-create or renew a monitor that is still active. A turn woken by a recurring monitor "
+    "may still register a monitor that fires once (once=true) for a purpose of its own, such as waiting "
+    "for a result its work produces.\n"
     "When the user asks to be told about something later (a price, a page, a file, a condition), "
     "register a monitor with action='notify'; it shows an OS notification and keeps working while "
     "GilzaBots is closed. Read a value from a JSON API with json_path when one exists; use an llm "

@@ -1621,6 +1621,18 @@
     "startDaemon": "Iniciar",
     "startAtLogin": "Iniciar no login",
     "autostartFailed": "Não foi possível alterar o serviço de login: {{error}}",
+    "trayIcon": "Ícone na bandeja",
+    "trayIconHint": "Enquanto o serviço de monitores roda, um ícone na bandeja do sistema mostra isso e permite abrir o GilzaBots, pausar os monitores ou encerrar o serviço.",
+    "trayFailed": "Não foi possível alterar o ícone na bandeja: {{error}}",
+    "trayState": {
+      "running": "visível",
+      "stopped": "aparece quando o serviço roda",
+      "disabled": "desligado",
+      "no_qt": "indisponível",
+      "no_session": "aguardando a área de trabalho",
+      "no_tray": "a área de trabalho não tem bandeja",
+      "failed": "falhou"
+    },
     "testNotification": "Testar notificação",
     "testNotificationBody": "As notificações dos monitores do GilzaBots funcionam.",
     "testNotificationSent": "Notificação enviada via {{backend}}.",

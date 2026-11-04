@@ -190,6 +190,16 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
     }
   };
 
+  const setTrayIcon = async (enabled) => {
+    setError('');
+    try {
+      await post('/api/monitors/tray', { enabled });
+      refresh();
+    } catch (err) {
+      setError(t('monitors.trayFailed', { error: err.message }));
+    }
+  };
+
   const clearEvents = async () => {
     setError('');
     try {
@@ -310,6 +320,7 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
     .slice().reverse(), [data.monitors, showFinished]);
   const daemon = data.daemon;
   const autostart = daemon?.autostart;
+  const tray = daemon?.tray;
 
   return (
     // No backdrop-filter: the window often composites in software
@@ -344,6 +355,14 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
                 onChange={(e) => setAutostart(e.target.checked)} />
               {t('monitors.startAtLogin')}{autostart?.backend ? ` (${autostart.backend})` : ''}
             </label>
+            {tray && (
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                title={[t('monitors.trayIconHint'), tray.reason].filter(Boolean).join('\n\n')}>
+                <input type="checkbox" checked={Boolean(tray.enabled)} onChange={(e) => setTrayIcon(e.target.checked)} />
+                {t('monitors.trayIcon')}
+                {tray.enabled && <span style={{ opacity: 0.75 }}>({t(`monitors.trayState.${tray.state}`, tray.state)})</span>}
+              </label>
+            )}
             <button style={buttonStyle} onClick={notifyTest}>{t('monitors.testNotification')}</button>
           </div>
         )}

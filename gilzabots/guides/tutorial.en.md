@@ -617,6 +617,14 @@ window. **Start at login** is on by default so your monitors survive a restart (
 `systemd --user` service on Linux, the per-user `Run` key on Windows); you can turn it off in the Monitors panel.
 The service stops by itself after a while when there is nothing left to watch.
 
+- **Tray icon** — while the service runs, a GilzaBots icon in the system tray shows it is
+  working in the background, even with the window closed (closing the window still closes
+  it). Its menu shows the active monitors and new events (a red dot marks unseen ones) and
+  offers **Open GilzaBots**, **Monitors panel…**, **Pause all monitors** / **Resume
+  monitors**, and **Stop background service** (monitors then wait until GilzaBots is opened
+  or you log in again). On Ubuntu it needs the *Ubuntu AppIndicators* extension, which is on
+  by default; vanilla GNOME needs the AppIndicator extension. Turn it off with **Tray icon**
+  in the Monitors panel or `gilzabots monitors tray off`.
 - **Notifications** — native ones: the GNOME/KDE notification center on Linux, toasts on
   Windows, Notification Center on macOS. Clicking a notification (on Linux and Windows)
   opens GilzaBots on the chat it belongs to.
@@ -639,13 +647,13 @@ The service stops by itself after a while when there is nothing left to watch.
   stay), and lists every monitor with its type (*Task wait* or
   *Watch*), trigger, last check, last value and errors, with **Pause/Resume**, **Test**
   (checks now without changing anything), **Cancel/Remove**, the history of each monitor,
-  a **New monitor** form, the service status, **Start at login** and **Test
+  a **New monitor** form, the service status, **Start at login**, **Tray icon** and **Test
   notification**.
 - **In the chat** — ask the assistant to list, pause or cancel monitors
   (`list_monitors`, `pause_monitor`, `cancel_monitor`).
 - **In the terminal** — `gilzabots monitors list`, `info <id>`, `pause <id>`,
   `resume <id>`, `cancel <id>`, `test <id>`,
-  `daemon --status`, `service status|install|uninstall`, `notify-test`; `/monitors` does
+  `daemon --status`, `service status|install|uninstall`, `tray status|on|off`, `notify-test`; `/monitors` does
   the same inside `gilzabots --cli`.
 
 ### Cautions

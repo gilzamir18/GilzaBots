@@ -85,7 +85,8 @@ CREATE TABLE IF NOT EXISTS monitors (
     last_value_json TEXT NOT NULL DEFAULT 'null',
     last_met INTEGER,
     reference_json TEXT NOT NULL DEFAULT 'null',
-    last_fired_at REAL
+    last_fired_at REAL,
+    lineage_root_id TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS monitor_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -151,6 +152,7 @@ CREATE TABLE IF NOT EXISTS open_requests (
     project TEXT NOT NULL DEFAULT '',
     project_path TEXT NOT NULL DEFAULT '',
     chat_id TEXT NOT NULL DEFAULT '',
+    view TEXT NOT NULL DEFAULT '',
     created_at REAL NOT NULL,
     consumed_at REAL
 );
@@ -210,6 +212,14 @@ class MonitorStore:
         ):
             if column not in columns:
                 conn.execute(f"ALTER TABLE wake_requests ADD COLUMN {column} {definition}")
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(monitors)")}
+        if "lineage_root_id" not in columns:
+            # The recurring monitor whose wake-up turn registered this one.
+            conn.execute("ALTER TABLE monitors ADD COLUMN lineage_root_id TEXT NOT NULL DEFAULT ''")
+        columns = {row["name"] for row in conn.execute("PRAGMA table_info(open_requests)")}
+        if "view" not in columns:
+            # What to show besides the chat ('monitors': the Monitors panel).
+            conn.execute("ALTER TABLE open_requests ADD COLUMN view TEXT NOT NULL DEFAULT ''")
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
@@ -243,8 +253,8 @@ class MonitorStore:
                     id, name, description, owner, project, project_path, chat_id, sessions_db,
                     check_json, condition_json, action_json, interval_seconds, max_checks,
                     expires_at, repeat, status, created_at, updated_at, next_check_at,
-                    has_value, last_value_json, last_met, reference_json
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    has_value, last_value_json, last_met, reference_json, lineage_root_id
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """,
                 (
                     monitor_id, spec["name"], spec.get("description", ""), spec.get("owner", "user"),
@@ -255,7 +265,7 @@ class MonitorStore:
                     1 if spec.get("repeat") else 0, STATUS_ACTIVE, now, now, next_check,
                     1 if has_initial_value else 0, _dumps(initial_value),
                     None if initial_met is None else int(bool(initial_met)),
-                    _dumps(initial_reference),
+                    _dumps(initial_reference), str(spec.get("lineage_root_id") or ""),
                 ),
             )
         self.add_event(monitor_id, "registered", spec["name"], {"next_check_at": next_check})
@@ -665,11 +675,11 @@ class MonitorStore:
 
     # ── Open requests ───────────────────────────────────────────────────────
 
-    def add_open_request(self, project: str, project_path: str, chat_id: str) -> int:
+    def add_open_request(self, project: str, project_path: str, chat_id: str, view: str = "") -> int:
         with self._connect() as conn:
             cursor = conn.execute(
-                "INSERT INTO open_requests (project, project_path, chat_id, created_at) VALUES (?,?,?,?)",
-                (project, project_path, chat_id, self.clock()),
+                "INSERT INTO open_requests (project, project_path, chat_id, view, created_at) VALUES (?,?,?,?,?)",
+                (project, project_path, chat_id, view, self.clock()),
             )
             return int(cursor.lastrowid)
 
