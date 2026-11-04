@@ -200,7 +200,7 @@ async def test_environment_endpoint_reports_platform_and_version(monkeypatch):
 
     assert responses[-1] == (
         200,
-        {"platform": "Linux", "version": "0.2.36"},
+        {"platform": "Linux", "version": "0.2.37"},
         "application/json",
     )
 
