@@ -252,3 +252,23 @@ def test_local_mode_runs_the_command(tmp_path):
     block = CommandExecutorBlock(execution_mode="local")
     res = asyncio.run(block.run(CommandExecutorInput(command='python3 -c "print(1 + 1)"', cwd=str(tmp_path), timeout=5)))
     assert (res.exit_code, res.stdout.strip(), res.is_valid) == (0, "2", True)
+
+
+@pytest.mark.skipif(not os.path.isdir("/proc/self"), reason="needs /proc")
+def test_a_stop_request_ends_the_command_before_its_timeout(local_docker, tmp_path):
+    import threading
+
+    pid_file = tmp_path / "child.pid"
+    stop = threading.Event()
+    threading.Timer(0.5, stop.set).start()
+    started = time.monotonic()
+    res = DockerContainerManager.exec_in_container(
+        "box", f'sleep 60 & echo $! > "{pid_file}"; echo started; wait',
+        timeout=60, docker_bin=local_docker, stop=stop,
+    )
+    assert time.monotonic() - started < 20
+    assert res["error"] == "Stopped"
+    assert res["exit_code"] == 130
+    assert res["stop_error"] is None
+    assert res["stdout"].strip() == "started"
+    assert _gone(int(pid_file.read_text().strip()))

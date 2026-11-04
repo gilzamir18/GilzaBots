@@ -95,3 +95,60 @@ def test_run_python_script_shares_the_runner(project):
 
     (project / "hello.py").write_text("import sys\nprint('hi', sys.argv[1])\n", encoding="utf-8")
     assert _result(_call(run_python_script, "hello.py", "there"))["stdout"] == "hi there"
+
+
+def _wait_gone(pid):
+    for _ in range(100):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.05)
+    os.kill(pid, 9)
+    return False
+
+
+def test_a_synchronous_tool_leaves_the_event_loop_free(project):
+    """The backend's HTTP server shares the turn's loop: a blocking tool froze it."""
+    from gilzabots.tools import run_command
+
+    async def scenario():
+        ticks = 0
+
+        async def ticker():
+            nonlocal ticks
+            while True:
+                await asyncio.sleep(0.05)
+                ticks += 1
+
+        counting = asyncio.create_task(ticker())
+        await run_command._func(f'"{sys.executable}" -c "import time; time.sleep(1)"')
+        counting.cancel()
+        return ticks
+
+    assert asyncio.run(scenario()) >= 10
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX process groups")
+def test_interrupting_the_turn_stops_the_running_command(project):
+    from gilzabots.tools import run_command
+
+    pid_file = project / "child.pid"
+    command = f'sleep 60 & echo $! > "{pid_file}"; wait'
+
+    async def scenario():
+        call = asyncio.create_task(run_command._func(command, timeout_seconds=120))
+        for _ in range(100):
+            if pid_file.exists() and pid_file.read_text().strip():
+                break
+            await asyncio.sleep(0.05)
+        started = time.monotonic()
+        call.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await call
+        return time.monotonic() - started
+
+    # The cancel is acknowledged at once, not when the command would have ended.
+    assert asyncio.run(scenario()) < 1
+    # And the command does not keep running unattended after the interrupt.
+    assert _wait_gone(int(pid_file.read_text().strip())), "the command survived the interrupt"

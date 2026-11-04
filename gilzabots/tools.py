@@ -13,6 +13,7 @@ from pathlib import Path
 import functools
 import asyncio
 import concurrent.futures
+import contextvars
 from agenticblocks.core.function_block import as_tool
 
 from . import terminal as T
@@ -503,6 +504,20 @@ async def authorize_external_tool_call(name: str, question: str, *, always_ask: 
     return await _ask_tool_permission(name, question)
 
 
+# Set for the length of a synchronous tool's call, in the worker thread running
+# it: the event is set when the coroutine awaiting that thread is cancelled (the
+# user interrupted the turn). A thread cannot be cancelled, so a tool that
+# blocks for long — a shell command — polls it and ends its work itself.
+_TOOL_STOP: contextvars.ContextVar[threading.Event | None] = contextvars.ContextVar(
+    "gilzabots_tool_stop", default=None
+)
+
+
+def tool_stop_event() -> threading.Event | None:
+    """The stop request of the synchronous tool running in this thread, if any."""
+    return _TOOL_STOP.get()
+
+
 def gilzabots_tool(name: str, description: str, is_safe: bool = False):
     """
     Decorator that wraps the agenticblocks tool.
@@ -572,15 +587,23 @@ def gilzabots_tool(name: str, description: str, is_safe: bool = False):
                 if refusal is not None:
                     return refusal
 
-            try:
-                if is_async:
-                    result = await func(*args, **kwargs)
-                else:
-                    result = func(*args, **kwargs)
-            except Exception:
-                raise
+            if is_async:
+                return await func(*args, **kwargs)
 
-            return result
+            # This wrapper is a coroutine, so FunctionBlock awaits it instead of
+            # offloading the tool to a thread itself. Called inline, a synchronous
+            # tool blocked the event loop that also serves the window: a
+            # three-minute run_command froze the whole backend, and an
+            # interrupt was not even read until the command ended.
+            stop = threading.Event()
+            token = _TOOL_STOP.set(stop)  # copied into the worker's context
+            try:
+                return await asyncio.to_thread(func, *args, **kwargs)
+            except asyncio.CancelledError:
+                stop.set()
+                raise
+            finally:
+                _TOOL_STOP.reset(token)
                 
         return as_tool(name=name, description=description)(async_wrapper)
             
@@ -1541,16 +1564,21 @@ def _run_captured(command: str, timeout_seconds) -> str:
 
     With the Docker sandbox enabled the command runs in the project's container.
     """
+    from agenticblocks.blocks.patterns.sandbox import communicate_until
+
     from .sandbox_config import is_enabled as sandbox_is_enabled
 
     timeout = _command_timeout(timeout_seconds)
+    # Set when the turn is interrupted while the command runs: the command is
+    # ended like a timed-out one instead of running on unattended.
+    stop = tool_stop_event()
     stop_error = None
     if sandbox_is_enabled():
         from .docker_sandbox import run_in_sandbox
 
-        res = run_in_sandbox(command, get_project_path(), timeout)
+        res = run_in_sandbox(command, get_project_path(), timeout, stop=stop)
         out, err, returncode = res["stdout"], res["stderr"], res["exit_code"]
-        timed_out = res.get("error") == "TimeoutExpired"
+        reason = res.get("error") if res.get("error") in ("TimeoutExpired", "Stopped") else None
         stop_error = res.get("stop_error")
     else:
         group = (
@@ -1568,18 +1596,18 @@ def _run_captured(command: str, timeout_seconds) -> str:
             **utf8_text_kwargs(),
             **group,
         )
-        timed_out = False
-        try:
-            out, err = proc.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
-            timed_out = True
+        out, err, reason = communicate_until(proc, timeout, stop)
+        if reason is not None:
             _kill_process_tree(proc)
             try:
                 out, err = proc.communicate(timeout=10)
             except subprocess.TimeoutExpired:
                 out, err = "", ""
         returncode = proc.returncode
-    if timed_out:
+    if reason == "Stopped":
+        # Nobody reads this: the call awaiting the tool was cancelled.
+        raise ValueError("Error: The command was stopped because the agent turn was interrupted.")
+    if reason == "TimeoutExpired":
         partial = ""
         if (out or "").strip():
             partial += "\nstdout before the timeout:\n" + _fit_command_output(out, "stdout")

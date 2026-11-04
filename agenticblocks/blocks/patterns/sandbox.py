@@ -14,6 +14,7 @@ import posixpath
 import shutil
 import subprocess
 import threading
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, Literal, Optional, Tuple
@@ -31,6 +32,39 @@ EXEC_ID_ENV = "AGENTICBLOCKS_EXEC_ID"
 
 #: Mount point of ``volume_mount`` inside the container.
 WORKSPACE = "/workspace"
+
+#: How often a running command checks whether its caller asked it to stop.
+STOP_POLL_SECONDS = 0.2
+
+
+def communicate_until(
+    proc: subprocess.Popen,
+    timeout: float,
+    stop: Optional[threading.Event] = None,
+) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """Wait for *proc* like ``Popen.communicate``, until it ends, times out or is stopped.
+
+    Returns ``(stdout, stderr, reason)``: ``reason`` is ``None`` when the
+    process ended, ``"TimeoutExpired"`` after *timeout* seconds, or
+    ``"Stopped"`` once *stop* is set. In the last two cases the process is
+    still running and its output so far is not yet collected: the caller ends
+    it, then calls ``proc.communicate`` again, which loses nothing.
+
+    ``stop`` lets a caller in another thread end a blocking command, for
+    example when the coroutine waiting on that thread is cancelled.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        remaining = deadline - time.monotonic()
+        wait = remaining if stop is None else min(remaining, STOP_POLL_SECONDS)
+        try:
+            out, err = proc.communicate(timeout=max(wait, 0))
+            return out, err, None
+        except subprocess.TimeoutExpired:
+            if stop is not None and stop.is_set():
+                return None, None, "Stopped"
+            if time.monotonic() >= deadline:
+                return None, None, "TimeoutExpired"
 
 
 def _csv_field(field: str) -> str:
@@ -256,6 +290,7 @@ class DockerContainerManager:
         timeout: int = 120,
         docker_bin: str = "docker",
         env: Optional[Dict[str, str]] = None,
+        stop: Optional[threading.Event] = None,
     ) -> Dict[str, Any]:
         """Run a shell command inside an existing container.
 
@@ -264,6 +299,10 @@ class DockerContainerManager:
         running), and the output produced until then is returned with
         ``error == "TimeoutExpired"``. ``stop_error`` is set when those
         processes could not be stopped.
+
+        Setting *stop* (from any thread) ends the command the same way before
+        its timeout; the result then has ``error == "Stopped"`` and exit code
+        130, the code a shell reports for an interrupted command.
         """
         bin_path = cls.find_docker_binary(docker_bin)
         if not bin_path:
@@ -295,9 +334,8 @@ class DockerContainerManager:
         except Exception as e:
             return {"stdout": "", "stderr": str(e), "exit_code": -1, "error": str(e)}
 
-        try:
-            out, err = proc.communicate(timeout=timeout)
-        except subprocess.TimeoutExpired:
+        out, err, reason = communicate_until(proc, timeout, stop)
+        if reason is not None:
             stopped, stop_detail = cls.stop_exec(container_name, exec_id, docker_bin=bin_path)
             try:
                 out, err = proc.communicate(timeout=10)
@@ -307,8 +345,8 @@ class DockerContainerManager:
             return {
                 "stdout": out or "",
                 "stderr": err or "",
-                "exit_code": 124,
-                "error": "TimeoutExpired",
+                "exit_code": 124 if reason == "TimeoutExpired" else 130,
+                "error": reason,
                 "stop_error": None if stopped else stop_detail,
             }
         return {

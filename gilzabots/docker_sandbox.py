@@ -12,6 +12,7 @@ import platform
 import re
 import shutil
 import subprocess
+import threading
 import time
 import uuid
 from typing import Any, Tuple
@@ -365,12 +366,18 @@ def _start_container(project_path: str) -> tuple[str, str]:
     return docker_bin, container_name_for_project(project_path)
 
 
-def run_in_sandbox(command: str, project_path: str, timeout_seconds: int) -> dict[str, Any]:
+def run_in_sandbox(
+    command: str,
+    project_path: str,
+    timeout_seconds: int,
+    stop: threading.Event | None = None,
+) -> dict[str, Any]:
     """Execute *command* inside the project's sandbox container.
 
     Returns the ``exec_in_container`` result: ``stdout``, ``stderr``,
     ``exit_code``, and on a timeout ``error == "TimeoutExpired"`` with
     ``stop_error`` set when the command's processes could not be stopped.
+    Setting *stop* ends the command early with ``error == "Stopped"``.
     Raises ``ValueError`` when the container cannot be started.
     """
     docker_bin, container_name = _start_container(project_path)
@@ -380,6 +387,7 @@ def run_in_sandbox(command: str, project_path: str, timeout_seconds: int) -> dic
         cwd=WORKSPACE,
         timeout=timeout_seconds,
         docker_bin=docker_bin,
+        stop=stop,
     )
 
 

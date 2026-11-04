@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 import subprocess
+import threading
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -316,7 +317,10 @@ def test_run_command_is_routed_to_the_sandbox(project):
     answer = {"stdout": "hello sandbox\n", "stderr": "", "exit_code": 0, "error": None}
     with patch("gilzabots.docker_sandbox.run_in_sandbox", return_value=answer) as sandbox:
         out = json.loads(json.loads(_call(run_command, "echo hello", timeout_seconds=7))["result"])
-    sandbox.assert_called_once_with("echo hello", str(project), 7)
+    sandbox.assert_called_once()
+    assert sandbox.call_args.args == ("echo hello", str(project), 7)
+    # The tool's stop request, so interrupting the turn ends the command too.
+    assert isinstance(sandbox.call_args.kwargs["stop"], threading.Event)
     assert out == {"stdout": "hello sandbox", "stderr": "", "exit_code": 0}
 
 
