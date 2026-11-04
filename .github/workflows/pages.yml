@@ -1,0 +1,45 @@
+# Publishes site/ to GitHub Pages (https://gilzamir18.github.io/GilzaBots/).
+#
+# The site exists for one file: site/oauth/client-metadata.json, the OAuth Client
+# ID Metadata Document that identifies GilzaBots to the authorization servers of
+# MCP connectors (PROJECT_DESIGN 2.25). Its URL is the client_id, so it must stay
+# where it is; tests/test_connectors.py checks it against the code.
+#
+# Only site/ is published -- never docs/ or anything else in the repository.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload site/
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

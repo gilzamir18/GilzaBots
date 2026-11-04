@@ -1,0 +1,19 @@
+{
+  "client_id": "https://gilzamir18.github.io/GilzaBots/oauth/client-metadata.json",
+  "client_name": "GilzaBots",
+  "client_uri": "https://github.com/gilzamir18/GilzaBots",
+  "redirect_uris": [
+    "http://127.0.0.1:47821/oauth/callback",
+    "http://127.0.0.1:47822/oauth/callback",
+    "http://127.0.0.1:47823/oauth/callback"
+  ],
+  "grant_types": [
+    "authorization_code",
+    "refresh_token"
+  ],
+  "response_types": [
+    "code"
+  ],
+  "token_endpoint_auth_method": "none",
+  "application_type": "native"
+}

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GilzaBots</title>
+  <style>
+    :root { --bg: #ffffff; --fg: #1d1b26; --muted: #5d5a6b; --accent: #5847d6; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0f1117; --fg: #e6e4f0; --muted: #a09db0; --accent: #8b7cf6; }
+    }
+    body { margin: 0; background: var(--bg); color: var(--fg);
+           font-family: system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.55; }
+    main { max-width: 40rem; margin: 0 auto; padding: 3rem 16px; }
+    h1 { margin: 0 0 .5rem; font-size: 1.75rem; }
+    p { color: var(--muted); }
+    a { color: var(--accent); }
+    code { font-size: .9em; overflow-wrap: anywhere; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>GilzaBots</h1>
+    <p>A free, open-source desktop agent. Source code, releases and issues are on
+      <a href="https://github.com/gilzamir18/GilzaBots">GitHub</a>.</p>
+    <p>This site publishes the OAuth client metadata document GilzaBots uses to
+      identify itself when you connect an MCP service:
+      <a href="oauth/client-metadata.json"><code>oauth/client-metadata.json</code></a>.
+      GilzaBots runs on your computer; this site collects nothing.</p>
+  </main>
+</body>
+</html>
