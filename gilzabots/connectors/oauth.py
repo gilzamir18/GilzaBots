@@ -253,8 +253,31 @@ def build_provider(connector: Connector, flow: AuthorizationFlow):
         callback_handler=flow.callback_handler,
         client_metadata_url=None if connector.oauth_client_id else client_metadata_url(),
     )
-    # See credentials.py: restore the absolute expiry the SDK does not persist, so
-    # an expired token is refreshed instead of triggering a full authorization.
-    # `_initialize` loads tokens and client info but leaves this field alone.
+    # See credentials.py: restore what the SDK does not persist -- the absolute
+    # expiry and the discovered authorization server -- so an expired token is
+    # refreshed at the server's token endpoint instead of triggering a full
+    # authorization. `_initialize` loads tokens and client info but leaves these
+    # fields alone; a 401 still runs the discovery again and overwrites them.
+    storage.context = provider.context
     provider.context.token_expiry_time = storage.stored_expiry()
+    restore_discovery(provider.context, storage.stored_discovery())
     return provider
+
+
+def restore_discovery(context, discovery: dict) -> None:
+    """Put the stored discovery back into the SDK's ``OAuthContext``.
+
+    A record that no longer validates is ignored: the context then starts
+    without it, as the SDK does, and the next 401 discovers the server again.
+    """
+    from mcp.shared.auth import OAuthMetadata, ProtectedResourceMetadata
+
+    try:
+        oauth_metadata = OAuthMetadata.model_validate(discovery["oauth_metadata"])
+        raw_resource = discovery.get("protected_resource_metadata")
+        resource = ProtectedResourceMetadata.model_validate(raw_resource) if raw_resource else None
+    except Exception:
+        return
+    context.oauth_metadata = oauth_metadata
+    context.protected_resource_metadata = resource
+    context.auth_server_url = discovery.get("auth_server_url") or None

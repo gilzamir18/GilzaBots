@@ -8,6 +8,13 @@ get a 401 and start a full interactive authorization -- instead of using the
 refresh token it holds. `stored_expiry` lets the caller restore the expiry
 (`oauth.build_provider`).
 
+It also records the authorization server the SDK discovered (protected resource
+metadata, authorization server URL and metadata). The SDK discovers it only
+after a 401, so after a restart its refresh of an expired token went to its
+guess, ``<origin>/token`` -- a 404 at X, whose endpoint is ``/2/oauth2/token`` --
+dropped the tokens and demanded a new browser authorization although it held a
+valid refresh token. `stored_discovery` lets the caller restore it.
+
 The file holds bearer credentials, so it is owner-only and written atomically.
 """
 
@@ -77,10 +84,30 @@ class FileTokenStorage:
     def __init__(self, connector_id: str, preset_client: Any = None):
         self.connector_id = connector_id
         self.preset_client = preset_client
+        #: The provider's ``OAuthContext``, bound by `oauth.build_provider`: its
+        #: discovered metadata is saved with every token.
+        self.context: Any = None
 
     def stored_expiry(self) -> float | None:
         value = _read(self.connector_id).get("expires_at")
         return float(value) if isinstance(value, (int, float)) else None
+
+    def stored_discovery(self) -> dict:
+        """What `_discovery` recorded: ``auth_server_url`` and the two metadata documents."""
+        value = _read(self.connector_id).get("discovery")
+        return value if isinstance(value, dict) else {}
+
+    def _discovery(self) -> dict | None:
+        context = self.context
+        if context is None or context.oauth_metadata is None:
+            return None
+        found: dict = {"oauth_metadata": context.oauth_metadata.model_dump(mode="json", exclude_none=True)}
+        if context.protected_resource_metadata is not None:
+            found["protected_resource_metadata"] = context.protected_resource_metadata.model_dump(
+                mode="json", exclude_none=True)
+        if context.auth_server_url:
+            found["auth_server_url"] = context.auth_server_url
+        return found
 
     async def get_tokens(self):
         from mcp.shared.auth import OAuthToken
@@ -99,6 +126,9 @@ class FileTokenStorage:
             data["tokens"] = tokens.model_dump(mode="json", exclude_none=True)
             data["expires_at"] = time.time() + tokens.expires_in if tokens.expires_in else None
             data["updated_at"] = time.time()
+            discovery = self._discovery()
+            if discovery is not None:
+                data["discovery"] = discovery
             _write(self.connector_id, data)
 
     async def get_client_info(self):

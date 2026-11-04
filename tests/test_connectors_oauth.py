@@ -98,8 +98,51 @@ class MemoryAuthorizationServer:
         self.access.clear()
 
 
-@pytest.fixture
-def protected_server():
+def _token_endpoint_at(app, token_path):
+    """``app`` with its token endpoint moved from ``/token`` to ``token_path``.
+
+    The SDK's authorization server always serves ``/token`` at the root, which
+    is also where the SDK's client guesses the endpoint when it has no metadata.
+    X serves it at ``/2/oauth2/token`` (``/token`` is a 404 there), so a client
+    that refreshes without the discovered metadata fails against X but not
+    against the plain test server. This wrapper reproduces X's layout: the
+    metadata advertises ``token_path``, which is served, and ``/token`` is a 404.
+    """
+
+    async def wrapped(scope, receive, send):
+        if scope["type"] != "http":
+            return await app(scope, receive, send)
+        path = scope["path"]
+        if path == "/token":
+            await send({"type": "http.response.start", "status": 404, "headers": []})
+            await send({"type": "http.response.body", "body": b""})
+            return
+        if path == token_path:
+            return await app(dict(scope, path="/token", raw_path=b"/token"), receive, send)
+        if path != "/.well-known/oauth-authorization-server":
+            return await app(scope, receive, send)
+        start, body = {}, []
+
+        async def capture(message):
+            if message["type"] == "http.response.start":
+                start.update(message)
+            else:
+                body.append(message.get("body", b""))
+
+        await app(scope, receive, capture)
+        metadata = json.loads(b"".join(body))
+        origin = metadata["token_endpoint"].rsplit("/token", 1)[0]
+        metadata["token_endpoint"] = origin + token_path
+        payload = json.dumps(metadata).encode()
+        headers = [(k, v) for k, v in start.get("headers", []) if k.lower() != b"content-length"]
+        headers.append((b"content-length", str(len(payload)).encode()))
+        await send({"type": "http.response.start", "status": start["status"], "headers": headers})
+        await send({"type": "http.response.body", "body": payload})
+
+    return wrapped
+
+
+def _serve_protected(token_path=None):
     import uvicorn
     from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
     from mcp.server.mcpserver import MCPServer
@@ -122,8 +165,10 @@ def protected_server():
         """Who is calling."""
         return "authorized caller"
 
-    config = uvicorn.Config(server.streamable_http_app(), host="127.0.0.1", port=port,
-                            log_level="error", lifespan="on")
+    app = server.streamable_http_app()
+    if token_path:
+        app = _token_endpoint_at(app, token_path)
+    config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error", lifespan="on")
     uv = uvicorn.Server(config)
     thread = threading.Thread(target=uv.run, daemon=True)
     thread.start()
@@ -135,6 +180,17 @@ def protected_server():
     yield f"{base}/mcp", provider
     uv.should_exit = True
     thread.join(timeout=10)
+
+
+@pytest.fixture
+def protected_server():
+    yield from _serve_protected()
+
+
+@pytest.fixture
+def x_like_server():
+    """An authorization server laid out like X's: the token endpoint is not ``/token``."""
+    yield from _serve_protected(token_path="/2/oauth2/token")
 
 
 @pytest.fixture(autouse=True)
@@ -216,6 +272,44 @@ async def test_oauth_connect_refresh_and_reauthorization(protected_server, monke
         await manager.call_tool("prot", "whoami", {})
     assert info.value.needs_authorization
     await manager.shutdown()
+
+
+def _expire_stored_token(connector_id):
+    path = credentials.credentials_path(connector_id)
+    data = json.loads(open(path, encoding="utf-8").read())
+    data["expires_at"] = time.time() - 10
+    open(path, "w", encoding="utf-8").write(json.dumps(data))
+
+
+@pytest.mark.asyncio
+async def test_a_restart_refreshes_at_the_discovered_token_endpoint(x_like_server, monkeypatch):
+    """The sign-in survives restarts against a server whose token endpoint is not ``/token``.
+
+    After a restart the SDK has not discovered the authorization server yet (it
+    does so only after a 401), so it would send the refresh to ``<origin>/token``:
+    a 404 at X, after which the tokens are dropped and the connector demands a
+    new browser authorization. The credentials file keeps the discovered
+    metadata, so the refresh goes where the server said, restart after restart.
+    """
+    url, provider = x_like_server
+    opened = []
+    monkeypatch.setattr(oauth, "open_in_browser", _consenting_browser(opened))
+    store.create_connector({"id": "xl", "name": "X-like", "url": url, "auth": "oauth"})
+    manager = get_manager()
+    await manager.connect("xl", interactive=True)
+    assert provider.authorizations == 1
+    await manager.shutdown()
+
+    # Two restarts in a row, each with an expired access token: the second one
+    # refreshes with the metadata the first refresh wrote back.
+    for restart in (1, 2):
+        provider.expire_all_access_tokens()
+        _expire_stored_token("xl")
+        result = await manager.call_tool("xl", "whoami", {})
+        assert result.content == ["authorized caller"]
+        assert provider.refreshes == restart
+        assert provider.authorizations == 1 and len(opened) == 1
+        await manager.shutdown()
 
 
 @pytest.mark.asyncio
