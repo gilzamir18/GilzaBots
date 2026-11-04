@@ -1,7 +1,7 @@
 """In-app installs of tectonic and pandoc go to a writable per-user directory.
 
 They used to be written next to the package (``<site-packages>/bin``), which is
-a read-only squashfs in the snap, so "Install Pandoc" and reinstalling Tectonic
+read-only in system-wide installs, so "Install Pandoc" and reinstalling Tectonic
 failed with ``[Errno 30] Read-only file system``.
 """
 

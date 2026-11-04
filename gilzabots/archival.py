@@ -22,10 +22,11 @@ def _get_embedding_function():
 
     Two problems with the stock default, both visible as a burst of
     `[E:onnxruntime:...] pthread_setaffinity_np failed ... Operation not
-    permitted` lines inside a Snap:
+    permitted` lines inside a sandbox that restricts CPU affinity (a container or
+    an AppArmor/seccomp profile):
 
     1. ONNX Runtime sizes its intra-op thread pool from the visible CPU count and
-       then pins each thread with `pthread_setaffinity_np`. Strict confinement
+       then pins each thread with `pthread_setaffinity_np`. Such a sandbox
        denies that syscall, so every session start logs one error line per
        thread. The remedy is the one the runtime names in the message itself --
        set the thread count explicitly, which skips the pinning. `OMP_NUM_THREADS`

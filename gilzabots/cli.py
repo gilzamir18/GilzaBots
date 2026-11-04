@@ -92,7 +92,6 @@ async def project_picker(store: ProjectStore, args, cwd: str) -> ProjectData:
     project whose folder is gone is listed but cannot be opened, as in the
     window. Any choice that fails comes back to this menu.
     """
-    from .config import expand_user_path
     from .project import ProjectImportError
 
     while True:
@@ -143,7 +142,7 @@ async def project_picker(store: ProjectStore, args, cwd: str) -> ProjectData:
                 project = _import_folder(store, cwd)
             elif action == "import":
                 answer = T.ask(_("cli_picker_import_path", path=cwd)).strip()
-                project = _import_folder(store, expand_user_path(answer) if answer else cwd)
+                project = _import_folder(store, os.path.expanduser(answer) if answer else cwd)
             elif action == "create_here":
                 project = await _create_project(store, args, project_path=cwd)
             else:
@@ -181,7 +180,6 @@ async def _create_project(store: ProjectStore, args, project_path: str = "") -> 
     folder is asked for, and asked again until one can.
     """
     from .skills import discover_skills, MANDATORY_SKILLS
-    from .config import expand_user_path
 
     if project_path:
         project_path = os.path.abspath(project_path)
@@ -198,14 +196,13 @@ async def _create_project(store: ProjectStore, args, project_path: str = "") -> 
         default_path = os.path.join(os.getcwd(), project_name)
         while True:
             entered_path = T.ask(f"Project path [{default_path}]").strip()
-            project_path = os.path.abspath(expand_user_path(entered_path) if entered_path else default_path)
+            project_path = os.path.abspath(os.path.expanduser(entered_path) if entered_path else default_path)
             existed = os.path.isdir(project_path)
             problem = _project_dir_problem(store, project_path)
             if not problem:
                 break
-            # Re-ask instead of creating a project whose state cannot be saved.
-            # Under snap the home directory itself is such a folder, and a
-            # subfolder named after the project is the usual answer.
+            # Re-ask instead of creating a project whose state cannot be saved;
+            # a subfolder named after the project is the usual answer.
             T.error(problem)
             if existed:
                 default_path = os.path.join(project_path, project_name)
@@ -317,7 +314,7 @@ async def resolve_project(store: ProjectStore, args, *, pick: bool = False) -> P
 
     if registered:
         # Registered, but its state directory is gone or could never be
-        # created (under snap: a project at the home directory itself).
+        # created.
         existing = store.load(registered)
         T.warning(_("cli_registered_without_state",
                     name=(existing.project_name or existing.name) if existing else registered,
@@ -750,14 +747,9 @@ def _start_gui_or_explain() -> None:
 
 
 def _monitors_argv(argv: list[str]) -> list[str] | None:
-    """The arguments of ``gilzabots monitors ...``, or None for any other command.
-
-    The snap launcher always prepends ``--gui`` (snap/local/gilzabots-launch), so
-    it is skipped here; a subcommand is otherwise the first argument.
-    """
-    rest = [arg for arg in argv if arg != "--gui"]
-    if rest and rest[0] == "monitors":
-        return rest[1:]
+    """The arguments of ``gilzabots monitors ...``, or None for any other command."""
+    if argv and argv[0] == "monitors":
+        return argv[1:]
     return None
 
 

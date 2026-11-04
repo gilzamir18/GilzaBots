@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=GilzaBots
-Comment=Free, open-source AI agent for your projects
-Exec=gilzabots
-Icon=${SNAP}/meta/gui/icon.png
-Terminal=false
-Categories=Development;Office;TextEditor;
-StartupNotify=true

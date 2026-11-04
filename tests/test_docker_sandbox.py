@@ -77,7 +77,6 @@ def test_container_name_deterministic():
 
 def test_verify_docker_missing_binary(monkeypatch):
     monkeypatch.setattr(docker_sandbox, "find_docker_bin", lambda: None)
-    monkeypatch.setattr(docker_sandbox, "_running_in_snap", lambda: False)
 
     res = docker_sandbox.verify_docker()
     assert res["ready"] is False
@@ -85,39 +84,8 @@ def test_verify_docker_missing_binary(monkeypatch):
     assert "not found on PATH" in res["problem"]
 
 
-def test_verify_docker_missing_binary_in_snap(monkeypatch):
-    monkeypatch.setattr(docker_sandbox, "find_docker_bin", lambda: None)
-    monkeypatch.setattr(docker_sandbox, "_running_in_snap", lambda: True)
-
-    res = docker_sandbox.verify_docker()
-    assert res["ready"] is False
-    assert "inside the Snap environment" in res["problem"]
-
-
-def test_verify_docker_permission_denied_snap(monkeypatch):
-    monkeypatch.setattr(docker_sandbox, "find_docker_bin", lambda: "/usr/bin/docker")
-    monkeypatch.setattr(docker_sandbox, "_running_in_snap", lambda: True)
-    monkeypatch.setattr(docker_sandbox, "_snap_docker_plug_connected", lambda: False)
-    monkeypatch.setattr(docker_sandbox, "_docker_group_pending", lambda: False)
-
-    def fake_run(cmd, **kwargs):
-        if "version" in cmd:
-            return subprocess.CompletedProcess(
-                cmd, 1, stdout="", stderr="permission denied while trying to connect to the docker API at unix:///var/run/docker.sock"
-            )
-        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
-    res = docker_sandbox.verify_docker()
-    assert res["ready"] is False
-    assert res["daemon_running"] is False
-    assert "Snap confinement" in res["problem"]
-    assert res["action_command"] == "sudo snap connect gilzabots:docker"
-
-
 def test_verify_docker_permission_denied_linux(monkeypatch):
     monkeypatch.setattr(docker_sandbox, "find_docker_bin", lambda: "/usr/bin/docker")
-    monkeypatch.setattr(docker_sandbox, "_running_in_snap", lambda: False)
     monkeypatch.setattr(docker_sandbox.platform, "system", lambda: "Linux")
     monkeypatch.setattr(docker_sandbox, "_docker_group_pending", lambda: False)
 
@@ -135,10 +103,8 @@ def test_verify_docker_permission_denied_linux(monkeypatch):
     assert res["action_command"] == "sudo usermod -aG docker $USER"
 
 
-def _denied(monkeypatch, in_snap, plug=None, pending=False):
+def _denied(monkeypatch, pending=False):
     monkeypatch.setattr(docker_sandbox, "find_docker_bin", lambda: "/usr/bin/docker")
-    monkeypatch.setattr(docker_sandbox, "_running_in_snap", lambda: in_snap)
-    monkeypatch.setattr(docker_sandbox, "_snap_docker_plug_connected", lambda: plug)
     monkeypatch.setattr(docker_sandbox, "_docker_group_pending", lambda: pending)
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(
         cmd, 1, "", "permission denied while trying to connect to the docker API at unix:///var/run/docker.sock"))
@@ -146,29 +112,12 @@ def _denied(monkeypatch, in_snap, plug=None, pending=False):
 
 
 def test_a_group_added_after_login_asks_for_a_new_session_not_usermod_again(monkeypatch):
-    res = _denied(monkeypatch, in_snap=False, pending=True)
+    res = _denied(monkeypatch, pending=True)
     assert "Log out and back in" in res["problem"]
     assert "restarting GilzaBots is not enough" in res["problem"]
     assert res["action_command"] == ""
 
 
-def test_a_connected_snap_plug_moves_on_to_the_docker_group(monkeypatch):
-    assert "Log out and back in" in _denied(monkeypatch, in_snap=True, plug=True, pending=True)["problem"]
-    res = _denied(monkeypatch, in_snap=True, plug=True, pending=False)
-    assert res["action_command"] == "sudo usermod -aG docker $USER"
-    # snapctl could not tell: the plug stays the first suspect
-    assert _denied(monkeypatch, in_snap=True, plug=None)["action_command"] == "sudo snap connect gilzabots:docker"
-
-
-def test_only_the_gilzabots_snap_counts_as_snap_confinement(monkeypatch):
-    monkeypatch.setenv("SNAP", "/snap/some-ide/7")
-    monkeypatch.setenv("SNAP_NAME", "some-ide")
-    assert docker_sandbox._running_in_snap() is False
-    monkeypatch.setenv("SNAP_NAME", "gilzabots")
-    assert docker_sandbox._running_in_snap() is True
-
-
-@pytest.mark.skipif(os.name == "nt", reason="POSIX groups")
 def test_docker_group_pending_compares_the_group_file_with_this_process(monkeypatch):
     import grp
     import pwd
@@ -184,9 +133,9 @@ def test_docker_group_pending_compares_the_group_file_with_this_process(monkeypa
     monkeypatch.setattr(os, "getgroups", lambda: [1000])
     assert docker_sandbox._docker_group_pending() is False
 
+
 def test_verify_docker_daemon_not_running(monkeypatch):
     monkeypatch.setattr(docker_sandbox, "find_docker_bin", lambda: "/usr/bin/docker")
-    monkeypatch.setattr(docker_sandbox, "_running_in_snap", lambda: False)
 
     def fake_run(cmd, **kwargs):
         if "version" in cmd:
@@ -203,7 +152,6 @@ def test_verify_docker_daemon_not_running(monkeypatch):
 
 def test_verify_docker_image_missing_vs_present(monkeypatch):
     monkeypatch.setattr(docker_sandbox, "find_docker_bin", lambda: "/usr/bin/docker")
-    monkeypatch.setattr(docker_sandbox, "_running_in_snap", lambda: False)
 
     # 1. Daemon ok, image missing
     def fake_run_missing(cmd, **kwargs):
@@ -238,7 +186,6 @@ def test_verify_docker_image_missing_vs_present(monkeypatch):
 
 def test_verify_docker_reports_an_error_with_blank_output(monkeypatch):
     monkeypatch.setattr(docker_sandbox, "find_docker_bin", lambda: "/usr/bin/docker")
-    monkeypatch.setattr(docker_sandbox, "_running_in_snap", lambda: False)
     monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 1, "", "\n"))
     res = docker_sandbox.verify_docker()
     assert res["problem"] == "Docker daemon is unreachable: exit code 1"

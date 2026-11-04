@@ -45,8 +45,7 @@ def gilzabots_command() -> list[str]:
     A frozen build is its own executable. A source checkout is not installed
     as a package, so it runs its ``main.py`` by absolute path (a service starts
     in the home directory, where ``-m`` would not find the package); an
-    installed package, the snap included, runs ``-m gilzabots.cli`` as the snap
-    launcher does. On Windows a source install uses ``pythonw.exe`` so a
+    installed package runs ``-m gilzabots.cli``. On Windows a source install uses ``pythonw.exe`` so a
     background process does not open a console window.
     """
     if getattr(sys, "frozen", False):

@@ -25,7 +25,7 @@ def script_launch_context(monkeypatch):
 
 
 def test_module_relaunch_preserves_package_imports_and_arguments(tmp_path):
-    """Exercise real -m startup and a child restart, as the Snap launcher does."""
+    """Exercise real -m startup and a child restart."""
     package = tmp_path / "restart_probe"
     package.mkdir()
     (package / "__init__.py").write_text("VALUE = 'package import works'\n")
@@ -192,9 +192,7 @@ async def test_restart_endpoint_returns_500_when_the_relaunch_cannot_be_schedule
 
 
 @pytest.mark.asyncio
-async def test_environment_endpoint_reports_snap_platform_and_version(monkeypatch):
-    monkeypatch.setenv("SNAP_NAME", "gilzabots")
-    monkeypatch.setenv("SNAP", "/snap/gilzabots/current")
+async def test_environment_endpoint_reports_platform_and_version(monkeypatch):
     monkeypatch.setattr("platform.system", lambda: "Linux")
 
     server, responses = _server_with_capture()
@@ -202,7 +200,7 @@ async def test_environment_endpoint_reports_snap_platform_and_version(monkeypatc
 
     assert responses[-1] == (
         200,
-        {"platform": "Linux", "running_in_snap": True, "version": "0.2.35"},
+        {"platform": "Linux", "version": "0.2.35"},
         "application/json",
     )
 

@@ -11,7 +11,7 @@ nor with a click on a GNOME notification** — see *Open items*.
 | Question | Decision |
 | --- | --- |
 | Where monitors run with every front-end closed | A per-user daemon, `gilzabots monitors daemon`, registered with the OS login service. Not a tray icon (it would change what closing the window means for everyone) and not only a detached process (it would not survive a logout or reboot). |
-| Login service per platform | `systemd --user` (Linux), the snap's `autostart:` app (snap), a LaunchAgent (macOS), `HKCU\…\Run` (Windows). On by default; a toggle in the panel and `gilzabots monitors service`. |
+| Login service per platform | `systemd --user` (Linux), a LaunchAgent (macOS), `HKCU\…\Run` (Windows). On by default; a toggle in the panel and `gilzabots monitors service`. |
 | How processes coordinate | One SQLite file, `<gilzabots home>/monitors.db`. No socket: nothing has to be running for another process to register, pause or cancel a monitor. |
 | Who runs a wake-up while the window is open | The window, for its open project, as an ordinary streamed turn. The daemon runs every other wake-up headless, in a child process. |
 | A monitor's turn needs a question or an approval | It does not ask outside its chat: the turn is unattended, every question tool refuses with a diagnostic, and the agent puts what it needs in its reply in the chat (new or origin, as configured), where the user answers. Nothing is approved for the user. *Superseded:* the first version stored the question, notified and waited; in use a vague instruction produced six question dialogs in a row outside the chat. |
@@ -52,12 +52,11 @@ background applications use.
 
 ## Why `gdbus` and not a Python D-Bus library
 
-No new dependency: `gdbus` ships with GLib wherever GNOME runs, and the snap
-stages it (`libglib2.0-bin`). The daemon keeps one `gdbus monitor` for
-`ActionInvoked`; every call passes typed GVariant text (`uint32 0`, `@as []`,
-`<byte …>`, `int32 -1`), because under Snap confinement the `desktop` plug
-denies `Introspect` on `/org/freedesktop/Notifications` and `gdbus` parses
-untyped integer literals as `int32`.
+No new dependency: `gdbus` ships with GLib wherever GNOME runs. The daemon
+keeps one `gdbus monitor` for `ActionInvoked`; every call passes typed GVariant
+text (`uint32 0`, `@as []`, `<byte …>`, `int32 -1`), because when `Introspect`
+on `/org/freedesktop/Notifications` is unavailable (an AppArmor profile can deny
+it) `gdbus` parses untyped integer literals as `int32`.
 
 ## Open items
 
@@ -69,6 +68,5 @@ untyped integer literals as `int32`.
   notification was shown on GNOME 50, but clicking it has not been exercised by
   a person. GNOME may drop actions of a notification whose sender (the
   short-lived `gdbus call`) has exited; if so, the sender must stay connected.
-- **Snap**: `autostart:` and the staged `gdbus` need a snap build to confirm.
 - A wake-up with a real model, end to end, has not been run (verified up to
   `handle_run` refusing a project without a model).

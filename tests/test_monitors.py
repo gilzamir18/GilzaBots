@@ -598,9 +598,9 @@ class TestNotify:
         assert "'It\\'s <done>'" in argv
         assert "'a &amp; b\\nline'" in argv
         assert "['default', 'Open chat']" in argv
-        # Under Snap confinement, AppArmor denies org.freedesktop.DBus.Introspectable.Introspect
-        # on /org/freedesktop/Notifications, so gdbus parses each argument without introspection;
-        # an untyped "0" defaults to int32 ("i") instead of uint32 ("u") and fails with InvalidArgs.
+        # When D-Bus introspection of /org/freedesktop/Notifications is unavailable, gdbus parses
+        # each argument without it; an untyped "0" defaults to int32 ("i") instead of uint32 ("u")
+        # and fails with InvalidArgs.
         method_idx = argv.index("org.freedesktop.Notifications.Notify")
         notify_args = argv[method_idx + 1:]
         assert len(notify_args) == 8
@@ -716,11 +716,11 @@ class TestService:
         assert 'Environment="GILZABOTS_HOME=/data/gilza home"' in unit
         assert "Restart=on-failure" in unit
 
-    def test_snap_autostart_entry_names_the_snap_app(self, tmp_path):
-        entry = service.XdgAutostart(config_home=str(tmp_path), snap=True)
+    def test_xdg_autostart_entry_runs_the_daemon(self, tmp_path):
+        entry = service.XdgAutostart(config_home=str(tmp_path))
         entry.install()
         assert entry.installed()
-        assert "Exec=gilzabots.monitors" in open(entry.entry_path).read()
+        assert "monitors daemon" in open(entry.entry_path).read()
         entry.uninstall()
         assert not entry.installed()
 
@@ -754,14 +754,14 @@ class TestService:
         with open(unit.unit_path, "w") as handle:
             handle.write('[Service]\nEnvironment="GILZABOTS_HOME=/data/other place"\n')
         assert unit.owner() == "/data/other place"
-        entry = service.XdgAutostart(config_home=str(tmp_path), snap=False)
+        entry = service.XdgAutostart(config_home=str(tmp_path))
         os.makedirs(os.path.dirname(entry.entry_path))
         with open(entry.entry_path, "w") as handle:
             handle.write("Exec=env GILZABOTS_HOME=/data/x /py main.py monitors daemon\n")
         assert entry.owner() == "/data/x"
 
     def test_set_autostart_reports_a_foreign_service(self, mstore, tmp_path, monkeypatch):
-        unit = service.XdgAutostart(config_home=str(tmp_path), snap=False)
+        unit = service.XdgAutostart(config_home=str(tmp_path))
         monkeypatch.setattr(service, "current_home", lambda: "/data/main")
         unit.install()
         monkeypatch.setattr(service, "current_home", lambda: "/data/scratch")
@@ -1322,10 +1322,10 @@ class TestApi:
 # ── Command line ────────────────────────────────────────────────────────────
 
 class TestCli:
-    def test_monitors_subcommand_is_found_after_the_snap_gui_flag(self):
+    def test_monitors_subcommand_is_the_first_argument(self):
         from gilzabots.cli import _monitors_argv
 
-        assert _monitors_argv(["--gui", "monitors", "list"]) == ["list"]
+        assert _monitors_argv(["monitors", "list"]) == ["list"]
         assert _monitors_argv(["monitors"]) == []
         assert _monitors_argv(["--cli"]) is None
 

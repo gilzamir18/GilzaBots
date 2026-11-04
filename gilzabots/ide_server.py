@@ -73,30 +73,8 @@ def _normalize_rel_path(path: str) -> str:
     return path.replace("\\", "/").strip("/")
 
 
-def _running_in_snap() -> bool:
-    """True when this process runs inside a strictly confined snap."""
-    return bool(os.environ.get("SNAP_NAME") and os.environ.get("SNAP"))
-
-
-# The snapd shim that hands a path to the host session. Inside confinement it is
-# the only opener that can reach the user's desktop; everything a real xdg-open
-# would delegate to (gio, the browser list, the file manager over D-Bus) is
-# either absent from the snap or blocked by its apparmor profile.
-_SNAP_XDG_OPEN = "/usr/bin/xdg-open"
-
-
 def _desktop_open_command(target_path: str) -> list[str]:
-    """Return the argv that opens ``target_path`` with the desktop's handler.
-
-    Inside a snap, ``$SNAP/usr/bin`` comes before ``/usr/bin`` on PATH, so a bare
-    ``xdg-open`` resolves to any xdg-utils staged in the payload instead of the
-    base snap's shim. That copy runs confined, finds none of the helpers it wants
-    and exits 3 without opening anything, which is why this works from a source
-    checkout but not from the installed snap. Address the shim by full path so the
-    payload cannot shadow it.
-    """
-    if _running_in_snap() and os.path.exists(_SNAP_XDG_OPEN):
-        return [_SNAP_XDG_OPEN, target_path]
+    """Return the argv that opens ``target_path`` with the desktop's handler."""
     return ["xdg-open", target_path]
 
 
@@ -2235,12 +2213,10 @@ class AsyncHTTPServer:
                 system = platform.system()
 
                 # Strip PyInstaller's LD_LIBRARY_PATH so system apps (like nautilus or image viewers) don't crash.
-                # A snap's LD_LIBRARY_PATH is its own runtime rather than a frozen loader's, and dropping it would
-                # only break the helpers the snap itself ships.
                 env = os.environ.copy()
                 if 'LD_LIBRARY_PATH_ORIG' in env:
                     env['LD_LIBRARY_PATH'] = env['LD_LIBRARY_PATH_ORIG']
-                elif 'LD_LIBRARY_PATH' in env and not _running_in_snap():
+                elif 'LD_LIBRARY_PATH' in env:
                     del env['LD_LIBRARY_PATH']
 
                 proc = None
@@ -2253,13 +2229,7 @@ class AsyncHTTPServer:
                     # Check if it's WSL (Windows Subsystem for Linux)
                     release = platform.uname().release.lower()
                     if "microsoft" in release or "wsl" in release:
-                        # Inside strict confinement, explorer.exe cannot be executed directly
-                        # (PATH is isolated, /mnt/c execution is blocked by AppArmor, and the
-                        # kernel binfmt_misc handler cannot resolve /init in the container mount namespace).
-                        # We must delegate to the host session through _desktop_open_command.
-                        if _running_in_snap():
-                            proc = subprocess.Popen(_desktop_open_command(target_path), env=env)
-                        elif os.path.isdir(target_path):
+                        if os.path.isdir(target_path):
                             import shutil
                             if shutil.which("explorer.exe"):
                                 proc = subprocess.Popen(["explorer.exe", "."], cwd=target_path, env=env)
@@ -2288,25 +2258,21 @@ class AsyncHTTPServer:
 
         # 3.7. List subdirectories of a filesystem path
         elif path == '/api/fs/dirs':
-            from gilzabots.config import expand_user_path, get_gilzabots_home, user_home_dir
+            from gilzabots.config import get_gilzabots_home
 
             def _default_dir():
-                # In a snap the data directory's parent is a per-revision
-                # directory that turns read-only after the next refresh.
-                if os.environ.get("SNAP_NAME"):
-                    return user_home_dir()
                 return os.path.dirname(get_gilzabots_home())
 
             req_path = data.get('path')
             if not req_path or req_path == '~':
                 req_path = _default_dir()
 
-            req_path = os.path.abspath(expand_user_path(req_path))
+            req_path = os.path.abspath(os.path.expanduser(req_path))
 
             if not os.path.exists(req_path) or not os.path.isdir(req_path):
                 req_path = _default_dir()
                 if not os.path.exists(req_path) or not os.path.isdir(req_path):
-                    req_path = user_home_dir()
+                    req_path = os.path.expanduser("~")
 
             try:
                 entries = []
@@ -2447,7 +2413,6 @@ class AsyncHTTPServer:
             from gilzabots import __version__
             self.send_response(writer, 200, json.dumps({
                 "platform": platform.system(),
-                "running_in_snap": _running_in_snap(),
                 "version": __version__,
             }).encode('utf-8'), "application/json")
 
@@ -2606,15 +2571,15 @@ class AsyncHTTPServer:
                 self.send_response(writer, 400, b'{"error":"project_name is required"}', "application/json")
                 return
                 
-            from gilzabots.config import expand_user_path, project_dir_error
+            from gilzabots.config import project_dir_error
 
-            abs_path = os.path.abspath(expand_user_path(project_path)) if project_path else os.getcwd()
+            abs_path = os.path.abspath(os.path.expanduser(project_path)) if project_path else os.getcwd()
             if os.path.exists(abs_path) and not os.path.isdir(abs_path):
                 self.send_response(writer, 400, json.dumps({"error": f"The path '{project_path}' exists but is not a directory."}).encode('utf-8'), "application/json")
                 return
-            # Probe by creating a file: os.access cannot see AppArmor denials,
-            # so a snap-confined read-only directory used to pass this check and
-            # fail only when the user tried to create the first file.
+            # Probe by creating a file: os.access does not catch every case in
+            # which a directory refuses new files, which otherwise surfaced only
+            # when the user tried to create the first file.
             message = project_dir_error(abs_path)
             if message:
                 self.send_response(writer, 400, json.dumps({"error": message}).encode('utf-8'), "application/json")
@@ -6387,7 +6352,7 @@ def build_relaunch_command():
     Frozen builds (PyInstaller) expose the app itself as ``sys.executable`` and
     must not be re-run through an interpreter. Source checkouts are re-launched
     with the same interpreter and entry script. Module launches preserve ``-m``
-    so package-relative imports still work (including the Snap launcher).
+    so package-relative imports still work.
     When no entry script exists, invoke the CLI entry point directly.
     """
     import sys

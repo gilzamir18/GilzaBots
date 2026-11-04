@@ -19,11 +19,10 @@ warnings.filterwarnings(
     message=".*coroutine 'Logging.async_success_handler' was never awaited.*"
 )
 
-# A directory that `os.path.isdir` accepts can still be unusable. Under snap
-# strict confinement the `home` interface lets the sandbox stat a top-level
-# hidden directory of the real home (e.g. ~/.gilzabots) while denying every
-# open() beneath it, and `os.access` is fooled as well because AppArmor does
-# not mediate faccessat. Accepting such a path used to surface much later as
+# A directory that `os.path.isdir` accepts can still be unusable (read-only
+# mounts, permissions or ACLs that deny creating files, a directory owned by
+# another user), and `os.access` does not catch every such case. Accepting such
+# a path used to surface much later as
 # `sqlite3.OperationalError: unable to open database file`, so the only usable
 # probe is to actually create a file in the directory. Successful probes are
 # cached because get_gilzabots_home() is called from hot paths.
@@ -52,67 +51,18 @@ def check_data_dir(path: str) -> str:
     return ""
 
 
-def snap_confinement_hint(path: str) -> str:
-    """Explain the snap `home` interface restriction when it applies to `path`.
-
-    Returns "" outside a snap, or when the path is not a hidden top-level entry
-    of the user's real home.
-    """
-    real_home = os.environ.get("SNAP_REAL_HOME", "")
-    if not os.environ.get("SNAP_NAME") or not real_home:
-        return ""
-    try:
-        relative = os.path.relpath(os.path.abspath(path), os.path.abspath(real_home))
-    except ValueError:
-        return ""
-    first_component = relative.split(os.sep, 1)[0]
-    if not first_component.startswith(".") or first_component == "..":
-        return ""
-    suggestion = os.path.join(real_home, "GilzaBots")
-    return (
-        f"The snap 'home' interface denies access to hidden top-level "
-        f"directories of {real_home}, so GilzaBots cannot use '{path}'. Pick a "
-        f"directory whose first component is not hidden, e.g. '{suggestion}'."
-    )
-
-
-def user_home_dir() -> str:
-    """The user's own home directory, where their documents belong.
-
-    Inside a snap, ``~`` is ``$SNAP_USER_DATA`` (``~/snap/<name>/<revision>``),
-    which is private to one revision: after a refresh the previous revision's
-    directory is read-only to the app, and it is deleted once that revision is
-    removed. A project created there loses write access on the next update, so
-    user-facing defaults use the real home, which the ``home`` plug grants.
-    """
-    real_home = os.environ.get("SNAP_REAL_HOME", "")
-    if os.environ.get("SNAP_NAME") and real_home:
-        return real_home
-    return os.path.expanduser("~")
-
-
-def expand_user_path(path: str) -> str:
-    """Like ``os.path.expanduser`` for the current user, but using user_home_dir()."""
-    if path == "~" or path.startswith("~/") or path.startswith("~" + os.sep):
-        return user_home_dir() + path[1:]
-    return os.path.expanduser(path)
-
-
 def project_dir_error(path: str) -> str:
     """A full, user-facing explanation of why `path` cannot be a project folder, or "".
 
     A project keeps its state in ``<path>/.gilzabots``, so that directory is
-    probed as well. Under snap they differ for the home directory itself: the
-    ``home`` interface lets the app write regular files there but not hidden
-    top-level entries, so ``~`` passes a plain probe and then every write of the
-    project's own state fails with "Permission denied".
+    probed as well: a folder can accept files while its ``.gilzabots``
+    subdirectory cannot be created or written (an existing one owned by another
+    user, for example).
     """
     for candidate in (path, os.path.join(path, ".gilzabots")):
         problem = check_data_dir(candidate)
         if problem:
-            message = f"Cannot use '{path}' as a project folder: {problem} ('{candidate}')."
-            hint = snap_confinement_hint(candidate)
-            return f"{message} {hint}" if hint else message
+            return f"Cannot use '{path}' as a project folder: {problem} ('{candidate}')."
     return ""
 
 
@@ -121,9 +71,7 @@ def data_dir_error(path: str) -> str:
     problem = check_data_dir(path)
     if not problem:
         return ""
-    message = f"'{path}' cannot be used as the GilzaBots data directory: {problem}."
-    hint = snap_confinement_hint(path)
-    return f"{message} {hint}" if hint else message
+    return f"'{path}' cannot be used as the GilzaBots data directory: {problem}."
 
 
 def configured_gilzabots_home() -> str:

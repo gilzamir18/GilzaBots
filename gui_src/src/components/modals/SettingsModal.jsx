@@ -31,7 +31,6 @@ const TRANSLATE_LANGUAGES = [
 ];
 
 const TRANSLATE_CUSTOM = '__custom__';
-const DIRECT_INSTALL_COMMAND = 'curl -fsSL https://raw.githubusercontent.com/gilzamir18/GilzaBots/main/install.sh -o gilzabots-install.sh && bash gilzabots-install.sh';
 const FEEDBACK_ISSUE_URL = 'https://github.com/gilzamir18/GilzaBots/issues/new';
 // The short feedback form (suggestions, criticism, feature ideas). It needs no
 // GitHub account, so it is the primary channel; the issue stays for bug reports.
@@ -101,7 +100,7 @@ export default function SettingsModal({
   const [dictationModels, setDictationModels] = React.useState([]);
   const [dictationBusy, setDictationBusy] = React.useState('');
   const [isRestarting, setIsRestarting] = React.useState(false);
-  const [runtimeInfo, setRuntimeInfo] = React.useState({ platform: '', running_in_snap: false, version: '0.2.35' });
+  const [runtimeInfo, setRuntimeInfo] = React.useState({ platform: '', version: '0.2.35' });
   const [sandbox, setSandbox] = React.useState({
     enabled: false,
     image: 'python:3.12-slim',
@@ -488,13 +487,6 @@ export default function SettingsModal({
     setPreference('ephemeralParams', JSON.stringify(updated));
   };
 
-  const copyDirectInstallCommand = async () => {
-    const copied = await writeClipboard(DIRECT_INSTALL_COMMAND);
-    await showAlert(copied
-      ? t('settingsModal.directInstallCopied')
-      : t('settingsModal.directInstallCopyFailed'));
-  };
-
   const openFeedbackForm = async () => {
     if (!await openExternal(FEEDBACK_FORM_URL)) {
       await showAlert(t('settingsModal.feedbackOpenFailed', { url: FEEDBACK_FORM_URL }));
@@ -507,9 +499,6 @@ export default function SettingsModal({
       body: t('settingsModal.feedbackIssueBody', {
         version: runtimeInfo.version || 'unknown',
         platform: runtimeInfo.platform || navigator.platform || 'unknown',
-        distribution: runtimeInfo.running_in_snap
-          ? t('settingsModal.feedbackDistributionSnap')
-          : t('settingsModal.feedbackDistributionOther'),
       }),
     });
     const url = `${FEEDBACK_ISSUE_URL}?${params.toString()}`;
@@ -1428,23 +1417,6 @@ export default function SettingsModal({
                 <span className="vscode-sidebar-section-title" style={{ padding: 0 }}>{t('settingsModal.license')}</span>
                 <span style={{ fontSize: '13px', color: 'var(--vscode-text-fg)' }}>MIT</span>
               </div>
-              {runtimeInfo.running_in_snap && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', padding: '14px', border: '1px solid var(--vscode-focusBorder)', borderRadius: '8px', backgroundColor: 'var(--vscode-sidebar-bg)' }}>
-                  <span className="vscode-sidebar-section-title" style={{ padding: 0 }}>{t('settingsModal.directInstallTitle')}</span>
-                  <span style={{ fontSize: '12px', lineHeight: 1.5, color: 'var(--vscode-descriptionForeground)' }}>
-                    {t('settingsModal.directInstallDescription')}
-                  </span>
-                  <code style={{ fontSize: '11px', padding: '8px', overflowWrap: 'anywhere', backgroundColor: 'var(--vscode-input-bg)' }}>
-                    {DIRECT_INSTALL_COMMAND}
-                  </code>
-                  <button className="vscode-button" style={{ alignSelf: 'flex-start' }} onClick={copyDirectInstallCommand}>
-                    {t('settingsModal.directInstallCopy')}
-                  </button>
-                  <span style={{ fontSize: '11px', lineHeight: 1.4, color: 'var(--vscode-descriptionForeground)' }}>
-                    {t('settingsModal.directInstallWarning')}
-                  </span>
-                </div>
-              )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '14px', border: '1px solid var(--vscode-border)', borderRadius: '8px', backgroundColor: 'var(--vscode-sidebar-bg)' }}>
                 <span className="vscode-sidebar-section-title" style={{ padding: 0 }}>{t('settingsModal.feedbackTitle')}</span>
                 <span style={{ fontSize: '12px', lineHeight: 1.5, color: 'var(--vscode-descriptionForeground)' }}>
@@ -1465,11 +1437,9 @@ export default function SettingsModal({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                 <span className="vscode-sidebar-section-title" style={{ padding: 0 }}>{t('settingsModal.uninstallTitle')}</span>
                 <span style={{ fontSize: '12px', lineHeight: 1.5, color: 'var(--vscode-descriptionForeground)' }}>
-                  {runtimeInfo.running_in_snap
-                    ? t('settingsModal.uninstallSnap')
-                    : runtimeInfo.platform === 'Windows'
-                      ? t('settingsModal.uninstallWindows')
-                      : t('settingsModal.uninstallDirect')}
+                  {runtimeInfo.platform === 'Windows'
+                    ? t('settingsModal.uninstallWindows')
+                    : t('settingsModal.uninstallDirect')}
                 </span>
               </div>
               <div style={{

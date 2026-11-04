@@ -12,7 +12,7 @@
 
 <p align="center">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-6d5ce8">
-  <img alt="Platforms: Linux and Windows" src="https://img.shields.io/badge/platform-Linux%20%7C%20Windows-6d5ce8">
+  <img alt="Platforms: Ubuntu 24.04, Ubuntu 26.04 and Windows 11" src="https://img.shields.io/badge/platform-Ubuntu%2024.04%20%7C%2026.04%20%7C%20Windows%2011-6d5ce8">
   <img alt="Python 3.11+" src="https://img.shields.io/badge/python-3.11%2B-6d5ce8">
   <img alt="Interface: English and Brazilian Portuguese" src="https://img.shields.io/badge/UI-English%20%7C%20Portugu%C3%AAs-6d5ce8">
 </p>
@@ -34,7 +34,7 @@
 
 > [!NOTE]
 > **Everything runs on your machine.** There is no account, no subscription and no telemetry.
-> Use a local model through [Ollama](https://ollama.com), or bring your own API key for a third-party provider.
+> Use a local model through [Ollama](https://ollama.com), bring your own API key for a third-party provider, or sign in to [OpenRouter](https://openrouter.ai) with OAuth.
 
 ---
 
@@ -100,6 +100,16 @@
       English and Brazilian Portuguese.
     </td>
   </tr>
+  <tr>
+    <td valign="top">
+      <h3>🔑 OpenRouter sign-in (OAuth)</h3>
+      Connect <a href="https://openrouter.ai">OpenRouter</a> with your browser instead of pasting a key. GilzaBots creates the key through OAuth (PKCE) and adds a free model to start with.
+    </td>
+    <td valign="top">
+      <h3>🔌 Connectors (MCP)</h3>
+      External services through MCP servers, with OAuth, tokens or local commands.
+    </td>
+  </tr>
 </table>
 
 ---
@@ -128,16 +138,16 @@ The architecture and design decisions are documented in [PROJECT_DESIGN.md](PROJ
 
 ## 📦 Install
 
-### Requirements
+### Supported systems
 
-| Operating system | Minimum version |
-|------------------|-----------------|
-| 🐧 Linux         | Ubuntu 24.04 or 26.04 |
-| 🪟 Windows       | Windows 10 or 11 |
+| Operating system | Supported versions |
+|------------------|--------------------|
+| 🐧 Ubuntu        | 24.04 and 26.04 (x86_64/amd64) |
+| 🪟 Windows       | Windows 11 |
 
 The installer downloads the current GilzaBots Community release from GitHub Releases, extracts it into your user profile and creates shortcuts. It does **not** require administrator privileges.
 
-### Linux / macOS
+### Ubuntu
 
 Open a terminal and run:
 
@@ -193,9 +203,6 @@ uv tool install gilzabots     # or: pip install gilzabots
 
 The desktop application needs the `gui` extra: `pip install "gilzabots[gui]"`. LaTeX compilation uses a `tectonic` found on your `PATH`.
 
-> [!IMPORTANT]
-> **Snap installations and the integrated terminal.** The snap runs under strict confinement, so its integrated terminal cannot run programs installed on the host. There, `python` is the Python 3.12 bundled with GilzaBots. `python -m venv .venv` works, but the environment it creates is meant to be used from GilzaBots's terminal. An environment created in a system terminal will not work inside GilzaBots, because each side has a different `/usr/bin/python3`. If you need your own toolchain (your Python, TeX Live, `make`, and so on) from the terminal or the AI assistant, use the direct installer above.
-
 ---
 
 ## 🚀 Quick start
@@ -208,7 +215,8 @@ flowchart LR
 1. **Open or create a project.** A project is a folder on your disk. Use the **+** (new project) or the folder (import) button in the explorer.
 2. **Connect a model.** Open **Connections and models** in the left activity bar.
    - **Ollama:** click **Load from Local Ollama** to add the models your Ollama server already has.
-   - **A hosted provider:** use **Manage Connections…** to add the provider and your API key, then **Add Model**. OpenRouter can also be connected with **Sign in with OpenRouter**.
+   - **OpenRouter, without copying a key:** click **Sign in with OpenRouter**. Your browser opens OpenRouter's authorization page; once you approve, GilzaBots receives a key of your own through OAuth (PKCE, on a `127.0.0.1` callback) and adds the free model `openrouter/free`, ready to use.
+   - **Another hosted provider:** use **Manage Connections…** to add the provider and your API key, then **Add Model**.
 3. **Choose it for the project** in the **Orchestrator** selector at the top of the chat.
 4. **Ask.** For example: *"Add unit tests for `src/clean.py` and run them"*, *"Summarise the changes since the last commit"* or *"Fix the compilation errors in chapter 3"*.
 
@@ -340,6 +348,7 @@ flowchart LR
 ```bash
 /providers add label="Ollama Gil" provider=ollama api_base=http://192.168.0.10:11434/v1
 /providers add label="OpenAI" provider=openai api_key=sk-...
+/providers login openrouter                   # sign in to OpenRouter with OAuth, adds openrouter/free
 /providers                                    # list connections
 
 /models add name=gemma4:26b connection=ollama-gil num_ctx=65000 supports_thinking=true
@@ -369,14 +378,13 @@ Uninstalling keeps your settings, chats, caches, credentials and project directo
 
 | Installation | How to uninstall |
 |--------------|------------------|
-| Linux / macOS (direct) | `gilzabots-uninstall`. Add `--purge` to also remove the global GilzaBots data directory. |
+| Ubuntu | `gilzabots-uninstall`. Add `--purge` to also remove the global GilzaBots data directory. |
 | Windows | **Settings › Apps › Installed apps › GilzaBots**, or **Uninstall GilzaBots** in the Start menu. The PowerShell `-Purge` switch removes global application data after confirmation. |
-| Snap | `sudo snap remove gilzabots`, from a system terminal |
 
 <details>
 <summary>Older installations without an uninstall command</summary>
 
-Linux / macOS:
+Ubuntu:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/gilzamir18/GilzaBots/main/uninstall.sh | bash
@@ -404,7 +412,7 @@ irm https://raw.githubusercontent.com/gilzamir18/GilzaBots/main/uninstall.ps1 | 
 Requirements: **Python 3.11 or newer**, **Node.js/npm** and **Git**.
 
 <details open>
-<summary><b>Bash (Linux/macOS)</b></summary>
+<summary><b>Bash (Ubuntu)</b></summary>
 
 ```bash
 git clone https://github.com/gilzamir18/GilzaBots.git
@@ -457,7 +465,7 @@ If script execution is disabled for the current PowerShell process, run `Set-Exe
 | Run the test suite (from the repository root) | `python -m pytest` |
 | Rebuild only the web interface | `npm run build --prefix gui_src` |
 | Packaged desktop build on Windows | `.\build_exe.ps1` |
-| Packaged desktop build on Linux | `bash ./build_exe.sh` |
+| Packaged desktop build on Ubuntu | `bash ./build_exe.sh` |
 
 The build scripts install the build dependencies, build the React/Vite interface, download pinned Tectonic and Pandoc releases, and package the application with PyInstaller. Outputs are written under `dist/`.
 

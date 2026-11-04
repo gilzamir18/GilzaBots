@@ -133,9 +133,9 @@ class FreedesktopNotifier(Notifier):
             "--method", "org.freedesktop.Notifications.Notify",
             # Every non-string argument must carry its explicit GVariant type
             # so the signature is (susssasa{sv}i) even when D-Bus introspection
-            # is blocked (e.g. under Snap's desktop AppArmor plug, which denies
-            # Introspect on /org/freedesktop/Notifications and makes gdbus parse
-            # an untyped "0" as int32 instead of uint32).
+            # is unavailable (an AppArmor profile that denies Introspect on
+            # /org/freedesktop/Notifications makes gdbus parse an untyped "0"
+            # as int32 instead of uint32).
             _gvariant_string(APP_NAME), "uint32 0", _gvariant_string(icon_path()),
             _gvariant_string(title),
             # body-markup servers read the body as markup, so it is escaped.

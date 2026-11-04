@@ -101,7 +101,7 @@ def test_the_floor_is_never_below_the_verified_release():
 
 
 def test_both_files_agree():
-    """The snap installs from pyproject.toml, a checkout from requirements.txt."""
+    """A pip install reads pyproject.toml, a checkout requirements.txt."""
     assert _requirements_txt() == _pyproject_gui_extra()
 
 

@@ -109,17 +109,16 @@ build so forks and branch builds stay permissive: the secrets are required
 ### The packaging trap this fell into
 
 `bundled_google_client.json` is `.gitignore`'d, and hatchling drops VCS-ignored
-files from the wheel by default. The snap installs with `pip install .`, so
-**every installed build shipped without a client** while the source tree had
+files from the wheel by default, so **every build installed with
+`pip install .` shipped without a client** while the source tree had
 one — and the only symptom was Cloud sync answering "this build of GilzaBots
 carries no Google OAuth client", sending the user to the Google Cloud console
 for a chore the feature exists to avoid. A working dev checkout hides it
 completely, because there `__file__` resolves to the source tree.
 
-Two things hold it shut now: `artifacts` in `[tool.hatch.build.targets.wheel]`
-(hatchling's exception list for generated files), and a check in the snap's
-`override-build` that the installed package still has the file whenever the
-source tree did. A checkout with no credentials still builds — it just says so.
+What holds it shut now is `artifacts` in `[tool.hatch.build.targets.wheel]`
+(hatchling's exception list for generated files). A checkout with no
+credentials still builds — it just says so.
 
 ### Resolution order
 

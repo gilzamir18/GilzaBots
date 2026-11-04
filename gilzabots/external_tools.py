@@ -5,12 +5,11 @@ Tectonic and pandoc can come from three places, searched in this order:
 1. ``<gilzabots home>/bin`` — what the user installed from inside the app. It is
    searched first so that reinstalling a tool actually replaces the one in use.
 2. A directory shipped with the application (a source checkout's ``bin/``, a
-   PyInstaller bundle, or the snap's ``$SNAP/bin``, which is also on ``PATH``).
+   PyInstaller bundle).
 3. ``PATH``.
 
 Downloads are installed into (1) and never next to the package: the package
-directory is read-only in the snap (a squashfs mount) and in system-wide
-installs, which is how "Install Pandoc" used to fail with ``[Errno 30]
+directory is read-only in system-wide installs, which is how "Install Pandoc" used to fail with ``[Errno 30]
 Read-only file system`` on ``.../site-packages/bin``.
 """
 

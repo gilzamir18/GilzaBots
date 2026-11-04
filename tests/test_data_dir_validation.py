@@ -1,9 +1,8 @@
 """Tests for validating the configurable global data directory (GILZABOTS_HOME).
 
 A directory that `os.path.isdir` accepts is not necessarily one GilzaBots can
-write to: under snap strict confinement the `home` interface lets the sandbox
-stat a hidden top-level directory of the real home (e.g. ~/.gilzabots) while
-denying every open() beneath it. Accepting such a path surfaced much later as
+write to (a read-only mount, or permissions that deny creating files). Accepting
+such a path surfaced much later as
 `sqlite3.OperationalError: unable to open database file` on the next launch.
 """
 
@@ -60,7 +59,7 @@ def test_a_path_that_is_a_file_is_rejected(tmp_path):
 
 
 def test_a_directory_that_only_looks_valid_is_rejected(tmp_path, monkeypatch):
-    """The snap case: isdir() succeeds, opening a file in it does not."""
+    """isdir() succeeds, opening a file in it does not."""
     target = tmp_path / ".gilzabots"
     target.mkdir()
     _deny_writes(monkeypatch, target)
@@ -69,34 +68,6 @@ def test_a_directory_that_only_looks_valid_is_rejected(tmp_path, monkeypatch):
 
     assert "not writable" in problem
     assert str(target) not in config._verified_data_dirs
-
-
-def test_snap_hint_names_the_confinement_rule_for_hidden_home_directories(monkeypatch):
-    monkeypatch.setenv("SNAP_NAME", "gilzabots")
-    monkeypatch.setenv("SNAP_REAL_HOME", "/home/user")
-
-    hint = config.snap_confinement_hint("/home/user/.gilzabots")
-
-    assert "hidden top-level" in hint
-    assert "/home/user/GilzaBots" in hint
-
-
-@pytest.mark.parametrize(
-    "path",
-    ["/home/user/GilzaBots", "/home/user/Docs/.gilzabots", "/srv/.gilzabots"],
-)
-def test_snap_hint_stays_quiet_for_paths_the_home_interface_allows(monkeypatch, path):
-    monkeypatch.setenv("SNAP_NAME", "gilzabots")
-    monkeypatch.setenv("SNAP_REAL_HOME", "/home/user")
-
-    assert config.snap_confinement_hint(path) == ""
-
-
-def test_snap_hint_stays_quiet_outside_a_snap(monkeypatch):
-    monkeypatch.delenv("SNAP_NAME", raising=False)
-    monkeypatch.delenv("SNAP_REAL_HOME", raising=False)
-
-    assert config.snap_confinement_hint("/home/user/.gilzabots") == ""
 
 
 def test_unusable_configured_home_falls_back_and_warns(tmp_path, monkeypatch, capsys):

@@ -45,63 +45,38 @@ O assistente roda em um de três **modos**, selecionáveis na barra do chat:
 - **edit** — edita arquivos diretamente, mas pergunta antes de rodar comandos no
   terminal.
 
-## snap-installation :: Por que o sudo falha no Snap e como instalar sem Snap?
+## installation :: Quais sistemas são suportados e como instalo o GilzaBots?
 
-A edição Snap usa **confinamento estrito (`strict`)**. O terminal integrado e os
-comandos do assistente herdam esse confinamento: `sudo apt install nome-do-pacote`
-não consegue instalar pacotes no sistema por esse terminal, mesmo com a senha correta.
-O acesso a arquivos e programas do sistema também é restrito. Mudar o modo do
-assistente ou abrir outro shell dentro do app não remove essas restrições.
+O GilzaBots suporta **Ubuntu 24.04**, **Ubuntu 26.04** e **Windows 11**. O instalador não
+exige privilégios de administrador e instala no seu perfil de usuário.
 
-Para uma instalação pontual, abra o **terminal do sistema pelo menu do desktop** e
-execute o comando ali. Instalar uma ferramenta no sistema não garante que a edição
-Snap consiga acessá-la.
+**Ubuntu** (x86_64/amd64, com `curl`): abra um terminal e execute
 
-Nota sobre o sandbox Docker experimental no Snap: o confinamento estrito bloqueia o
-socket do daemon Docker por padrão. Para usar o sandbox Docker na edição Snap, libere o
-acesso executando `sudo snap connect gilzabots:docker` no terminal do sistema
-(seu usuário também precisa estar no grupo `docker`).
+```bash
+curl -fsSL https://raw.githubusercontent.com/gilzamir18/GilzaBots/main/install.sh -o gilzabots-install.sh
+bash gilzabots-install.sh
+```
 
-### Instalar diretamente no Linux para ter mais liberdade
+Ele baixa a versão para Linux em `~/.local/share/GilzaBots` e cria um atalho na área de
+trabalho e o comando `~/.local/bin/gilzabots`. Se o `curl` não estiver instalado, instale-o
+antes com `sudo apt update && sudo apt install curl`.
 
-A edição direta usa as permissões normais do seu usuário, fora do confinamento Snap.
-Comandos administrativos continuam exigindo autorização do seu usuário pelo `sudo`.
-O instalador Linux do pacote requer uma máquina **x86_64/amd64** e `curl`; o projeto
-lista **Ubuntu 24.04 ou 26.04** como sistemas Linux suportados.
+**Windows 11**: abra o PowerShell e execute
 
-1. Salve seu trabalho e feche o GilzaBots. Abra um **terminal do sistema**, fora do app Snap.
-2. Se o `curl` não estiver instalado, instale-o nesse terminal:
+```powershell
+irm https://raw.githubusercontent.com/gilzamir18/GilzaBots/main/install.ps1 | iex
+```
 
-   ```bash
-   sudo apt update
-   sudo apt install curl
-   ```
+O aplicativo fica em `%LOCALAPPDATA%\GilzaBots`, com atalhos na Área de Trabalho e no menu
+Iniciar.
 
-3. Baixe e execute o instalador direto do projeto (sem `sudo`):
-
-   ```bash
-   curl -fsSL https://raw.githubusercontent.com/gilzamir18/GilzaBots/main/install.sh -o gilzabots-install.sh
-   bash gilzabots-install.sh
-   ```
-
-   Ele baixa a versão Linux para `~/.local/share/GilzaBots` e cria um atalho no menu
-   de aplicativos e o comando `~/.local/bin/gilzabots`. A versão mais recente no
-   GitHub Releases precisa conter o arquivo `GilzaBots-linux-x64.tar.gz`.
-
-4. Abra explicitamente a edição direta pelo terminal do sistema:
-
-   ```bash
-   "$HOME/.local/bin/gilzabots"
-   ```
-
-   Esse caminho evita abrir `/snap/bin/gilzabots` por engano quando as duas edições
-   estão instaladas. O instalador não remove a edição Snap nem migra automaticamente
-   suas configurações e seu histórico de chats. Preserve os dados do Snap até conferir
-   seus projetos e configurações na edição direta.
+O GilzaBots roda com as permissões normais do seu usuário, então o terminal integrado e os
+comandos do assistente enxergam os mesmos programas que o terminal do sistema. Comandos
+administrativos continuam exigindo sua autorização via `sudo`.
 
 ## uninstall :: Como desinstalo o GilzaBots?
 
-Primeiro feche o GilzaBots. Uma instalação direta no Linux ou macOS fornece:
+Primeiro feche o GilzaBots. No Ubuntu, a instalação fornece:
 
 ```bash
 gilzabots-uninstall
@@ -113,8 +88,7 @@ somente se também quiser apagar os dados globais do aplicativo; o comando mostr
 o diretório exato e pede confirmação. Os diretórios dos projetos nunca são removidos.
 
 No Windows, use **Configurações > Aplicativos > Aplicativos instalados > GilzaBots**
-ou o atalho **Desinstalar GilzaBots** no menu Iniciar. Para a edição Snap, abra um
-terminal do sistema e execute `sudo snap remove gilzabots`.
+ou o atalho **Desinstalar GilzaBots** no menu Iniciar.
 
 ## projects :: Como crio e configuro um projeto?
 
@@ -585,13 +559,6 @@ seção **Sandbox Docker** em Preferências:
     login**: saia da sessão e entre de novo (ou reinicie o computador). Reiniciar apenas o
     GilzaBots não basta, porque ele herda os grupos da sessão em que foi aberto.
   - No Windows/macOS: garanta que o Docker Desktop está em execução e integrado ao WSL2.
-- **Edição Snap**: ao rodar o GilzaBots via Snap, o confinamento estrito bloqueia o socket
-  do Docker por padrão. Execute o comando abaixo em um terminal do sistema para liberar o
-  acesso:
-  ```bash
-  sudo snap connect gilzabots:docker
-  ```
-  O snap continua exigindo que seu usuário esteja no grupo `docker`, como acima.
 
 Como esse recurso é **experimental**, a execução local padrão continua sendo o padrão.
 Se encontrar problemas de permissão ou não necessitar de isolamento em contêiner, você pode
@@ -669,8 +636,8 @@ silêncio.
 
 Os monitores rodam num pequeno serviço em segundo plano, `gilzabots monitors daemon`,
 separado da janela. **Iniciar no login** vem ligado por padrão para seus monitores
-sobreviverem a uma reinicialização (um serviço `systemd --user` no Linux, o autostart da
-própria snap na snap, a chave `Run` do usuário no Windows, um LaunchAgent no macOS); você
+sobreviverem a uma reinicialização (um serviço `systemd --user` no Linux, a chave `Run`
+do usuário no Windows); você
 pode desligar no painel de Monitores. O serviço para sozinho depois de um tempo quando não
 há mais nada para observar.
 

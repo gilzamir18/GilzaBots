@@ -137,12 +137,3 @@ def test_a_failing_qt_import_is_not_blamed_on_onnxruntime():
     assert problem.startswith("importing QtWebEngine failed (exit 1)")
     assert "onnxruntime" not in problem
     assert "procedure could not be found" in problem
-
-
-def test_the_snap_runs_the_gate_after_installing_qt():
-    text = (ROOT / "snapcraft.yaml").read_text(encoding="utf-8")
-    install = text.index('"$CRAFT_PART_INSTALL/bin/python" -m pip install ".[gui]"')
-    check = text.index('"$CRAFT_PART_INSTALL/bin/python" scripts/check_qt_runtime.py')
-    assert install < check, "snapcraft.yaml must check the Qt it installed with the interpreter it ships"
-    block = text[text.rindex("override-build: |", 0, install):install]
-    assert "set -eu" in block, "the snap build must stop when the gate fails"

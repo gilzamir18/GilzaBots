@@ -206,7 +206,7 @@ def test_the_model_flag_has_no_built_in_default():
 
 
 def test_a_folder_that_cannot_hold_project_state_is_asked_for_again(tmp_path, monkeypatch, catalog, capsys):
-    """Under snap, `~` itself accepts files but not `~/.gilzabots`.
+    """A folder that accepts files but not its `.gilzabots` state directory.
 
     Stands in for that with a `.gilzabots` that is a file: the folder is writable,
     its state directory is not. Creating the project there anyway printed
@@ -248,7 +248,7 @@ def test_project_new_can_be_cancelled(tmp_path, monkeypatch, catalog):
 
 
 def test_opening_a_project_whose_folder_cannot_hold_its_state_says_so(tmp_path, capsys):
-    """A project registered at `~` under snap before the folder was checked."""
+    """A project registered before the folder was checked."""
     (tmp_path / ".gilzabots").write_text("")
     store, project = _project(tmp_path)
     capsys.readouterr()
@@ -321,10 +321,10 @@ def test_a_project_can_be_created_in_another_directory(tmp_path, monkeypatch, ca
 
 
 def test_a_directory_that_cannot_take_a_project_returns_to_the_question(tmp_path, monkeypatch, catalog, capsys):
-    """Under snap, `~` itself: creating there fails, and the run must not just end."""
+    """Creating a project in an unusable folder fails, and the run must not just end."""
     folder = tmp_path / "home"
     folder.mkdir()
-    (folder / ".gilzabots").write_text("")  # stands in for the AppArmor denial
+    (folder / ".gilzabots").write_text("")  # the state directory cannot be created
 
     with pytest.raises(cli.T.AppExit):
         _start(tmp_path, monkeypatch, folder, ["1", "3"])

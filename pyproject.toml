@@ -102,7 +102,7 @@ gilzabots = "gilzabots.cli:main"
 packages = ["gilzabots", "agenticblocks"]
 # The Google OAuth client is injected at build time and is .gitignore'd, and
 # hatchling drops VCS-ignored files by default — which shipped every installed
-# build (the snap included) without a client, so Cloud sync could only answer
+# build without a client, so Cloud sync could only answer
 # "this build carries no Google OAuth client" and sent the user to the Google
 # Cloud console. `artifacts` is the exception list for exactly this: generated
 # files that must be packaged. A missing file simply does not match, so a

@@ -75,8 +75,8 @@ def test_chroma_embeds_through_the_thread_bounded_session(tmp_path, monkeypatch)
 
     `Collection._embed` ignores any `DefaultEmbeddingFunction` instance and
     embeds with a fresh default rebuilt from the collection configuration. A
-    wrapper subclassing it was silently bypassed, so the Snap kept logging the
-    affinity errors. Every session created while embedding must carry the
+    wrapper subclassing it was silently bypassed, so the affinity errors kept
+    being logged. Every session created while embedding must carry the
     explicit thread count, and only one may be created for the process.
     """
     if archival._get_embedding_function() is None:
@@ -111,7 +111,7 @@ def test_an_explicit_thread_count_is_requested(tmp_path, monkeypatch):
     """ONNX Runtime only skips `pthread_setaffinity_np` when told the count.
 
     Leaving it unset is what produced one "Operation not permitted" error line
-    per thread inside the Snap.
+    per thread inside a sandbox that denies CPU affinity.
     """
     monkeypatch.setenv("GILZABOTS_EMBEDDING_THREADS", "2")
     assert archival._onnx_intra_op_threads() == 2

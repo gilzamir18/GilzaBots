@@ -38,25 +38,6 @@ _SCRIPT_DIR = os.path.join(".gilzabots", "sandbox")
 _SCRIPT_MAX_AGE = 24 * 3600
 
 
-def _running_in_snap() -> bool:
-    # Only GilzaBots's own snap: a terminal of another snapped app (an IDE) also
-    # exports SNAP and SNAP_NAME to the programs started from it.
-    return os.environ.get("SNAP_NAME") == "gilzabots"
-
-
-def _snap_docker_plug_connected() -> bool | None:
-    """Whether the snap's ``docker`` plug is connected; None when snapctl cannot tell."""
-    try:
-        proc = subprocess.run(
-            ["snapctl", "is-connected", "docker"], capture_output=True, text=True, timeout=10,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if proc.returncode in (0, 1):
-        return proc.returncode == 0
-    return None
-
-
 def _docker_group_pending() -> bool:
     """True when the user is in the 'docker' group but this process does not have it yet.
 
@@ -177,7 +158,6 @@ def verify_docker() -> dict[str, Any]:
     image = get_sandbox_image()
     network = get_sandbox_network()
     docker_bin = find_docker_bin()
-    in_snap = _running_in_snap()
     os_name = platform.system()
 
     result: dict[str, Any] = {
@@ -193,16 +173,10 @@ def verify_docker() -> dict[str, Any]:
     }
 
     if not docker_bin:
-        if in_snap:
-            result["problem"] = (
-                "The Docker CLI client was not found inside the Snap environment. "
-                "Ensure Docker is installed on your host system."
-            )
-        else:
-            result["problem"] = (
-                f"Docker executable was not found on PATH ({os_name}). "
-                "Please install Docker Engine (Linux) or Docker Desktop (Windows/macOS)."
-            )
+        result["problem"] = (
+            f"Docker executable was not found on PATH ({os_name}). "
+            "Please install Docker Engine (Linux) or Docker Desktop (Windows/macOS)."
+        )
         return result
 
     # Check daemon accessibility
@@ -225,15 +199,7 @@ def verify_docker() -> dict[str, Any]:
 
     if proc.returncode != 0:
         if "permission denied" in combined_lower or "dial unix /var/run/docker.sock" in combined_lower:
-            # Under Snap the plug only lifts confinement: the socket's own
-            # permissions (root:docker) still require the docker group.
-            if in_snap and _snap_docker_plug_connected() is not True:
-                result["problem"] = (
-                    "GilzaBots is running in Snap confinement and does not have permission "
-                    "to access the Docker daemon socket."
-                )
-                result["action_command"] = "sudo snap connect gilzabots:docker"
-            elif _docker_group_pending():
+            if _docker_group_pending():
                 result["problem"] = (
                     "Your user is in the 'docker' group, but GilzaBots runs in a login session "
                     "that started before you were added, so it does not have the group yet; "
@@ -251,7 +217,7 @@ def verify_docker() -> dict[str, Any]:
             result["problem"] = (
                 "The Docker daemon is not running. Please start the Docker service or launch Docker Desktop."
             )
-            if os_name == "Linux" and not in_snap:
+            if os_name == "Linux":
                 result["action_command"] = "sudo systemctl start docker"
         else:
             lines = (proc.stderr or proc.stdout or "").strip().splitlines()

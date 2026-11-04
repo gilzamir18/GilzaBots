@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .config import DEFAULT_DB_PATH, DEFAULT_MODEL, resolve_display_num_ctx, snap_confinement_hint
+from .config import DEFAULT_DB_PATH, DEFAULT_MODEL, resolve_display_num_ctx
 from .api_keys import get_env_var_for_model
 from .atomic_file import write_text_atomic
 
@@ -81,9 +81,9 @@ def _open(db_path: str) -> sqlite3.Connection:
         return sqlite3.connect(db_path)
     except sqlite3.OperationalError as exc:
         directory = os.path.dirname(db_path) or os.getcwd()
-        hint = snap_confinement_hint(directory)
-        detail = f"cannot open the database '{db_path}' in '{directory}' ({exc})"
-        raise sqlite3.OperationalError(f"{detail}. {hint}" if hint else detail) from exc
+        raise sqlite3.OperationalError(
+            f"cannot open the database '{db_path}' in '{directory}' ({exc})"
+        ) from exc
 
 
 def _conn(db_path: str) -> sqlite3.Connection:

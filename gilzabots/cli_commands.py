@@ -326,8 +326,7 @@ async def cmd_list(state: REPLState, _args: list[str]) -> None:
 def warn_if_project_dir_unusable(project: ProjectData) -> bool:
     """Say, once on opening, when the project's folder cannot hold its state.
 
-    A project created before the folder was checked (under snap, the home
-    directory itself) otherwise surfaces only as "Permission denied" on
+    A project created before the folder was checked otherwise surfaces only as "Permission denied" on
     ``<folder>/.gilzabots`` during every turn. A folder that no longer exists is
     left alone: probing it would recreate it.
     """
