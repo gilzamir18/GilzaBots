@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gilzabots"
-version = "0.2.33"
+version = "0.2.34"
 description = "Autonomous coding agent with interactive planning and modular execution"
 readme = "README.md"
 requires-python = ">=3.11"
