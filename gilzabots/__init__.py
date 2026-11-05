@@ -1,5 +1,5 @@
 """GilzaBots – AI coding agent with session management and modular execution."""
-__version__ = "0.2.37"
+__version__ = "0.2.38"
 
 import sys
 import os
