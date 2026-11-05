@@ -783,6 +783,13 @@ class ProjectStore:
             ).fetchone()
             return row is not None
 
+    def has_chat(self, name: str, chat_id: str) -> bool:
+        with _conn(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT 1 FROM project_chats WHERE project = ? AND id = ?", (name, chat_id)
+            ).fetchone()
+            return row is not None
+
     def find_by_path(self, path: str) -> str | None:
         with _conn(self.db_path) as conn:
             row = conn.execute(

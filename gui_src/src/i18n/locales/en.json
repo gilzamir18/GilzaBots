@@ -1857,5 +1857,40 @@
     },
     "fieldScope": "OAuth scopes",
     "scopePlaceholder": "empty = what the server asks for"
+  },
+  "transfer": {
+    "title": "Move to another machine",
+    "open": "Export / Import",
+    "openHint": "Export monitors and connectors to a file, or import a file from another machine",
+    "intro": "A bundle carries the definitions of your connectors and monitors, never their secrets, sign-ins or history. On the other machine, connectors arrive disabled and monitors paused, so you can review each one before turning it on.",
+    "exportTitle": "Export",
+    "connectors": "Connectors",
+    "monitors": "Active and paused monitors",
+    "export": "Export to file",
+    "exportHint": "Tokens, OAuth client secrets, header and environment values are left out; the import asks for them.",
+    "exported": "Exported {{connectors}} connector(s) and {{monitors}} monitor(s).",
+    "importTitle": "Import",
+    "chooseFile": "Choose bundle…",
+    "importHint": "The file is checked first; nothing changes until you click Import.",
+    "unreadable": "The file cannot be read as a bundle: {{error}}",
+    "mapProjects": "Projects that do not exist here — import their monitors into:",
+    "notMapped": "(not imported)",
+    "emptyBundle": "The bundle is empty.",
+    "recheck": "Check again",
+    "importButton": "Import {{count}} item(s)",
+    "done": "Imported {{imported}}, already here {{existing}}, not imported {{failed}}.",
+    "kind": {
+      "connector": "Connector",
+      "monitor": "Monitor"
+    },
+    "status": {
+      "ready": "ready",
+      "imported": "imported",
+      "exists": "already here",
+      "needs_secrets": "needs secrets",
+      "no_project": "no project",
+      "no_chat": "no chat",
+      "invalid": "invalid"
+    }
   }
 }

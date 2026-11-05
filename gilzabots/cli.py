@@ -759,6 +759,10 @@ def main() -> None:
         from .monitors.cli import main as monitors_main
 
         sys.exit(monitors_main(monitors_args))
+    if sys.argv[1:2] == ["transfer"]:
+        from .transfer_cli import main as transfer_main
+
+        sys.exit(transfer_main(sys.argv[2:]))
 
     parser = build_parser()
     args = parser.parse_args()

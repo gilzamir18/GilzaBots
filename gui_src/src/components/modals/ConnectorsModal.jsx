@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Cable, Plus, Trash2, Pencil, RefreshCw, Unplug, LogOut, ChevronDown, ChevronRight, ExternalLink, TriangleAlert } from 'lucide-react';
+import { Cable, ArrowLeftRight, Plus, Trash2, Pencil, RefreshCw, Unplug, LogOut, ChevronDown, ChevronRight, ExternalLink, TriangleAlert } from 'lucide-react';
+import TransferModal from './TransferModal';
 import { handleExternalClick } from '../../utils/openExternal';
 
 // MCP connectors panel (PROJECT_DESIGN 2.25): external MCP servers whose tools
@@ -163,6 +164,7 @@ export default function ConnectorsModal({ onClose }) {
   const [editing, setEditing] = useState(null); // null | 'new' | connector id
   const [form, setForm] = useState(emptyForm);
   const [busy, setBusy] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const [expanded, setExpanded] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [presets, setPresets] = useState([]);
@@ -447,7 +449,12 @@ export default function ConnectorsModal({ onClose }) {
           <h2 style={{ margin: 0, fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Cable size={18} aria-hidden="true" /> {t('connectors.title')}
           </h2>
-          <button onClick={onClose} aria-label={t('common.close', 'Close')} style={{ background: 'transparent', border: 'none', color: 'var(--vscode-text-fg)', cursor: 'pointer', fontSize: '18px' }}>✕</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button type="button" onClick={() => setTransferOpen(true)} title={t('transfer.openHint')} style={{ padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', background: 'transparent', color: 'var(--vscode-text-fg)', border: '1px solid var(--vscode-border)', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
+              <ArrowLeftRight size={12} aria-hidden="true" /> {t('transfer.open')}
+            </button>
+            <button onClick={onClose} aria-label={t('common.close', 'Close')} style={{ background: 'transparent', border: 'none', color: 'var(--vscode-text-fg)', cursor: 'pointer', fontSize: '18px' }}>✕</button>
+          </div>
         </div>
         <p style={{ margin: 0, fontSize: '12px', opacity: 0.8 }}>{t('connectors.intro')}</p>
 
@@ -538,6 +545,7 @@ export default function ConnectorsModal({ onClose }) {
           })}
         </div>
       </div>
+      {transferOpen && <TransferModal onClose={() => setTransferOpen(false)} onImported={refresh} />}
     </div>
   );
 }

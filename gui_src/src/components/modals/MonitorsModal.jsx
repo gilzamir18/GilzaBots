@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Radar, Pause, Play, FlaskConical, Trash2, Plus, ChevronDown, ChevronRight, MessageSquare } from 'lucide-react';
+import { Radar, ArrowLeftRight, Pause, Play, FlaskConical, Trash2, Plus, ChevronDown, ChevronRight, MessageSquare } from 'lucide-react';
+import TransferModal from './TransferModal';
 
 // Conditions that apply to each check type; mirrors gilzabots/monitors/spec.py
 // (_CONDITIONS_FOR_CHECK). The server validates again and its message is shown.
@@ -115,6 +116,7 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [busy, setBusy] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const [showFinished, setShowFinished] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -339,7 +341,12 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
           <h2 style={{ margin: 0, fontSize: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Radar size={18} aria-hidden="true" /> {t('monitors.title')}
           </h2>
-          <button onClick={onClose} aria-label={t('common.close', 'Close')} style={{ background: 'transparent', border: 'none', color: 'var(--vscode-text-fg)', cursor: 'pointer', fontSize: '18px' }}>✕</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button type="button" onClick={() => setTransferOpen(true)} title={t('transfer.openHint')} style={{ padding: '4px 8px', borderRadius: '6px', cursor: 'pointer', background: 'transparent', color: 'var(--vscode-text-fg)', border: '1px solid var(--vscode-border)', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px' }}>
+              <ArrowLeftRight size={12} aria-hidden="true" /> {t('transfer.open')}
+            </button>
+            <button onClick={onClose} aria-label={t('common.close', 'Close')} style={{ background: 'transparent', border: 'none', color: 'var(--vscode-text-fg)', cursor: 'pointer', fontSize: '18px' }}>✕</button>
+          </div>
         </div>
         <p style={{ margin: 0, fontSize: '12px', opacity: 0.8 }}>{t('monitors.intro')}</p>
 
@@ -630,6 +637,7 @@ export default function MonitorsModal({ onClose, activeProject, activeChatId, on
           </section>
         </div>
       </div>
+      {transferOpen && <TransferModal onClose={() => setTransferOpen(false)} onImported={refresh} />}
     </div>
   );
 }

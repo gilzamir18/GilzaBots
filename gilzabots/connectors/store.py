@@ -322,12 +322,22 @@ def _apply_fields(connector: Connector, data: dict) -> Connector:
     return connector
 
 
+def prepare_connector(data: dict) -> Connector:
+    """The connector ``data`` describes, validated but not stored.
+
+    Raises `ConnectorError` exactly as `create_connector` would, so a caller can
+    check a definition (an import's dry run) without writing the registry.
+    """
+    connector = _apply_fields(Connector(id=str(data.get("id") or "").strip(), name=""), data)
+    validate(connector)
+    return connector
+
+
 def create_connector(data: dict) -> Connector:
     with _LOCK:
         connectors = _read_all()
-        connector = _apply_fields(Connector(id=str(data.get("id") or "").strip(), name=""), data)
+        connector = prepare_connector(data)
         connector.created_at = time.time()
-        validate(connector)
         if any(c.id == connector.id for c in connectors):
             raise ConnectorError(f"A connector with id '{connector.id}' already exists.")
         connectors.append(connector)

@@ -1910,5 +1910,40 @@
     },
     "fieldScope": "Escopos OAuth",
     "scopePlaceholder": "vazio = o que o servidor pedir"
+  },
+  "transfer": {
+    "title": "Levar para outra máquina",
+    "open": "Exportar / Importar",
+    "openHint": "Exporte monitores e conectores para um arquivo, ou importe um arquivo de outra máquina",
+    "intro": "Um pacote leva as definições dos seus conectores e monitores, nunca seus segredos, logins ou histórico. Na outra máquina, os conectores chegam desativados e os monitores pausados, para você revisar cada um antes de ligá-lo.",
+    "exportTitle": "Exportar",
+    "connectors": "Conectores",
+    "monitors": "Monitores ativos e pausados",
+    "export": "Exportar para arquivo",
+    "exportHint": "Tokens, segredos de cliente OAuth e valores de cabeçalhos e de ambiente ficam de fora; a importação pede por eles.",
+    "exported": "Exportados {{connectors}} conector(es) e {{monitors}} monitor(es).",
+    "importTitle": "Importar",
+    "chooseFile": "Escolher pacote…",
+    "importHint": "O arquivo é verificado primeiro; nada muda até você clicar em Importar.",
+    "unreadable": "O arquivo não pôde ser lido como pacote: {{error}}",
+    "mapProjects": "Projetos que não existem aqui — importar seus monitores em:",
+    "notMapped": "(não importar)",
+    "emptyBundle": "O pacote está vazio.",
+    "recheck": "Verificar de novo",
+    "importButton": "Importar {{count}} item(ns)",
+    "done": "Importados {{imported}}, já existentes {{existing}}, não importados {{failed}}.",
+    "kind": {
+      "connector": "Conector",
+      "monitor": "Monitor"
+    },
+    "status": {
+      "ready": "pronto",
+      "imported": "importado",
+      "exists": "já existe",
+      "needs_secrets": "faltam segredos",
+      "no_project": "sem projeto",
+      "no_chat": "sem chat",
+      "invalid": "inválido"
+    }
   }
 }

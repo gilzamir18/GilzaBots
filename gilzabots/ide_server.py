@@ -2319,6 +2319,13 @@ class AsyncHTTPServer:
             )
             self.send_response(writer, status, json.dumps(body, default=str).encode('utf-8'), "application/json")
 
+        elif path.startswith('/api/transfer/'):
+            from gilzabots import transfer_api
+            status, body = await transfer_api.handle(
+                path, method, data, refresh_agent=self._refresh_live_orchestrator,
+            )
+            self.send_response(writer, status, json.dumps(body, default=str).encode('utf-8'), "application/json")
+
         elif path == '/api/hardware' and method == 'GET':
             from gilzabots.hardware_store import get_or_detect_hardware
             info = get_or_detect_hardware()
