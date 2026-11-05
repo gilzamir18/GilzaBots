@@ -931,9 +931,21 @@ async def check_editor_file_switch(page: Page, check: Checks) -> None:
             break
         await asyncio.sleep(0.2)
     else:
-        check("editor harness loads", False, "Monaco never mounted")
+        status = await page.js(
+            "(document.querySelector('.monaco-load-status')||{}).innerText || null")
+        check("editor harness loads", False, f"Monaco never mounted (status: {status!r})")
         return
     await asyncio.sleep(0.6)
+
+    # The browser runs with every non-local host unresolvable (see main), so
+    # reaching this point already proves Monaco came from the bundle. Say so
+    # explicitly: `@monaco-editor/react` used to fetch it from jsDelivr, and a
+    # single failed fetch left every editor on "Loading..." for the session.
+    offsite = await page.js(
+        "performance.getEntriesByType('resource').map(e => e.name)"
+        ".filter(n => !/^https?:\\/\\/(localhost|127\\.0\\.0\\.1)[:/]/.test(n))")
+    check("Monaco loads from the bundle, with no network",
+          not offsite, f"off-site requests: {offsite[:3]}")
 
     lines = await page.rect(".monaco-editor .view-lines")
     await page.click(lines["x"] + 40, lines["y"] + 8)
@@ -1040,6 +1052,10 @@ def main(argv: list[str]) -> int:
         browser = subprocess.Popen(
             [chrome, *([] if headful else ["--headless"]),
              "--disable-gpu", "--no-sandbox", "--no-first-run", "--hide-scrollbars",
+             # The application is offline by default, so the suite is too:
+             # anything that reaches past this machine fails here instead of
+             # passing on a developer's connection.
+             "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE localhost, EXCLUDE 127.0.0.1",
              f"--remote-debugging-port={cdp_port}",
              f"--window-size={WINDOW[0]},{WINDOW[1]}", "about:blank"],
             stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT,

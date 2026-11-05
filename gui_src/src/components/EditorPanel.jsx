@@ -4,6 +4,7 @@ import { Files, RefreshCw, Save, X, Maximize2, Minimize2, GitCompare, Eye, EyeOf
 import { useTranslation } from 'react-i18next';
 import { useCustomDialog } from './modals/CustomDialogProvider';
 import { getLanguage } from '../utils/language';
+import { useBundledMonaco } from '../monaco/useBundledMonaco';
 import {
   COUNT_MODE_AUTO,
   countTextStats,
@@ -94,6 +95,9 @@ export default function EditorPanel({
   openPreviewByDefault,
 }) {
   const { t, i18n } = useTranslation();
+  // Monaco ships in the bundle; <Editor>/<DiffEditor> mount only once it is
+  // loaded, so their loader never reaches for the CDN (see bundledMonaco.js).
+  const bundledMonaco = useBundledMonaco();
   const { showAlert } = useCustomDialog();
   const [isDiffMode, setIsDiffMode] = useState(false);
   const [isPreviewMode, setIsPreviewMode] = useState(false);
@@ -1414,8 +1418,37 @@ export default function EditorPanel({
   // Monaco (or its diff variant) for every file that is not handled by a
   // dedicated panel. Shared by the plain editor layout and by the left pane of
   // the Markdown/HTML side-by-side layout, so the two can never drift apart.
+  // Shown in place of Monaco until the bundled editor has loaded, and with the
+  // reason and a retry if its chunk failed to load, instead of a placeholder
+  // that waits forever.
+  const renderMonacoStatus = () => (
+    <div
+      className="monaco-load-status"
+      data-status={bundledMonaco.status}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '16px', textAlign: 'center' }}
+    >
+      {bundledMonaco.status === 'error' ? (
+        <>
+          <p style={{ fontSize: '13px', color: 'var(--vscode-errorForeground, var(--vscode-text-fg))' }}>
+            {t('editorPanel.editorLoadFailed', 'The code editor could not be loaded.')}
+          </p>
+          <p style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground)', wordBreak: 'break-word' }}>
+            {String(bundledMonaco.error?.message || bundledMonaco.error || '')}
+          </p>
+          <button type="button" className="vscode-button" onClick={bundledMonaco.retry}>
+            {t('editorPanel.editorLoadRetry', 'Try again')}
+          </button>
+        </>
+      ) : (
+        <p style={{ fontSize: '12px', color: 'var(--vscode-descriptionForeground)' }}>
+          {t('editorPanel.editorLoading', 'Loading editor…')}
+        </p>
+      )}
+    </div>
+  );
+
   const renderPlainEditorSurface = () => (
-    isDiffMode ? (
+    bundledMonaco.status !== 'ready' ? renderMonacoStatus() : isDiffMode ? (
       <DiffEditor
         height="100%"
         language={getLanguage(selectedFile)}
@@ -1540,7 +1573,7 @@ export default function EditorPanel({
             richTextScrollTopsRef.current[selectedFile] = top;
           }}
         />
-      ) : isDiffMode ? (
+      ) : bundledMonaco.status !== 'ready' ? renderMonacoStatus() : isDiffMode ? (
         <DiffEditor
           height="100%"
           language={getLanguage(selectedFile)}
