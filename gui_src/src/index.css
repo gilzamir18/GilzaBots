@@ -1551,6 +1551,12 @@ input:focus, select:focus, textarea:focus {
 .vscode-chat-history {
   flex: 1;
   overflow-y: auto;
+  /* The panel places the view itself (utils/chatScroll.js). Browser scroll
+     anchoring fought it: when a finished reply replaced the live stream, the
+     reply's row was inserted above the still-visible live block, and the
+     browser shifted the view to keep that block in place -- which is the end
+     of the history -- before the panel could anchor the reply's first line. */
+  overflow-anchor: none;
   padding: 16px;
   /* Matches the bottom padding, so a sticky table scrollbar sits flush with
      the panel edge instead of floating above it. Both this inset and the
