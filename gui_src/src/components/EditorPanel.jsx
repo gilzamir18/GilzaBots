@@ -40,6 +40,9 @@ const LatexWysiwygEditor = lazy(() => import('../wysiwyg/LatexWysiwygEditor.jsx'
 
 // Center panel: file tabs + Monaco editor (or empty state when no file is open).
 export default function EditorPanel({
+  // The model the active chat runs on (utils/chatModels.js); excerpt actions
+  // (translate, look up) follow it.
+  chatModel = '',
   selectedFile,
   openFiles,
   fileContent,
@@ -157,7 +160,7 @@ export default function EditorPanel({
     copy: copyTranslation,
     close: closeTranslation,
   } = useSnippetTranslation({
-    model: activeProject?.model || '',
+    model: chatModel,
     uiLanguage: i18n.language,
   });
 
@@ -172,7 +175,7 @@ export default function EditorPanel({
     saveMarkdown: saveLookupMarkdown,
     close: closeLookup,
   } = useSnippetQuery({
-    model: activeProject?.model || '',
+    model: chatModel,
     projectPath: activeProject?.project_path || '',
   });
 
@@ -2053,6 +2056,7 @@ export default function EditorPanel({
           <div style={{ height: '100%', background: 'var(--vscode-editor-bg)' }}>
             <PdfPreview
               key={pdfViewKey}
+              chatModel={chatModel}
               ref={pdfPreviewRef}
               initialViewState={pdfViewStatesRef.current[pdfViewKey]}
               onViewStateChange={rememberPdfViewState}
@@ -2091,6 +2095,7 @@ export default function EditorPanel({
           <div style={{ height: '100%', background: 'var(--vscode-editor-bg)', borderLeft: '1px solid var(--vscode-border)' }}>
             <PdfPreview
               key={pdfViewKey}
+              chatModel={chatModel}
               ref={pdfPreviewRef}
               initialViewState={pdfViewStatesRef.current[pdfViewKey]}
               onViewStateChange={rememberPdfViewState}

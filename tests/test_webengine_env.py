@@ -5,6 +5,7 @@ from gilzabots.webengine_env import (
     DISABLE_GPU_FLAG,
     DISABLE_GPU_VAR,
     GPU_AUTO,
+    GPU_DEFAULT,
     GPU_OFF,
     QUICK_BACKEND_SOFTWARE,
     QUICK_BACKEND_VAR,
@@ -15,13 +16,22 @@ from gilzabots.webengine_env import (
 )
 
 
-def test_unknown_values_fall_back_to_using_the_gpu():
-    assert normalize_gpu_mode(None) == GPU_AUTO
-    assert normalize_gpu_mode("") == GPU_AUTO
-    assert normalize_gpu_mode("nonsense") == GPU_AUTO
+def test_hardware_acceleration_is_off_by_default():
+    assert GPU_DEFAULT == GPU_OFF
+    from gilzabots.ui_settings import _DEFAULTS
+    assert _DEFAULTS["webengine_gpu"] == GPU_DEFAULT
+
+
+def test_unknown_values_fall_back_to_the_default_mode():
+    assert normalize_gpu_mode(None) == GPU_DEFAULT
+    assert normalize_gpu_mode("") == GPU_DEFAULT
+    assert normalize_gpu_mode("nonsense") == GPU_DEFAULT
     assert normalize_gpu_mode("OFF") == GPU_OFF
-    # A hand-edited or older settings file that wrote a boolean still means "off".
+    assert normalize_gpu_mode("AUTO") == GPU_AUTO
+    # A hand-edited or older settings file that wrote a "disable gpu" boolean.
     assert normalize_gpu_mode(True) == GPU_OFF
+    assert normalize_gpu_mode(False) == GPU_AUTO
+    assert normalize_gpu_mode("false") == GPU_AUTO
 
 
 def test_the_environment_overrides_the_saved_setting_in_both_directions():
@@ -31,7 +41,8 @@ def test_the_environment_overrides_the_saved_setting_in_both_directions():
     settings = {"webengine_gpu": GPU_OFF}
     assert resolve_gpu_mode({DISABLE_GPU_VAR: "0"}, settings) == (GPU_AUTO, "env")
     assert resolve_gpu_mode({}, settings) == (GPU_OFF, "settings")
-    assert resolve_gpu_mode({}, {}) == (GPU_AUTO, "default")
+    assert resolve_gpu_mode({}, {}) == (GPU_OFF, "default")
+    assert resolve_gpu_mode({}, None) == (GPU_OFF, "default")
 
 
 def test_turning_the_gpu_off_adds_the_flag_on_any_platform():
@@ -60,13 +71,25 @@ def test_user_supplied_flags_are_never_dropped():
     assert env[CHROMIUM_FLAGS_VAR].split().count(DISABLE_GPU_FLAG) == 1
 
 
-def test_linux_keeps_its_historic_default_and_its_escape_hatch():
+def test_nothing_chosen_runs_without_the_gpu_on_any_platform():
+    for platform in ("win32", "linux", "darwin"):
+        env = {}
+        report = apply_webengine_environment(env, platform, {})
+        assert report["gpu_mode"] == GPU_OFF
+        assert report["source"] == "default"
+        assert env[CHROMIUM_FLAGS_VAR] == DISABLE_GPU_FLAG
+        assert env[QUICK_BACKEND_VAR] == QUICK_BACKEND_SOFTWARE
+
+
+def test_linux_keeps_its_historic_auto_behaviour_and_its_escape_hatch():
+    """With acceleration turned on, Linux still avoids the Mesa/Zink path unless
+    the user set the Chromium flags by hand."""
     env = {}
-    apply_webengine_environment(env, "linux", {})
+    apply_webengine_environment(env, "linux", {"webengine_gpu": GPU_AUTO})
     assert env[CHROMIUM_FLAGS_VAR] == DISABLE_GPU_FLAG
 
     chosen = {CHROMIUM_FLAGS_VAR: "--use-gl=desktop"}
-    apply_webengine_environment(chosen, "linux", {})
+    apply_webengine_environment(chosen, "linux", {"webengine_gpu": GPU_AUTO})
     assert chosen[CHROMIUM_FLAGS_VAR] == "--use-gl=desktop"
 
 
@@ -90,7 +113,7 @@ def test_using_the_gpu_leaves_qt_compositing_alone():
 
     # The Linux default predates this and concerns only Chromium's GPU process.
     linux = {}
-    apply_webengine_environment(linux, "linux", {})
+    apply_webengine_environment(linux, "linux", {"webengine_gpu": GPU_AUTO})
     assert QUICK_BACKEND_VAR not in linux
 
 

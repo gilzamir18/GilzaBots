@@ -29,6 +29,8 @@ class REPLState:
         self.store = store
         self.renderer = renderer
         self._memgpt = None
+        # The last /compact's result, for the GUI to draw its divider.
+        self.last_compaction: dict | None = None
 
     @property
     def memgpt(self):
@@ -154,9 +156,9 @@ _registry = CommandRegistry()
 #: explicit and does not depend on which module imported first. A command
 #: missing from this map is a bug the help would hide, so a test fails on it.
 COMMAND_GROUPS: dict[str, tuple[str, ...]] = {
-    "help_group_session": ("/help", "/mode", "/cost", "/resume", "/thoughts", "/tools", "/exit"),
+    "help_group_session": ("/help", "/mode", "/cost", "/hooks", "/resume", "/thoughts", "/tools", "/exit"),
     "help_group_projects": ("/project", "/list", "/load", "/rename", "/delete"),
-    "help_group_chats": ("/chat", "/effort", "/history", "/clear_chat", "/clear"),
+    "help_group_chats": ("/chat", "/effort", "/history", "/compact", "/clear_chat", "/clear"),
     "help_group_models": (
         "/add-provider", "/add-model", "/models", "/providers",
         "/set-provider-field", "/set-model-field", "/remove-provider", "/remove-model",
@@ -415,7 +417,7 @@ async def cmd_project(state: REPLState, args: list[str]) -> str | None:
     if not sub:
         T.console.print(f"\n[dim]Project '{_escape(state.display_name)}' ({_escape(state.project.name)}):[/dim]")
         T.console.print(f"  [cyan]folder[/cyan]  {_escape(state.project.project_path or '')}")
-        T.console.print(f"  [cyan]model[/cyan]   {_escape(state.project.model or _('cli_model_not_set'))}")
+        T.console.print(f"  [cyan]model[/cyan]   {_escape(_describe_main_model(state.project))}")
         T.console.print(f"  [cyan]mode[/cyan]    {_escape(state.project.mode or '')}\n")
         return "continue"
     if sub != "new":
@@ -552,9 +554,15 @@ async def cmd_models(state: REPLState, _args: list[str]) -> None:
     # start (agent_stdin), and an unset worker follows the main model
     # (config.resolve_agent_model). A built-in default shown here instead read
     # as a model the user had configured.
-    main_model = state.project.model or _("cli_model_not_set")
-    alt_model = state.project.worker_model or main_model
-    alt_origin = "project" if state.project.worker_model else _("cli_worker_follows_main")
+    from .project import resolve_chat_models
+    resolution = resolve_chat_models(state.project)
+    main_model = _describe_main_model(state.project)
+    alt_model = resolution.worker_model or resolution.model or _("cli_model_not_set")
+    alt_origin = (
+        _(_MODEL_SOURCE_KEYS[resolution.worker_source])
+        if resolution.worker_source in _MODEL_SOURCE_KEYS
+        else _("cli_worker_follows_main")
+    )
     T.console.print(f"\n[dim]Models for project '{state.display_name}':[/dim]")
     T.console.print(f"  [cyan]main[/cyan]        {main_model}")
     T.console.print(f"  [cyan]worker[/cyan]      {alt_model}  [dim]({alt_origin})[/dim]")
@@ -572,6 +580,22 @@ async def cmd_models(state: REPLState, _args: list[str]) -> None:
     )
 
 
+_MODEL_SOURCE_KEYS = {
+    "chat": "cli_model_source_chat",
+    "project": "cli_model_source_project",
+    "global": "cli_model_source_global",
+}
+
+
+def _describe_main_model(project) -> str:
+    """The model the current chat runs on, and where it comes from."""
+    from .project import resolve_chat_models
+    resolution = resolve_chat_models(project)
+    if not resolution.model:
+        return _("cli_model_not_set")
+    return f"{resolution.model} ({_(_MODEL_SOURCE_KEYS[resolution.model_source])})"
+
+
 def _warn_if_not_in_catalog(model_id: str) -> None:
     """Say when a model id has no catalog entry behind it.
 
@@ -586,7 +610,7 @@ def _warn_if_not_in_catalog(model_id: str) -> None:
 
 
 @_registry.register("/set-main-model", usage="<model_id>",
-                    description="Set the main model for this project")
+                    description="Set the project's default main model")
 async def cmd_set_main_model(state: REPLState, args: list[str]) -> str | None:
     if not args:
         T.error("Usage: /set-main-model <model_id>  (e.g. ollama/gemma4:latest)")
@@ -596,7 +620,7 @@ async def cmd_set_main_model(state: REPLState, args: list[str]) -> str | None:
     state.project.model = model_id
     state.store.save(state.project)
     _rebuild_memgpt(state)
-    T.success(f"Main model set to '{model_id}' for this project.")
+    T.success(f"Default main model set to '{model_id}' for this project.")
 
 
 @_registry.register("/set-worker-model", usage="<model_id>",
@@ -749,10 +773,15 @@ async def cmd_load_asset(state: REPLState, args: list[str]) -> str | None:
     project_path = state.project.project_path
     installed = []
     errors = []
+    from .assetstore import install_skill_with_requirements
+
     for meta in matches:
         try:
-            msg = install_asset(meta, project_path)
-            installed.append(msg)
+            if asset_type == "skill":
+                # With the skills it requires (`requires` in its metadata).
+                installed.extend(msg for _, msg in install_skill_with_requirements(meta, project_path))
+            else:
+                installed.append(install_asset(meta, project_path))
         except Exception as e:
             errors.append(f"{meta.get('id', '?')}: {e}")
 
@@ -763,7 +792,8 @@ async def cmd_load_asset(state: REPLState, args: list[str]) -> str | None:
 
     if installed and asset_type == "skill":
         T.console.print(
-            "[dim]Tip: use /addskill <name> to activate the skill in this project.[/dim]"
+            "[dim]Tip: use /addskill <name> to activate the skill in this project; a skill "
+            "installed with the skills it requires needs each of them active too.[/dim]"
         )
 
     return "continue"
@@ -1064,8 +1094,8 @@ async def cmd_effort(state: REPLState, args: list[str]) -> str | None:
     # is no effort to change, and a setting that silently does nothing reads as
     # a broken one. The models and their catalog entries are resolved the way
     # `build_chat_orchestrator`, `run_skill` and `get_agent_llm_kwargs` resolve them.
-    orchestrator = get_agent_model("memgpt", get_agent_model("chat_agent", state.project.model or ""))
-    worker = get_agent_model("worker", state.project.worker_model or state.project.model or "")
+    orchestrator = get_agent_model("memgpt", get_agent_model("chat_agent", state.project.active_model or ""))
+    worker = get_agent_model("worker", state.project.active_worker_model or state.project.active_model or "")
 
     def _reasons(model: str) -> bool:
         entry = get_model(model) or get_model_by_runtime_id(resolve_runtime_model_id(model))
@@ -1099,6 +1129,90 @@ async def cmd_cost(state: REPLState, _args: list[str]) -> str | None:
     T.console.print(f"  [cyan]prompt tokens[/cyan]  {used}")
     T.console.print(f"  [cyan]context window[/cyan] {window or '?'}")
     T.console.print(f"  [cyan]occupancy[/cyan]      {pct}\n")
+    return "continue"
+
+
+@_registry.register(
+    "/compact", usage="[instructions]",
+    description="Summarize this chat to free its context window (messages stay visible)",
+    details="""
+The agent writes a detailed summary of the conversation -- requests, files,
+decisions, errors, pending work -- and continues from that summary alone.
+Every message stays in the chat; only what the model receives is replaced.
+Turns also compact on their own when the window passes the project's
+auto_compact_threshold (default 0.8; 1.0 disables it).
+
+Examples:
+  /compact
+  /compact focus on the API changes and the failing tests
+""",
+)
+async def cmd_compact(state: REPLState, args: list[str]) -> str | None:
+    from .compaction import ChatBusyError, CompactionError, compact_chat, compaction_payload
+
+    if not getattr(state.project, "current_chat_id", ""):
+        T.info(_("cli_no_chats"))
+        return "continue"
+    instructions = " ".join(args).strip()
+    T.info(_("cli_compact_running"))
+    try:
+        event, timestamp = await compact_chat(
+            state.project, state.store, state.memgpt, instructions,
+        )
+    except (CompactionError, ChatBusyError) as exc:
+        T.error(_("cli_compact_failed", error=str(exc)))
+        return "continue"
+    state.last_compaction = compaction_payload(event, timestamp)
+    T.success(_(
+        "cli_compact_done",
+        count=event.messages_compacted,
+        before=event.pre_tokens,
+        after=event.post_tokens,
+    ))
+    from .compaction import print_compaction_details
+
+    print_compaction_details(state.last_compaction)
+    if state.renderer is not None:
+        # The GUI shows the summary in the divider it draws; the terminal prints it.
+        T.console.print(f"\n[dim]{_('cli_compact_summary_header')}[/dim]")
+        T.console.print(event.summary, markup=False, highlight=False, soft_wrap=True, style="dim")
+        T.console.print()
+    return "continue"
+
+
+@_registry.register(
+    "/hooks",
+    description="List the hooks GilzaBots runs (configured in hooks.json)",
+    details="""
+Hooks are commands GilzaBots runs at fixed moments, configured in the
+hooks.json file of the GilzaBots data folder (never in a project). Events:
+  PreCompact   before a compaction; what it prints is added to the summary's
+               instructions, and exit code 2 blocks the compaction
+  PostCompact  after the summary is written; what it prints is added to the
+               context the agent continues from
+Each command gets the event as JSON on its standard input.
+
+Example hooks.json:
+  {"hooks": {"PreCompact": [{"matcher": "auto",
+     "hooks": [{"type": "command", "command": "python save_chat.py", "timeout": 60}]}]}}
+""",
+)
+async def cmd_hooks(state: REPLState, _args: list[str]) -> str | None:
+    from .hooks import HookConfigError, describe_hooks, hooks_file_path, load_hooks
+
+    path = hooks_file_path()
+    try:
+        config = load_hooks(path)
+    except HookConfigError as exc:
+        T.error(str(exc))
+        return "continue"
+    lines = describe_hooks(config)
+    if not lines:
+        T.info(_("cli_hooks_none", path=path))
+        return "continue"
+    T.info(_("cli_hooks_header", path=path))
+    for line in lines:
+        T.console.print(f"  {line}", markup=False, highlight=False, soft_wrap=True)
     return "continue"
 
 

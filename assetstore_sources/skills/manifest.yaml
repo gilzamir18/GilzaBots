@@ -1,0 +1,53 @@
+# Asset Store skills built from this directory by scripts/build_store_skills.py.
+#
+# Each entry is a skill directory next to this file. `requires` lists the skills
+# it loads with load_skill and cannot work without: the Asset Store installs and
+# activates them together (gilzabots/assetstore.py: skill_requirements).
+# `original` is the skill of the upstream pack it was adapted from.
+pack: engineering-workflow
+upstream:
+  name: Matt Pocock's skills
+  url: https://github.com/mattpocock/skills
+  commit: 4ae2317ddb22b046e26455e4f9c9b3aaaf62212d
+  license: MIT
+  copyright: Copyright (c) 2026 Matt Pocock
+
+skills:
+  # productivity
+  grilling: {original: [skills/productivity/grilling]}
+  grill-me: {original: [skills/productivity/grill-me], requires: [grilling]}
+  handoff: {original: [skills/productivity/handoff]}
+  teach: {original: [skills/productivity/teach]}
+  to-questionnaire: {original: [skills/productivity/to-questionnaire]}
+  wait-what: {original: [skills/productivity/wait-what]}
+  writing-for-agents: {original: [skills/productivity/writing-for-agents]}
+  # engineering
+  which-skill: {original: [skills/engineering/ask-matt]}
+  setup-engineering-skills: {original: [skills/engineering/setup-matt-pocock-skills]}
+  grill-with-docs: {original: [skills/engineering/grill-with-docs], requires: [grilling, domain-modeling]}
+  domain-modeling: {original: [skills/engineering/domain-modeling]}
+  codebase-design: {original: [skills/engineering/codebase-design]}
+  improve-codebase-architecture:
+    original: [skills/engineering/improve-codebase-architecture]
+    requires: [codebase-design, grilling, domain-modeling]
+  to-spec: {original: [skills/engineering/to-spec]}
+  to-tickets: {original: [skills/engineering/to-tickets]}
+  implement:
+    original: [skills/engineering/implement, skills/engineering/implement-spec]
+    requires: [tdd, code-review]
+  wayfinder:
+    original: [skills/engineering/wayfinder]
+    requires: [grilling, domain-modeling, research, prototype]
+  retro: {original: [skills/engineering/retro], requires: [writing-for-agents]}
+  triage: {original: [skills/engineering/triage], requires: [grilling, domain-modeling]}
+  tdd: {original: [skills/engineering/tdd]}
+  diagnosing-bugs: {original: [skills/engineering/diagnosing-bugs]}
+  code-review: {original: [skills/engineering/code-review]}
+  research: {original: [skills/engineering/research]}
+  prototype: {original: [skills/engineering/prototype]}
+  wizard: {original: [skills/engineering/wizard]}
+  pr:
+    original: [skills/engineering/pr]
+    credits: >-
+      The menu of Summary visuals follows Dex Horthy's `show-me` skill
+      (https://github.com/humanlayer/skills), credited in the upstream `pr` skill.

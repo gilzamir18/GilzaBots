@@ -126,6 +126,7 @@ def as_tool(
     *,
     name: Optional[str] = None,
     description: Optional[str] = None,
+    concurrency_safe: bool = False,
 ) -> Any:
     """
     Converts a function (sync or async) into a FunctionBlock ready to be
@@ -138,9 +139,13 @@ def as_tool(
 
         @as_tool(name="name", description="Description.")
         def my_tool(param: str) -> str: ...
+
+    ``concurrency_safe=True`` lets an agent block run the tool together with
+    the other concurrency-safe calls of one model response (see
+    ``Block.concurrency_safe``).
     """
     def _wrap(f: Callable) -> FunctionBlock:
-        return FunctionBlock(func=f, name=name, description=description)
+        return FunctionBlock(func=f, name=name, description=description, concurrency_safe=concurrency_safe)
 
     if func is not None:
         # Called without parentheses: @as_tool

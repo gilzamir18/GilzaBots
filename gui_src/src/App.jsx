@@ -11,6 +11,7 @@ import { enterLayout, layoutAfterOpeningFile, layoutAllowsChatToggle, layoutHasC
 import { compactChatLayoutFor } from './utils/chatCompact';
 import { clearAnsweredRequest, confirmRequestDialog, dialogRequestKey, normalizeInputRequest } from './utils/askQuestion';
 import { readRunConflict, RUN_CONFLICT_TURN_STOPPING } from './utils/agentRunConflict';
+import { isSlashCommandText } from './utils/slashCommands.js';
 import { interruptedTurnContent } from './utils/turnMarkers.js';
 import { settleAtHandoff } from './utils/editHandoff.js';
 import { formatWaitDuration, providerWaitFromEvent } from './utils/providerWait.js';
@@ -69,6 +70,7 @@ import SettingsModal from './components/modals/SettingsModal';
 import ConfirmModal from './components/modals/ConfirmModal';
 import PlanReviewWindow from './components/PlanReviewWindow';
 import AlertModal from './components/modals/AlertModal';
+import SlashCommandOutputModal from './components/modals/SlashCommandOutputModal';
 import InteractiveTerminalModal from './components/modals/InteractiveTerminalModal';
 import AskModal from './components/modals/AskModal';
 import HardwareModal from './components/modals/HardwareModal';
@@ -84,6 +86,8 @@ import DeleteProjectModal from './components/modals/DeleteProjectModal';
 import { useCustomDialog } from './components/modals/CustomDialogProvider';
 
 import EditModelsModal from './components/modals/EditModelsModal';
+import { chatsUsingModel, resolveChatModels, withChatModel } from './utils/chatModels.js';
+import { compactionMessage, compactionMessagesFromActivity } from './utils/chatCompaction.js';
 import AddModelModal from './components/modals/AddModelModal';
 import EditProvidersModal from './components/modals/EditProvidersModal';
 import AddConnectionModal from './components/modals/AddConnectionModal';
@@ -601,6 +605,8 @@ export default function App() {
   const [projectToDelete, setProjectToDelete] = useState(null);
   const [deleteCloudLink, setDeleteCloudLink] = useState(null);
   const [confirmRequest, setConfirmRequest] = useState(null);
+  // The window a `/` command answers in: { command, status, text } or null.
+  const [slashCommandOutput, setSlashCommandOutput] = useState(null);
   // Non-modal agent requests need slots that front-end prompts cannot overwrite.
   // The user can open new-file/delete/etc. confirmations while either floating
   // window is pending; losing its request id would strand the backend future.
@@ -634,6 +640,7 @@ export default function App() {
     refresh: fetchGlobalModels,
     saveModel: saveGlobalModel,
     deleteModel: deleteGlobalModel,
+    setDefaultModel: setGlobalDefaultModel,
     loadLocalOllamaModels: loadLocalOllamaCatalogModels,
     connections: providerConnections,
     saveConnection: saveProviderConnection,
@@ -880,6 +887,10 @@ export default function App() {
     fetchProjects();
   };
 
+  // The models the active chat runs on: its own choice, else the project's
+  // default, else the catalog's global default (backend: resolve_chat_models).
+  const activeChatModels = resolveChatModels({ chats, chatId: activeChatId, project: activeProject, globalModels });
+
   const handleGlobalModelSave = async (modelData) => {
     try {
       const previousModelId = modelData.previous_id || modelData.id;
@@ -914,6 +925,18 @@ export default function App() {
             });
           }
         }
+        // Chats of this project that picked the renamed model by id follow it,
+        // as the project's own references do above.
+        if (activeProject && previousModelId !== modelData.id) {
+          for (const { chatId, role } of chatsUsingModel(chats, previousModelId)) {
+            const chatRes = await fetch('/api/chat/model', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ project_name: activeProject.name, chat_id: chatId, role, model: modelData.id })
+            });
+            if (chatRes.ok) setChats(prev => withChatModel(prev, chatId, role, modelData.id));
+          }
+        }
         setShowAddModelModal(false);
       }
       return result;
@@ -936,43 +959,14 @@ export default function App() {
   const handleGlobalModelDelete = (modelId) => deleteGlobalModel(modelId);
 
   const handleLoadLocalOllamaModels = () => loadLocalOllamaCatalogModels();
-  const handleProjectModelChange = async (field, value) => {
-    if (!activeProject) return;
-    try {
-      const payload = {
-        project_name: activeProject.name,
-        display_name: activeProject.project_name || activeProject.name,
-        project_path: activeProject.project_path,
-        main_file: activeProject.main_file || '',
-        model: activeProject.model,
-        worker_model: activeProject.worker_model,
-        mode: activeProject.mode,
-        description: activeProject.description,
-        model_params: activeProject.model_params,
-        worker_model_params: activeProject.worker_model_params,
-        use_shared_memory: activeProject.use_shared_memory,
-        chat_id: activeChatId
-      };
-
-      // Update specific field (orchestrator or worker)
-      if (field === 'model') {
-        payload.model = value;
-      } else if (field === 'worker_model') {
-        payload.worker_model = value;
-      }
-
-      const res = await fetch('/api/gilzabots/update-project', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (res.ok) {
-        const updated = await res.json();
-        setActiveProject(prev => ({ ...prev, ...updated }));
-        setProjects(prev => prev.map(p => (p.name === updated.name) ? { ...p, ...updated } : p));
-      }
-    } catch (err) {
-      console.error('Failed to update project model', err);
+  // Marks the catalog's global default model. A refusal is surfaced rather
+  // than leaving the star where it was without a word.
+  const handleSetDefaultModel = async (modelId) => {
+    const result = await setGlobalDefaultModel(modelId);
+    if (!result.ok) {
+      showAlert(t('editModelsModal.setDefaultFailed', 'Could not mark the default model: {{message}}', { message: result.error }));
     }
+    return result;
   };
 
   useEffect(() => {
@@ -1527,9 +1521,13 @@ export default function App() {
         timestamp: item.timestamp,
         _fromActivity: true,
       }));
-    if (!errors.length) return messages;
+    // Compaction dividers are stored the same way (gilzabots/compaction.py):
+    // the visible history is never compacted, so the divider is what shows where
+    // the agent's context restarted from a summary.
+    const compactions = compactionMessagesFromActivity(activity);
+    if (!errors.length && !compactions.length) return messages;
 
-    const merged = [...messages, ...errors];
+    const merged = [...messages, ...errors, ...compactions];
     merged.sort((left, right) => {
       const leftTime = activityTimestampMs(left.timestamp);
       const rightTime = activityTimestampMs(right.timestamp);
@@ -3540,6 +3538,20 @@ export default function App() {
         addLog('error', t('app.toolProblem', { tool: data.tool, message: data.message }));
         addProblem({ tool: data.tool, message: data.message, severity: data.severity || 'error' });
         break;
+      case 'context_compaction': {
+        // The window passed the auto-compact threshold: the agent's context is
+        // being replaced by a summary. The chat keeps every message.
+        if (!isRunOnScreen()) break;
+        if (data.phase === 'started') {
+          addLog('info', t('chatPanel.compaction.startedLog', 'Context window almost full: compacting the conversation...'), data.agent);
+        } else if (data.phase === 'completed') {
+          setChatMessages(prev => [...prev, compactionMessage(data)]);
+          addLog('info', t('chatPanel.compaction.completedLog', 'Conversation compacted.'), data.agent);
+        } else if (data.phase === 'failed') {
+          addLog('warning', t('chatPanel.compaction.failedLog', 'Automatic compaction failed: {{error}}', { error: data.error || '' }), data.agent);
+        }
+        break;
+      }
       case 'provider_wait': {
         // Information only: the request, its timeout and its retries are unchanged.
         const wait = providerWaitFromEvent(data);
@@ -3551,6 +3563,12 @@ export default function App() {
         }
         break;
       }
+      case 'info':
+      case 'warning':
+        // Notices a turn sends as text of their own: a subagent starting or
+        // finishing, background subagents stopped at the end of a turn.
+        if (data.message) addLog(event, data.message, data.agent);
+        break;
       default: addLog('info', t('app.eventReceived', { event }));
     }
   };
@@ -3657,6 +3675,118 @@ export default function App() {
     }
   };
 
+  // After a slash command, show what it left in the store: /clear_chat empties
+  // this chat, /clear deletes every chat, /compact records a divider. The
+  // conversation on screen is reloaded rather than patched, so it shows exactly
+  // what the agent will read next — no command output is ever added to it.
+  const syncChatAfterCommand = async (chatId) => {
+    if (!activeProject) return;
+    const projectName = activeProject.name;
+    try {
+      const listRes = await fetch(`/api/chat/list?project_name=${encodeURIComponent(projectName)}&t=${Date.now()}`);
+      if (!listRes.ok) throw new Error(`chat list request failed: ${listRes.status}`);
+      const list = (await listRes.json())?.chats || [];
+      setChats(list);
+      if (!chatId || activeChatIdRef.current !== chatId) return;
+      if (!list.some(chat => chat.id === chatId)) {
+        // The chat on screen no longer exists: open the newest one left, or none.
+        await handleSwitchChat(list[0]?.id || '');
+        return;
+      }
+      const res = await fetch(`/api/chat/history?project_name=${encodeURIComponent(projectName)}&chat_id=${encodeURIComponent(chatId)}&t=${Date.now()}`);
+      if (!res.ok) throw new Error(`history request failed: ${res.status}`);
+      const data = await res.json();
+      if (activeChatIdRef.current !== chatId || isTurnBusy()) return;
+      startTransition(() => {
+        setChatMessages(attachThoughtActivityToMessages(data.history || [], data.activity || [], data.thought_windows || []));
+        setTerminalLogs(activityToTerminalLogs(data.activity || []));
+      });
+    } catch (err) {
+      addLog('error', t('app.slashCommandSyncFailed', 'Could not reload the chat after the command: {{error}}', { error: err.message }));
+    }
+  };
+
+  const finishSlashCommand = async (command, result, chatId) => {
+    const text = (result?.messages || []).join('\n');
+    const failed = result?.status === 'error';
+    setSlashCommandOutput({
+      command,
+      status: failed ? 'error' : 'done',
+      text: text || (failed && result?.error ? `🔴 ${result.error}` : ''),
+    });
+    if (failed) return;
+    // /clear and /clear_chat erase the context the indicator described;
+    // /compact shrinks it.
+    if (result && 'context_usage' in result) {
+      setChatContextUsage(contextUsageFromPayload(result.context_usage));
+    }
+    fetchFiles();
+    fetchGitStatus();
+    await syncChatAfterCommand(chatId);
+  };
+
+  // Runs a `/` command in its own window (SlashCommandOutputModal). Nothing is
+  // written to the conversation: neither the command line nor its output.
+  // A `/name` the backend reports as a skill the user may run is the
+  // exception: it is a turn, sent as a chat message (PROJECT_DESIGN 2.29), by
+  // `options.onSkill` when the caller has its own way of sending it.
+  const runSlashCommand = async (commandText, options = {}) => {
+    if (!activeProject) return;
+    if (isTurnBusy()) {
+      addLog('error', t('app.slashCommandWhileRunning', 'Slash commands cannot run while the agent is working. Stop the agent first.'));
+      return;
+    }
+    const chatId = activeChatIdRef.current || '';
+    const command = commandText.split(/\s+/, 1)[0];
+    localTurnRef.current = true;
+    setSlashCommandOutput({ command: commandText, status: 'running', text: '' });
+    addLog('info', t('app.runningCommand', 'Running {{command}}', { command: commandText }));
+    let released = false;
+    try {
+      const res = await fetch('/api/gilzabots/slash-command', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: commandText, project_name: activeProject.name, project_path: activeProject.project_path, chat_id: chatId }),
+      });
+      const conflict = await readRunConflict(res);
+      if (conflict) {
+        setSlashCommandOutput(null);
+        reportRunConflict(conflict);
+        return;
+      }
+      const result = await res.json().catch(() => ({ status: 'error', error: `HTTP ${res.status}` }));
+      if (!res.ok && result.status !== 'error') {
+        result.status = 'error';
+        result.error = result.error || `HTTP ${res.status}`;
+      }
+      if (result.status === 'skill') {
+        setSlashCommandOutput(null);
+        localTurnRef.current = false;
+        released = true;
+        if (options.onSkill) await options.onSkill();
+        else await handleSendMessage(null, null, { overrideText: commandText, skillInvocation: true });
+        return;
+      }
+      if (result.status === 'confirm') {
+        setSlashCommandOutput({ command: commandText, status: 'confirm', text: '' });
+        setConfirmRequest({
+          id: result.id, prompt: result.prompt, options: result.options || ['yes', 'no'],
+          default: result.default || 'yes', type: result.type || 'confirm',
+          isSlashCommand: true, slashCommand: commandText, slashChatId: chatId,
+        });
+        addLog('info', t('app.waitingConfirmation', { prompt: result.prompt }));
+        return;
+      }
+      localTurnRef.current = false;
+      released = true;
+      await finishSlashCommand(commandText, result, chatId);
+    } catch (err) {
+      addLog('error', t('app.commandFailed', { error: err.message }));
+      setSlashCommandOutput({ command: commandText || command, status: 'error', text: `🔴 ${err.message}` });
+    } finally {
+      if (!released) localTurnRef.current = false;
+    }
+  };
+
   const handleSendMessage = async (e, retryMsg = null, options = {}) => {
     if (e && e.preventDefault) e.preventDefault();
     let targetChatId = options.chatIdOverride || activeChatId;
@@ -3691,22 +3821,28 @@ export default function App() {
       attachmentsSnapshot = retryMsg._attachments || [];
     } else {
       if ((!chatInput.trim() && pendingAttachments.length === 0) || !activeProject) return;
+      // A slash command is an operation on the project or the chat, not a
+      // message: it never enters the conversation, and pending attachments
+      // stay where they are for the next message.
+      if (isSlashCommandText(chatInput)) {
+        const commandText = chatInput.trim();
+        // Refused while a turn runs (/clear erases the history the agent is
+        // answering from) rather than handed to the model as text; the input
+        // is kept so nothing the user typed is lost.
+        if (isTurnBusy()) {
+          addLog('error', t('app.slashCommandWhileRunning', 'Slash commands cannot run while the agent is working. Stop the agent first.'));
+          return;
+        }
+        setChatInput('');
+        await runSlashCommand(commandText);
+        return;
+      }
       userText = chatInput;
       displayText = userText;
       attachmentsSnapshot = [...pendingAttachments];
       setChatInput('');
       setPendingAttachments([]);
       if (isTurnBusy()) {
-        // A slash command is a client-side operation on the chat the agent is
-        // using (/clear erases the history it is answering from), not something
-        // to hand the model as text. Refuse it while a turn runs instead of
-        // silently sending it as a message.
-        if (userText.trim().startsWith('/')) {
-          setChatInput(userText);
-          setPendingAttachments(attachmentsSnapshot);
-          addLog('error', t('app.slashCommandWhileRunning', 'Slash commands cannot run while the agent is working. Stop the agent first.'));
-          return;
-        }
         // With no chat open there is no conversation to join: handing it to
         // the running turn would put it in another chat.
         if (!targetChatId) {
@@ -3722,11 +3858,18 @@ export default function App() {
         return;
       }
     }
+    // Text handed in by a caller (a retry, a scripted prompt) follows the same
+    // rule as the composer: a command runs in its own window, never as a turn.
+    if (!options.resumeInterrupted && !options.skillInvocation && isSlashCommandText(userText)) {
+      await runSlashCommand(userText.trim(), {
+        onSkill: () => handleSendMessage(e, retryMsg, { ...options, skillInvocation: true }),
+      });
+      return;
+    }
     // Taken before any request below is made; every exit from here on releases it.
     localTurnRef.current = true;
-    // A project may have no chat: the first message is what starts one. Slash
-    // commands act on the project or on an existing chat and never create one.
-    if (!targetChatId && !options.resumeInterrupted && !userText.trim().startsWith('/')) {
+    // A project may have no chat: the first message is what starts one.
+    if (!targetChatId && !options.resumeInterrupted) {
       try {
         const created = await createChatForTask(t('chatPanel.defaultChatName', 'New Chat'));
         targetChatId = created.chatId;
@@ -3817,30 +3960,6 @@ export default function App() {
     // cleared below, once the request is accepted.
     addLog('info', t('app.starting', { text: userText }));
 
-    if (userText.trim().startsWith('/')) {
-      try {
-        const res = await fetch('/api/gilzabots/slash-command', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: userText.trim(), project_name: activeProject.name, project_path: activeProject.project_path, chat_id: targetChatId }),
-        });
-        const result = await res.json();
-        if (result.status === 'confirm') {
-          setConfirmRequest({ id: result.id, prompt: result.prompt, options: result.options || ['yes', 'no'], default: result.default || 'yes', type: result.type || 'confirm', isSlashCommand: true });
-          addLog('info', t('app.waitingConfirmation', { prompt: result.prompt }));
-        } else if (result.status === 'done') {
-          // /clear and /clear_chat erase the context the indicator described.
-          setChatContextUsage(contextUsageFromPayload(result.context_usage));
-          setChatMessages(prev => [...prev, { role: 'assistant', content: (result.messages || []).join('\n') || 'Comando executado.', timestamp: new Date().toISOString() }]);
-        } else {
-          setChatMessages(prev => [...prev, { role: 'assistant', content: `🔴 Erro: ${result.error || 'desconhecido'}`, is_error: true, timestamp: new Date().toISOString() }]);
-        }
-      } catch (err) {
-        addLog('error', t('app.commandFailed', { error: err.message }));
-        setChatMessages(prev => [...prev, { role: 'assistant', content: `🔴 Falha: ${err.message}`, is_error: true, timestamp: new Date().toISOString() }]);
-      } finally { localTurnRef.current = false; setIsAgentRunning(false); fetchFiles(); }
-      return;
-    }
-
     let selectedText = '';
     if (editorRef.current) {
       try { const model = editorRef.current.getModel(); const sel = editorRef.current.getSelection(); if (model && sel) selectedText = model.getValueInRange(sel); } catch (e) { }
@@ -3859,8 +3978,9 @@ export default function App() {
           display_prompt: displayText || userText || '',
           resume_interrupted: Boolean(options.resumeInterrupted),
           project_name: activeProject.name, project_path: activeProject.project_path,
-          model: activeProject.model,
-          worker_model: activeProject.worker_model,
+          // No model here: the backend resolves the chat's model from the store
+          // (chat, project default, global default), and a model sent with the
+          // run would be saved back as the project's default by the turn.
           model_params: activeProject.model_params,
           worker_model_params: activeProject.worker_model_params,
           max_heartbeats: options.maxHeartbeats !== undefined ? options.maxHeartbeats : resolveEffectiveMaxHeartbeats(),
@@ -4329,11 +4449,7 @@ export default function App() {
           throw new Error(text || `HTTP ${res.status}`);
         }
         const result = await res.json();
-        if (result.status === 'done') {
-          setChatMessages(prev => [...prev, { role: 'assistant', content: (result.messages || []).join('\n') || 'Comando executado.', timestamp: new Date().toISOString() }]);
-          fetchFiles();
-          fetchGitStatus();
-        }
+        await finishSlashCommand(currentRequest.slashCommand || '', result, currentRequest.slashChatId || '');
       } else {
         const res = await fetch('/api/gilzabots/input_response', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, value }) });
         if (!res.ok) {
@@ -4464,7 +4580,7 @@ export default function App() {
         body: JSON.stringify({
           command: 'run',
           agent: 'inline_editor',
-          model: activeProject.model,
+          model: activeChatModels.model,
           project_name: activeProject.name,
           project_path: activeProject.project_path,
           system_prompt: systemPrompt,
@@ -4873,7 +4989,7 @@ export default function App() {
     try {
       const res = await fetch('/api/gilzabots/run', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: 'run', agent: 'chat_orchestrator', prompt: userText, project_name: activeProject.name, project_path: activeProject.project_path, model: activeProject.model, max_heartbeats: resolveEffectiveMaxHeartbeats(), current_file: selectedFile || '', open_files: openFiles, editor_content: fileContent || '', selected_text: selectedText || '', lang: i18n.language || 'en', chat_id: activeChatId, model_params: ephemeralParams }),
+        body: JSON.stringify({ command: 'run', agent: 'chat_orchestrator', prompt: userText, project_name: activeProject.name, project_path: activeProject.project_path, max_heartbeats: resolveEffectiveMaxHeartbeats(), current_file: selectedFile || '', open_files: openFiles, editor_content: fileContent || '', selected_text: selectedText || '', lang: i18n.language || 'en', chat_id: activeChatId, model_params: ephemeralParams }),
       });
       const runConflict = await readRunConflict(res);
       if (runConflict) {
@@ -5106,6 +5222,7 @@ export default function App() {
 
           {!isBottomMaximized && isEditorLayout && (
             <EditorPanel
+              chatModel={activeChatModels.model}
               selectedFile={selectedFile}
               openFiles={openFiles}
               fileContent={fileContent}
@@ -5227,6 +5344,7 @@ export default function App() {
               setIsChatVisible={setIsChatVisible}
               chatWidth={chatWidth}
               handleSendMessage={handleSendMessage}
+              onRunSlashCommand={runSlashCommand}
               onEditUserMessage={handleEditUserMessage}
               onGenerateResponseForUserMessage={handleGenerateResponseForUserMessage}
               handleInterruptAgent={handleInterruptAgent}
@@ -5248,7 +5366,6 @@ export default function App() {
               globalModels={globalModels}
               onRefreshModels={fetchGlobalModels}
               onEditModels={() => setShowEditModelsModal(true)}
-              onModelChange={handleProjectModelChange}
             />
           )}
           <div
@@ -5324,6 +5441,7 @@ export default function App() {
               setIsChatVisible={setIsChatVisible}
               chatWidth={chatWidth}
               handleSendMessage={handleSendMessage}
+              onRunSlashCommand={runSlashCommand}
               onEditUserMessage={handleEditUserMessage}
               onGenerateResponseForUserMessage={handleGenerateResponseForUserMessage}
               handleInterruptAgent={handleInterruptAgent}
@@ -5347,7 +5465,6 @@ export default function App() {
               globalModels={globalModels}
               onRefreshModels={fetchGlobalModels}
               onEditModels={() => setShowEditModelsModal(true)}
-              onModelChange={handleProjectModelChange}
             />
 
             {(isLoadingChat || isPending) && (
@@ -5522,6 +5639,13 @@ export default function App() {
 
       {showOnboarding && <OnboardingModal onComplete={handleOnboardingComplete} />}
 
+      {/* Before the confirm dialogs, so a command's confirmation sits on top of its window. */}
+      <SlashCommandOutputModal
+        output={slashCommandOutput}
+        onClose={() => setSlashCommandOutput(null)}
+        projectPath={activeProject?.project_path}
+      />
+
       {confirmRequestDialog(confirmRequest) === 'interactive_terminal' ? (
         <InteractiveTerminalModal request={confirmRequest} onConfirm={sendConfirmResponse} activeProject={activeProject} uiScale={uiScale} />
       ) : confirmRequestDialog(confirmRequest) === 'ask' ? (
@@ -5583,6 +5707,7 @@ export default function App() {
           }}
           onManageConnections={() => setShowEditProvidersModal(true)}
           onLoadLocalOllama={handleLoadLocalOllamaModels}
+          onSetDefaultModel={handleSetDefaultModel}
         />
       )}
 

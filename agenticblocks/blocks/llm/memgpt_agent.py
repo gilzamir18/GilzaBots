@@ -1,3 +1,4 @@
+import asyncio
 import json
 import re
 import time
@@ -17,6 +18,18 @@ from agenticblocks.blocks.llm.agent import _await_reporting_cancellation
 from agenticblocks.blocks.llm.response_wait import ResponseWait, ResponseWaitWatch
 from agenticblocks.utils.messages import build_user_content, history_accepts_user_message
 from agenticblocks.blocks.llm.tokens import count_message_tokens
+from agenticblocks.blocks.llm.compaction import (
+    COMPACTION_TRIGGER_AUTO,
+    COMPACTION_TRIGGER_MANUAL,
+    DEFAULT_COMPACTION_PROMPT,
+    CompactionContext,
+    CompactionError,
+    CompactionEvent,
+    CompactionRequest,
+    build_compaction_request,
+    continuation_message,
+    extract_summary,
+)
 from agenticblocks.tools.a2a_bridge import block_to_tool_schema
 from agenticblocks.core.block import Block
 from agenticblocks.core.function_block import as_tool
@@ -50,6 +63,33 @@ implicitly -- the result has to be delivered -- so this tool exists solely for
 the remaining case: the model wants to think or speak in one step and act in
 the next. It is rarely the right call, which is why it is a separate, explicit
 request rather than a flag riding on the message that carries the answer."""
+
+
+def _is_concurrency_safe(block: Any) -> bool:
+    """Whether *block* declared it may run alongside other calls of its batch."""
+    return bool(getattr(block, "concurrency_safe", False))
+
+
+async def _execute_tool_call(tool_call: Any, function_name: str, block: Any, sys_msg: str) -> dict:
+    """Run one native tool call and return the tool message for the history.
+
+    An exception becomes an error result for that call alone, so one failing
+    call of a concurrent group never discards the results of the others.
+    Cancellation is not an exception here: it propagates and cancels the group.
+    """
+    try:
+        args_dict = json.loads(tool_call.function.arguments)
+        input_model = block.input_schema()(**args_dict)
+        result = await block.run(input=input_model)
+        if hasattr(result, "model_dump"):
+            content_str = json.dumps(result.model_dump(exclude_none=True))
+        elif isinstance(result, str):
+            content_str = result
+        else:
+            content_str = json.dumps(result)
+        return {"role": "tool", "tool_call_id": tool_call.id, "name": function_name, "content": content_str + sys_msg}
+    except Exception as e:
+        return {"role": "tool", "tool_call_id": tool_call.id, "name": function_name, "content": json.dumps({"error": str(e)})}
 
 
 def is_empty_response_placeholder(text: Any) -> bool:
@@ -153,6 +193,22 @@ class MemGPTAgentBlock(AgentBlock[AgentInput, AgentOutput]):
     request fits. Use it when the caller cannot learn the model's real window,
     rather than inventing a number that would evict or warn at the wrong size."""
     eviction_threshold: float = 1.0
+    auto_compact_threshold: Optional[float] = None
+    """Fraction of ``max_context_tokens`` past which a run compacts the context.
+
+    Compaction (see :meth:`compact`) replaces the whole working history with one
+    structured summary, instead of evicting the oldest messages a quarter at a
+    time. It is checked at the top of every heartbeat, before eviction, so a
+    threshold below ``eviction_threshold`` makes compaction the first response
+    to a filling window and leaves eviction as the mechanism of last resort.
+
+    ``None`` (the default) or a value of ``1.0`` or higher disables it, as does
+    an unknown window (``max_context_tokens=None``). Within one run, automatic
+    compaction stops after an attempt fails or leaves the context still above
+    the threshold, so a summary that cannot help is not requested again on every
+    heartbeat."""
+    compaction_prompt: str = DEFAULT_COMPACTION_PROMPT
+    """Instructions that ask the model for the summary a compaction keeps."""
     memory_pressure_threshold: float = 0.7
     heartbeat_pressure_threshold: float = 0.75
     """Fraction of ``max_heartbeats`` spent past which every request carries a
@@ -263,6 +319,34 @@ class MemGPTAgentBlock(AgentBlock[AgentInput, AgentOutput]):
     tool calls and tool results included -- so it is the only accurate reading of
     how full the context window is.
     Signature: `def callback(usage: TokenUsage) -> Any`.
+    Can be a synchronous or asynchronous function."""
+    on_compaction: Optional[Callable[["CompactionEvent"], Any]] = None
+    """Optional callback invoked as a compaction starts, completes or fails.
+
+    Fires for both manual (:meth:`compact`) and automatic compactions. The
+    ``"completed"`` event carries the summary and the token counts before and
+    after, so a host can show where the context was compacted and persist it.
+    Signature: `def callback(event: CompactionEvent) -> Any`.
+    Can be a synchronous or asynchronous function."""
+    on_compaction_request: Optional[Callable[["CompactionRequest"], Any]] = None
+    """Optional host step run before a compaction's summary is requested.
+
+    Receives a mutable :class:`CompactionRequest`: the host may change
+    ``custom_instructions`` or set ``blocked_reason`` to stop the compaction
+    (it then fails with that reason, context untouched). An exception it raises
+    fails the compaction too. Anything it stores in ``metadata`` is reported in
+    the compaction's ``completed`` or ``failed`` event as ``extra``.
+    Signature: `def callback(request: CompactionRequest) -> Any`.
+    Can be a synchronous or asynchronous function."""
+    on_compacted_context: Optional[Callable[["CompactionContext"], Any]] = None
+    """Optional host step run once the summary exists, before it replaces the context.
+
+    Receives a mutable :class:`CompactionContext`; text the host appends to
+    ``extra_context`` follows the summary in the message the new context starts
+    from -- for instance the current contents of the files the conversation was
+    working on. A compacted context that would not fit the known window fails
+    the compaction instead of being cut.
+    Signature: `def callback(context: CompactionContext) -> Any`.
     Can be a synchronous or asynchronous function."""
     on_unknown_tool: Optional[Callable[[str, str], Any]] = None
     """Optional callback invoked when the model calls a tool it was not offered.
@@ -471,6 +555,182 @@ class MemGPTAgentBlock(AgentBlock[AgentInput, AgentOutput]):
         except Exception as e:
             if self.debug: print(f"[DEBUG] Erro na sumarização recursiva: {e}")
             return self.recursive_summary
+
+    async def _invoke_on_compaction(self, event: CompactionEvent) -> None:
+        if self.on_compaction:
+            if inspect.iscoroutinefunction(self.on_compaction):
+                await self.on_compaction(event)
+            else:
+                self.on_compaction(event)
+
+    def _auto_compact_enabled(self) -> bool:
+        threshold = self.auto_compact_threshold
+        return (
+            self.max_context_tokens is not None
+            and threshold is not None
+            and threshold < 1.0
+        )
+
+    def _compaction_kwargs(self) -> Dict[str, Any]:
+        """The request options for a summary: the model's own, without actions.
+
+        Streaming is off so the summary never reaches ``on_chunk`` as if it were
+        part of the answer, and no tools are declared so the model cannot act.
+        """
+        kwargs = dict(self.model_kargs)
+        for key in ("stream", "stream_options", "tools", "tool_choice",
+                    "parallel_tool_calls", "response_format"):
+            kwargs.pop(key, None)
+        return kwargs
+
+    async def _invoke_compaction_hook(self, hook: Optional[Callable[[Any], Any]], arg: Any) -> None:
+        if hook:
+            if inspect.iscoroutinefunction(hook):
+                await hook(arg)
+            else:
+                result = hook(arg)
+                if inspect.isawaitable(result):
+                    await result
+
+    async def compact(
+        self,
+        custom_instructions: str = "",
+        *,
+        trigger: str = COMPACTION_TRIGGER_MANUAL,
+    ) -> CompactionEvent:
+        """Replace the working context with a structured summary of it.
+
+        The recursive summary and the whole ``internal_history`` are sent to the
+        model as a transcript, with ``compaction_prompt`` (plus
+        ``custom_instructions``, when given) asking for a sectioned summary. On
+        success the history becomes a single user message that states the
+        conversation continues from a previous one and carries that summary, and
+        the recursive summary is reset, since it is folded into the new one. An
+        automatic compaction also tells the model to carry on with its task.
+
+        Two host extension points take part: ``on_compaction_request`` before the
+        summary is requested (it may add instructions or block the compaction)
+        and ``on_compacted_context`` once the summary exists (it may add context
+        after it). An exception raised by either fails the compaction.
+
+        Raises :class:`CompactionError`, after reporting a ``"failed"`` event,
+        when there is nothing to compact, when the history ends in a tool call
+        still waiting for its result, when a host blocks it, when the request or
+        the compacted context would not fit the known window, or when the model
+        returns no summary. The context is untouched in every one of those cases.
+        """
+        pre_tokens = self.count_context_tokens()
+        history = list(self.internal_history)
+        previous_summary = (
+            "" if self.recursive_summary == DEFAULT_RECURSIVE_SUMMARY else self.recursive_summary
+        )
+        state = {"instructions": (custom_instructions or "").strip()}
+        metadata: Dict[str, Any] = {}
+
+        async def fail(reason: str, cause: Optional[BaseException] = None) -> None:
+            await self._invoke_on_compaction(CompactionEvent(
+                phase="failed", trigger=trigger, pre_tokens=pre_tokens,
+                context_window=self.max_context_tokens,
+                custom_instructions=state["instructions"], error=reason,
+                extra=metadata,
+            ))
+            if cause is not None:
+                raise CompactionError(reason) from cause
+            raise CompactionError(reason)
+
+        if not history and not previous_summary:
+            await fail("There is no conversation to compact yet.")
+        if not history_accepts_user_message(history):
+            await fail(
+                "The conversation ends in a tool call that is still waiting for its "
+                "result, so it cannot be compacted at this point."
+            )
+
+        compaction_request = CompactionRequest(
+            trigger=trigger,
+            custom_instructions=state["instructions"],
+            history=[dict(m) for m in history if isinstance(m, dict)],
+            metadata=metadata,
+        )
+        try:
+            await self._invoke_compaction_hook(self.on_compaction_request, compaction_request)
+        except Exception as exc:
+            await fail(f"Preparing the compaction failed: {exc}", exc)
+        state["instructions"] = (compaction_request.custom_instructions or "").strip()
+        if (compaction_request.blocked_reason or "").strip():
+            await fail(f"The compaction was blocked: {compaction_request.blocked_reason.strip()}")
+
+        request = build_compaction_request(
+            history, previous_summary, state["instructions"], self.compaction_prompt,
+        )
+        if self.max_context_tokens is not None:
+            request_tokens = self._estimate_tokens(request)
+            if request_tokens >= self.max_context_tokens:
+                await fail(
+                    f"The conversation is too long to compact: the summary request needs "
+                    f"{request_tokens} tokens and the context window holds "
+                    f"{self.max_context_tokens}."
+                )
+
+        await self._invoke_on_compaction(CompactionEvent(
+            phase="started", trigger=trigger, pre_tokens=pre_tokens,
+            context_window=self.max_context_tokens,
+            messages_compacted=len(history), custom_instructions=state["instructions"],
+            extra=metadata,
+        ))
+
+        try:
+            response = await self._acompletion(request, **self._compaction_kwargs())
+            raw = response.choices[0].message.content or ""
+        except Exception as exc:
+            await fail(f"The summary request failed: {exc}", exc)
+
+        summary = extract_summary(raw)
+        if not summary:
+            await fail("The model returned an empty summary.")
+
+        compacted = CompactionContext(
+            trigger=trigger,
+            summary=summary,
+            custom_instructions=state["instructions"],
+            history=compaction_request.history,
+            metadata=metadata,
+        )
+        try:
+            await self._invoke_compaction_hook(self.on_compacted_context, compacted)
+        except Exception as exc:
+            await fail(f"Building the compacted context failed: {exc}", exc)
+
+        previous_history = self.internal_history
+        previous_recursive = self.recursive_summary
+        self.internal_history = [{
+            "role": "user",
+            "content": continuation_message(
+                summary,
+                resume=trigger == COMPACTION_TRIGGER_AUTO,
+                extra_context=[str(block) for block in compacted.extra_context],
+            ),
+        }]
+        self.recursive_summary = DEFAULT_RECURSIVE_SUMMARY
+        post_tokens = self.count_context_tokens()
+        if self.max_context_tokens is not None and post_tokens >= self.max_context_tokens:
+            self.internal_history = previous_history
+            self.recursive_summary = previous_recursive
+            await fail(
+                f"The compacted context would not fit: it needs {post_tokens} tokens and the "
+                f"context window holds {self.max_context_tokens}."
+            )
+
+        event = CompactionEvent(
+            phase="completed", trigger=trigger, pre_tokens=pre_tokens,
+            post_tokens=post_tokens,
+            context_window=self.max_context_tokens,
+            messages_compacted=len(history), summary=summary,
+            custom_instructions=state["instructions"],
+            extra=metadata,
+        )
+        await self._invoke_on_compaction(event)
+        return event
 
     def _build_system_prompt(self) -> str:
         tool_descriptions_list = []
@@ -723,6 +983,10 @@ You are running on an OS-like MemGPT architecture. You have a limited Main Conte
         # means nothing the model writes is dropped for having travelled beside a
         # tool call: the answer is what it said, from the first word to the last.
         visible_texts: List[str] = []
+        # Automatic compaction stays armed until an attempt fails or does not bring
+        # the context back under the threshold; repeating it would spend a summary
+        # request on every heartbeat for nothing.
+        auto_compact_armed = self._auto_compact_enabled()
         # The same text, split by what the model was doing when it wrote it, for a
         # host that wants to show progress and answer differently. `visible_texts`
         # stays the whole of it: this split is a view, never the only copy.
@@ -746,6 +1010,25 @@ You are running on an OS-like MemGPT architecture. You have a limited Main Conte
             messages = self.build_request_messages()
 
             current_tokens = self.count_context_tokens()
+
+            # Compaction comes before eviction: past its threshold the whole
+            # context is replaced by a structured summary, and eviction only acts
+            # on whatever is still too large afterwards.
+            if (
+                auto_compact_armed
+                and len(self.internal_history) > 1
+                and current_tokens > self.max_context_tokens * self.auto_compact_threshold
+            ):
+                try:
+                    await self.compact(trigger=COMPACTION_TRIGGER_AUTO)
+                except CompactionError as exc:
+                    auto_compact_armed = False
+                    if self.debug: print(f"[DEBUG] Automatic compaction failed: {exc}")
+                else:
+                    messages = self.build_request_messages()
+                    current_tokens = self.count_context_tokens()
+                    if current_tokens > self.max_context_tokens * self.auto_compact_threshold:
+                        auto_compact_armed = False
 
             # Evictação FIFO
             window_known = self.max_context_tokens is not None
@@ -986,20 +1269,26 @@ You are running on an OS-like MemGPT architecture. You have a limited Main Conte
             # second kind spends the idle allowance.
             acted_this_round = False
 
+            # Two passes. The first decides, call by call and in order, what
+            # each call gets -- a refusal, the heartbeat grant, or execution --
+            # exactly as the loop always did. The second runs the executions:
+            # consecutive calls to tools that declare `concurrency_safe` run
+            # together, every other call runs alone, in order. Results enter the
+            # history in the order the model issued the calls, so a batch with
+            # no concurrency-safe tool behaves exactly as before.
+            planned: list[tuple] = []
             for tool_call in message.tool_calls:
                 tool_call_count += 1
                 function_name = tool_call.function.name
                 tool_usage[function_name] += 1
 
                 if function_name in self.tool_call_limits and tool_usage[function_name] > self.tool_call_limits[function_name]:
-                    err_res = {
+                    planned.append(("result", {
                         "role": "tool",
                         "tool_call_id": tool_call.id,
                         "name": function_name,
                         "content": json.dumps({"error": f"SYSTEM ALERT: Execution Blocked. You exceeded the maximum limit of {self.tool_call_limits[function_name]} calls for '{function_name}'."})
-                    }
-                    self.internal_history.append(err_res)
-                    messages.append(err_res)
+                    }))
                     continue
 
                 # Break verbatim retry loops before the call is executed.
@@ -1009,14 +1298,12 @@ You are running on an OS-like MemGPT architecture. You have a limited Main Conte
                     signature = _tool_call_signature(function_name, tool_call.function.arguments)
                     tool_call_signatures[signature] += 1
                     if tool_call_signatures[signature] > self.loop_detection_limit:
-                        err_res = {
+                        planned.append(("result", {
                             "role": "tool",
                             "tool_call_id": tool_call.id,
                             "name": function_name,
                             "content": _loop_block_message(function_name, self.loop_detection_limit),
-                        }
-                        self.internal_history.append(err_res)
-                        messages.append(err_res)
+                        }))
                         continue
 
                 if function_name == HEARTBEAT_TOOL_NAME:
@@ -1026,7 +1313,7 @@ You are running on an OS-like MemGPT architecture. You have a limited Main Conte
                     # idle allowance, because only a run of these with no work in
                     # between means the model is not going to act.
                     hb_left = self.max_heartbeats - heartbeats_used
-                    tool_result = {
+                    planned.append(("result", {
                         "role": "tool",
                         "tool_call_id": tool_call.id,
                         "name": function_name,
@@ -1034,52 +1321,64 @@ You are running on an OS-like MemGPT architecture. You have a limited Main Conte
                             "Heartbeat granted. Your turn stays open: take the next step. "
                             f"[System: You have {hb_left} heartbeats remaining.]"
                         ),
-                    }
-                    self.internal_history.append(tool_result)
-                    messages.append(tool_result)
-                else:
-                    acted_this_round = True
-                    matched_block = next((b for b in agent_tools if b.name == function_name), None)
-                    if not matched_block:
-                        err_res = {
-                            "role": "tool",
-                            "tool_call_id": tool_call.id,
-                            "name": function_name,
-                            "content": json.dumps({"error": unknown_tool_message(
-                                function_name, tool_call.function.arguments, litellm_tools
-                            )}),
-                        }
-                        self.internal_history.append(err_res)
-                        messages.append(err_res)
-                        await self._invoke_on_unknown_tool(function_name, tool_call.function.arguments)
-                        continue
+                    }))
+                    continue
 
-                    try:
-                        args_dict = json.loads(tool_call.function.arguments)
-                        input_model = matched_block.input_schema()(**args_dict)
-                        result = await matched_block.run(input=input_model)
-                        if hasattr(result, "model_dump"):
-                            content_str = json.dumps(result.model_dump(exclude_none=True))
-                        elif isinstance(result, str):
-                            content_str = result
-                        else:
-                            content_str = json.dumps(result)
-                        
-                        hb_left = self.max_heartbeats - heartbeats_used
-                        sys_msg = f"\n[System: You have {hb_left} heartbeats remaining."
-                        if function_name in self.tool_call_limits:
-                            calls_left = max(0, self.tool_call_limits[function_name] - tool_usage[function_name])
-                            sys_msg += f" You have {calls_left} calls remaining for '{function_name}'."
-                        sys_msg += "]"
-                        content_str += sys_msg
-                            
-                        tool_res = {"role": "tool", "tool_call_id": tool_call.id, "name": function_name, "content": content_str}
-                        self.internal_history.append(tool_res)
-                        messages.append(tool_res)
-                    except Exception as e:
-                        err_res = {"role": "tool", "tool_call_id": tool_call.id, "name": function_name, "content": json.dumps({"error": str(e)})}
-                        self.internal_history.append(err_res)
-                        messages.append(err_res)
+                acted_this_round = True
+                matched_block = next((b for b in agent_tools if b.name == function_name), None)
+                if not matched_block:
+                    planned.append(("unknown", tool_call, function_name))
+                    continue
+
+                # Taken now, at the call's position, so the count a result
+                # reports is the one the sequential loop reported.
+                hb_left = self.max_heartbeats - heartbeats_used
+                sys_msg = f"\n[System: You have {hb_left} heartbeats remaining."
+                if function_name in self.tool_call_limits:
+                    calls_left = max(0, self.tool_call_limits[function_name] - tool_usage[function_name])
+                    sys_msg += f" You have {calls_left} calls remaining for '{function_name}'."
+                sys_msg += "]"
+                planned.append(("run", tool_call, function_name, matched_block, sys_msg))
+
+            def _record(tool_message: dict) -> None:
+                self.internal_history.append(tool_message)
+                messages.append(tool_message)
+
+            index = 0
+            while index < len(planned):
+                entry = planned[index]
+                if entry[0] == "result":
+                    _record(entry[1])
+                    index += 1
+                    continue
+                if entry[0] == "unknown":
+                    _, tool_call, function_name = entry
+                    _record({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "name": function_name,
+                        "content": json.dumps({"error": unknown_tool_message(
+                            function_name, tool_call.function.arguments, litellm_tools
+                        )}),
+                    })
+                    await self._invoke_on_unknown_tool(function_name, tool_call.function.arguments)
+                    index += 1
+                    continue
+                group = [entry]
+                if _is_concurrency_safe(entry[3]):
+                    while (
+                        index + len(group) < len(planned)
+                        and planned[index + len(group)][0] == "run"
+                        and _is_concurrency_safe(planned[index + len(group)][3])
+                    ):
+                        group.append(planned[index + len(group)])
+                if len(group) == 1:
+                    results = [await _execute_tool_call(*group[0][1:])]
+                else:
+                    results = await asyncio.gather(*(_execute_tool_call(*item[1:]) for item in group))
+                for tool_message in results:
+                    _record(tool_message)
+                index += len(group)
 
             # A batch that did real work clears the idle count: narrate-act-
             # narrate-act is ordinary work, not a model going in circles. A batch

@@ -297,8 +297,8 @@ def test_the_endpoint_stores_the_effort_and_the_chat_list_reports_it(store, api)
     status, body = asyncio.run(chat_list())
     assert status == 200
     assert body["chats"] == [
-        {"id": "second", "name": "Second Chat", "reasoning_effort": "high"},
-        {"id": "first", "name": "First Chat", "reasoning_effort": ""},
+        {"id": "second", "name": "Second Chat", "reasoning_effort": "high", "model": "", "worker_model": ""},
+        {"id": "first", "name": "First Chat", "reasoning_effort": "", "model": "", "worker_model": ""},
     ]
 
 

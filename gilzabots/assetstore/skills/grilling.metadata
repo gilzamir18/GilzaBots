@@ -1,0 +1,7 @@
+desc: Relentless interview that stress-tests a plan, decision or idea until every
+  branch of its design tree is resolved. Use when the user wants their thinking stress-tested
+  or says "grill".
+id: grilling
+name: grilling
+pack: engineering-workflow
+type: skill

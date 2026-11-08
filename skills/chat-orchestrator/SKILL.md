@@ -241,6 +241,8 @@ Recognized commands:
 * `/removechk <id>`: remove a checkpoint from history
 * `/mode [auto|plan|edit]`: show or set how much the agent may do on its own
 * `/cost` or `/context`: show how much of the context window this chat occupies
+* `/hooks`: list the user's hooks, commands GilzaBots runs before and after a compaction (configured in `hooks.json` in the GilzaBots data folder)
+* `/compact [instructions]`: summarize this chat into a detailed summary the agent continues from, freeing the context window; every message stays in the chat, and turns also compact on their own when the window is nearly full
 * `/chat [list|new <name>|switch <name>]`: list, create, or switch chat *(command-line interface only)*
 * `/effort [default|low|medium|high|xhigh]`: show or set this chat's reasoning effort *(command-line interface only)*
 * `/resume` or `/continue`: continue the turn that was interrupted in this chat *(command-line interface only)*

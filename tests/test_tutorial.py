@@ -75,7 +75,7 @@ def test_guide_covers_the_topics_the_tutorial_promises(lang):
         "providers", "models", "settings", "projects",
         "project-settings", "asset-store", "tools-features",
         "docker-sandbox", "local-models", "local-skills", "cloud-for-big-data",
-        "monitors",
+        "monitors", "skill-pack",
     } <= ids
 
 
@@ -107,6 +107,24 @@ def test_asset_store_topic_covers_skills_and_templates(lang):
     answer = get_topic("asset-store", lang)["answer"]
     assert "Skills" in answer or "skills" in answer
     assert "template" in answer.lower()
+
+
+@pytest.mark.parametrize("lang", ["en", "pt"])
+def test_skill_pack_topic_names_every_skill_of_the_pack(lang):
+    """The guide is how users learn the pack exists: a skill added to the pack
+    (assetstore_sources/skills/manifest.yaml) and left out of the topic is one
+    nobody is told about."""
+    import os
+    import yaml
+
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root, "assetstore_sources", "skills", "manifest.yaml"), encoding="utf-8") as f:
+        pack = list(yaml.safe_load(f)["skills"])
+    answer = get_topic("skill-pack", lang)["answer"]
+    missing = [name for name in pack if f"`{name}`" not in answer and f"`/{name}" not in answer]
+    assert not missing, f"[{lang}] skill-pack topic does not mention {missing}"
+    # GilzaBots' /clear erases every chat: the topic must steer away from it.
+    assert "/clear" in answer and ("/chat new" in answer)
 
 
 @pytest.mark.parametrize("lang", ["en", "pt"])
@@ -363,8 +381,22 @@ def test_pilot_skill_embeds_the_shared_guide(lang):
 
 
 def test_pilot_skill_no_longer_advertises_unimplemented_commands():
-    """The hardcoded blobs it replaced promised `/goal` and `/grill-me`."""
+    """The hardcoded blobs it replaced promised `/goal` and `/grill-me`, which did
+    not exist. `/grill-me` exists now, as an Asset Store skill the user runs by
+    typing its name (PROJECT_DESIGN 2.29); `/goal` still does not. So the rule is
+    the general one: every `/name` the guide advertises is a built-in command or
+    a skill the store can install."""
+    import re
+
+    from gilzabots.assetstore import list_assets
+    from gilzabots.cli_commands import _registry
+
+    known = {name.lstrip("/") for name in _registry.names()}
+    known |= {asset["id"] for asset in list_assets("skill")}
     for lang in ("en", "pt"):
         content = pilot_skill_content(lang)
         assert "/goal" not in content
-        assert "/grill-me" not in content
+        advertised = set(re.findall(r"`/([a-z][a-z0-9_-]*)", content))
+        # `/name` / `/nome` are the placeholder; `/workspace` is the sandbox's mount path.
+        advertised -= {"name", "nome", "workspace"}
+        assert advertised - known == set(), f"[{lang}] unknown commands advertised"

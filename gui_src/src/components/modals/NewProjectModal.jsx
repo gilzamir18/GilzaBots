@@ -3,6 +3,7 @@ import { X, FolderOpen, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useModelValidation } from './useModelValidation';
 import ModelSelect from '../ModelSelect';
+import { globalDefaultModelId } from '../../utils/chatModels.js';
 
 // Modal for registering a new project.
 export default function NewProjectModal({
@@ -156,7 +157,9 @@ export default function NewProjectModal({
                   globalModels={globalModels}
                   showActions={false}
                   className=""
-                  placeholder={t('newProjectModal.modelPlaceholder')}
+                  placeholder={globalDefaultModelId(globalModels)
+                    ? t('modelSelect.followGlobalDefault', { model: globalDefaultModelId(globalModels) })
+                    : t('newProjectModal.modelPlaceholder')}
                   style={{ borderColor: getBorderColor(modelStatus), borderWidth: modelStatus !== 'unknown' ? '2px' : '1px' }}
                 />
                 {modelStatus === 'green' && <span style={{ fontSize: '11px', color: 'var(--vscode-fg-success)' }}>{t('editProjectModal.modelSuitable')}</span>}

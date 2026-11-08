@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from fnmatch import fnmatch
 from pathlib import Path
 
+import contextlib
 import functools
 import asyncio
 import concurrent.futures
@@ -114,17 +115,28 @@ _PROJECT_PATH: str = ""
 _PROJECT_SESSION = None
 _PROJECT_STORE = None
 
-# Toggled by run_skill() around a helper agent's execution (PROJECT_DESIGN
-# 2.23). A helper has no run_skill tool, so recovery advice must not tell it to
-# delegate; it does not change project files, so the write tools confine it to
-# the scratch area; and it sees images through its own model, not the main
-# agent's.
-_IN_SKILL_WORKER: bool = False
-_HELPER_MODEL: str = ""
+# Who is calling the tools right now (PROJECT_DESIGN 2.23, 2.30): the main
+# agent, a helper (set by run_skill around a helper agent's execution) or a
+# subagent (set by run_agent). A helper has no run_skill tool, so recovery advice
+# must not tell it to delegate; it does not change project files, so the write
+# tools confine it to the scratch area; and it sees images through its own model,
+# not the main agent's. A subagent holds read tools only.
+#
+# A context variable, not a module global: subagents run concurrently, and a
+# global flag cleared by the first one to finish would lift the write
+# confinement of the others while they still run. asyncio tasks and
+# `asyncio.to_thread` each carry a copy of the context, so every agent sees its
+# own value.
+CALLER_MAIN = "main"
+CALLER_HELPER = "helper"
+CALLER_SUBAGENT = "subagent"
+_CALLER: contextvars.ContextVar[tuple[str, str]] = contextvars.ContextVar(
+    "gilzabots_tool_caller", default=(CALLER_MAIN, "")
+)
 
 # Whether the main agent currently holds the command-execution tools. It always
 # does, under both policies, except in plan mode, where the mode withholds them.
-# Kept next to _IN_SKILL_WORKER because both exist for the same reason --
+# Kept next to _CALLER because both exist for the same reason --
 # recovery advice must name a route the caller can actually take
 # (PROJECT_DESIGN 2.6).
 _ORCHESTRATOR_HAS_TERMINAL: bool = True
@@ -136,13 +148,36 @@ HELPER_SCRATCH_DIR = ".gilzabots"
 
 def set_worker_context(active: bool, model: str = "") -> None:
     """Mark the window in which a helper agent runs, and the model it runs on."""
-    global _IN_SKILL_WORKER, _HELPER_MODEL
-    _IN_SKILL_WORKER = bool(active)
-    _HELPER_MODEL = str(model or "") if active else ""
+    _CALLER.set((CALLER_HELPER, str(model or "")) if active else (CALLER_MAIN, ""))
+
+
+@contextlib.contextmanager
+def subagent_context(model: str = ""):
+    """The window in which a read-only subagent runs on *model*.
+
+    Restored by token rather than by setting "main" back: a subagent that runs
+    alone runs in the main agent's own context, and one that runs in a group or
+    in the background runs in a copy, so the previous value is what has to come
+    back either way.
+    """
+    token = _CALLER.set((CALLER_SUBAGENT, str(model or "")))
+    try:
+        yield
+    finally:
+        _CALLER.reset(token)
 
 
 def in_helper_context() -> bool:
-    return _IN_SKILL_WORKER
+    return _CALLER.get()[0] == CALLER_HELPER
+
+
+def in_subagent_context() -> bool:
+    return _CALLER.get()[0] == CALLER_SUBAGENT
+
+
+def _caller_model() -> str:
+    """The model of the helper or subagent calling, or "" for the main agent."""
+    return _CALLER.get()[1]
 
 
 def set_orchestrator_terminal_access(active: bool) -> None:
@@ -156,7 +191,9 @@ def caller_has_terminal() -> bool:
 
     A helper always can; the main agent can in every mode but plan.
     """
-    return True if _IN_SKILL_WORKER else _ORCHESTRATOR_HAS_TERMINAL
+    if in_subagent_context():
+        return False
+    return True if in_helper_context() else _ORCHESTRATOR_HAS_TERMINAL
 
 
 def _refuse_helper_project_write(resolved: str) -> None:
@@ -165,7 +202,7 @@ def _refuse_helper_project_write(resolved: str) -> None:
     A helper returns data; the main agent makes the changes and sees each of
     their results (PROJECT_DESIGN 2.23). Its own notes go under the scratch area.
     """
-    if not _IN_SKILL_WORKER:
+    if not in_helper_context():
         return
     scratch = os.path.realpath(os.path.join(get_project_path(), HELPER_SCRATCH_DIR))
     target = os.path.realpath(resolved)
@@ -282,8 +319,8 @@ def set_project_context(session, store=None) -> None:
         # so it doesn't fail with a BadRequestError (request exceeds available context window).
         try:
             import litellm
-            from .config import resolve_effective_num_ctx
-            model_name = getattr(session, "model", None)
+            from .config import resolve_effective_num_ctx, session_main_model
+            model_name = session_main_model(session) or None
             num_ctx = resolve_effective_num_ctx("memgpt", model_name, getattr(session, "api_base", None))
             if model_name and num_ctx:
                 # Direct registration for model in litellm's dynamic model database
@@ -750,10 +787,15 @@ def read_file(path: str) -> str:
             # create_plan" while in auto called run_skill("create_plan") -- a tool
             # that does not exist there. Without a terminal the caller is the main
             # agent in plan mode; a helper writes only to its scratch area.
-            if _IN_SKILL_WORKER:
+            if in_helper_context():
                 create = (
                     f"If you are trying to create it: helpers write only under '{HELPER_SCRATCH_DIR}/'; "
                     "for a project file, put its path and content in your report."
+                )
+            elif in_subagent_context():
+                create = (
+                    "If you are trying to create it: you are a read-only subagent; put its path "
+                    "and content in your report."
                 )
             elif caller_has_terminal():
                 create = "If you are trying to create it, use 'write_file' instead."
@@ -858,7 +900,13 @@ def read_file(path: str) -> str:
         _DATA_EXTS = {".jsonl", ".csv", ".tsv", ".log"}
         ext = os.path.splitext(resolved)[1].lower()
         if ext in _DATA_EXTS:
-            if _IN_SKILL_WORKER:
+            if in_subagent_context():
+                routing_hint = (
+                    "IMPORTANT: You are a read-only subagent: you cannot run scripts or delegate. "
+                    "Sample the file with read_content_pos or search_code and report what you "
+                    "found, saying that the rest was not read."
+                )
+            elif in_helper_context():
                 # A helper has no run_skill tool, so telling it to "delegate via
                 # run_skill" is a dead end.
                 routing_hint = (
@@ -932,20 +980,21 @@ def analyze_image(file_path: str, prompt: str = "Describe this image in detail")
             with open(resolved, "rb") as f:
                 encoded_img = base64.b64encode(f.read()).decode("utf-8")
             
-        if _IN_SKILL_WORKER and _HELPER_MODEL:
-            # A helper looks through its own model: that is the model whose
-            # vision the main agent was told about when it chose the helper
-            # (PROJECT_DESIGN 2.23), and the helper only holds this tool when
+        if _caller_model():
+            # A helper (or subagent) looks through its own model: that is the
+            # model whose vision the main agent was told about when it chose the
+            # helper (PROJECT_DESIGN 2.23), and either only holds this tool when
             # that model accepts images.
             kwargs = get_agent_llm_kwargs("worker")
-            model = _HELPER_MODEL
+            model = _caller_model()
         else:
             kwargs = get_agent_llm_kwargs("memgpt")
 
             # The main agent's model, since it is the one using the tool.
             model = get_agent_model("memgpt")
             if _PROJECT_SESSION:
-                project_override = getattr(_PROJECT_SESSION, "model", None)
+                from .config import session_main_model
+                project_override = session_main_model(_PROJECT_SESSION)
                 if project_override:
                     model = project_override
                 
@@ -3073,6 +3122,31 @@ def get_helper_tools(vision: bool = False):
         web_search,
         *(action_by_name[name] for name in _HELPER_SCRATCH_WRITE_TOOLS),
         *(action_by_name[name] for name in _HELPER_EXECUTION_TOOLS),
+    ]
+    if vision:
+        tools.append(analyze_image)
+    return tools
+
+
+def get_subagent_tools(vision: bool = False):
+    """Tools handed to a subagent started with `run_agent` (PROJECT_DESIGN 2.30).
+
+    Read tools only: no write tool, no command, no `ask_question`. Every one is
+    `is_safe`, so none opens a confirmation dialog in edit mode and none is
+    blocked in plan mode -- which is what lets several subagents run at once and
+    lets the main agent use them while it plans. It also has no conversation to
+    search: a subagent starts from a fresh context, by design.
+    """
+    tools = [
+        get_project_overview,
+        search_code,
+        *get_code_navigation_tools(),
+        read_file,
+        read_content_pos,
+        diff_files,
+        *get_diagnostic_tools(),
+        get_editor_state,
+        web_search,
     ]
     if vision:
         tools.append(analyze_image)

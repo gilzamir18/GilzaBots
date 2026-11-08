@@ -1,0 +1,7 @@
+desc: A relentless interview to sharpen a plan or design, with no files written.
+id: grill-me
+name: grill-me
+pack: engineering-workflow
+requires:
+- grilling
+type: skill

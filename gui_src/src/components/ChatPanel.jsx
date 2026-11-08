@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback, useLayoutEffect, useEffect } from 'react';
+import { useRef, useState, useCallback, useLayoutEffect, useEffect, useMemo } from 'react';
 import { MessageSquare, Cpu, HelpCircle, Check, X, ArrowRight, Eraser, Globe, Settings, Settings2, Plus, Trash2, Search, Paperclip, FileText, ZoomIn, ZoomOut, Download, Printer, GitBranch, RefreshCw, Pencil, Sparkles, MoreHorizontal, AlertTriangle, Clock, Activity, Zap, ChevronDown, Mic, Square, Brain, SlidersHorizontal, Minimize2, Maximize2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useCustomDialog } from './modals/CustomDialogProvider';
@@ -9,6 +9,7 @@ import { isLocalModelId } from '../utils/models.js';
 import { readChatCompact, writeChatCompact } from '../utils/chatCompact.js';
 import { catalogReasoning, chatReasoningEffort, withChatReasoningEffort } from '../utils/chatReasoningEffort.js';
 import { stripInlineReasoning } from '../utils/thinkTags.js';
+import { formatTokenCount } from '../utils/chatCompaction.js';
 import { useTextContextMenu } from '../hooks/useTextContextMenu.js';
 
 import { turnEndFromContent } from '../utils/turnMarkers.js';
@@ -24,8 +25,20 @@ import { useDictation } from '../hooks/useDictation.js';
 import { buildQuoteExcerptPrompt } from '../utils/askAboutPrompt.js';
 import SearchChatsModal from './modals/SearchChatsModal.jsx';
 import ModelSelect from './ModelSelect.jsx';
+import { chatModelChoice, resolveChatModels, withChatModel } from '../utils/chatModels.js';
 import TutorialMenu from './TutorialMenu.jsx';
+import SlashCommandMenu from './SlashCommandMenu.jsx';
+import { completionText, filterSlashCommands, moveSelection, requiresArguments, slashQuery } from '../utils/slashCommands.js';
 import { getPreference, setPreference } from '../utils/preferences.js';
+import {
+  FOLLOW_BOTTOM,
+  FOLLOW_OFF,
+  FOLLOW_TURN_START,
+  anchoredScrollTop,
+  maxScrollTopOf,
+  planMessagesScroll,
+  topWithinScroller,
+} from '../utils/chatScroll.js';
 
 const normalizeForErrorMatch = (value) => String(value || '')
   .normalize('NFD')
@@ -144,6 +157,7 @@ export default function ChatPanel({
   setIsChatVisible,
   chatWidth,
   handleSendMessage,
+  onRunSlashCommand,
   onEditUserMessage,
   onGenerateResponseForUserMessage,
   handleInterruptAgent,
@@ -169,10 +183,12 @@ export default function ChatPanel({
   globalModels = [],
   onRefreshModels,
   onEditModels,
-  onModelChange,
 }) {
   const { t, i18n } = useTranslation();
   const { showPrompt, showAlert, showConfirm } = useCustomDialog();
+  // The models this chat runs on: its own choice, else the project's default,
+  // else the catalog's global default (backend: `resolve_chat_models`).
+  const chatModels = resolveChatModels({ chats, chatId: activeChatId, project: activeProject, globalModels });
   const historyRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -211,7 +227,7 @@ export default function ChatPanel({
     copy: copyTranslation,
     close: closeTranslation,
   } = useSnippetTranslation({
-    model: activeProject?.model || '',
+    model: chatModels.model,
     uiLanguage: i18n.language,
   });
   // "Look up" answers in a card of its own, so a question about an excerpt of
@@ -226,7 +242,7 @@ export default function ChatPanel({
     saveMarkdown: saveLookupMarkdown,
     close: closeLookup,
   } = useSnippetQuery({
-    model: activeProject?.model || '',
+    model: chatModels.model,
     projectPath: activeProject?.project_path || '',
   });
 
@@ -350,11 +366,14 @@ export default function ChatPanel({
     return () => cancelAnimationFrame(focusAtEnd);
   }, [chatInputFocusSignal]);
 
-  // Auto-scroll follows the bottom of the history only while the user is
-  // parked there. Scrolling up (to read something while the agent streams)
-  // unpins it; coming back to the bottom pins it again.
-  const isPinnedToBottomRef = useRef(true);
+  // Auto-scroll (see utils/chatScroll.js): after the user sends a message the
+  // view follows the reply until the reply's first line reaches the top, then
+  // stays there so the answer is read from its start. Scrolling away turns
+  // following off; coming back to the bottom follows the bottom again.
+  const followModeRef = useRef(FOLLOW_BOTTOM);
   const programmaticScrollUntilRef = useRef(0);
+  const lastAutoScrollTopRef = useRef(null);
+  const liveResponseRef = useRef(null);
 
   const isHistoryNearBottom = useCallback(() => {
     const el = historyRef.current;
@@ -363,37 +382,73 @@ export default function ChatPanel({
   }, []);
 
   const handleHistoryScroll = useCallback(() => {
-    // Ignore the scroll events our own smooth scrolling emits, otherwise the
-    // intermediate positions would look like the user scrolled up.
+    // Ignore the scroll events our own scrolling emits, otherwise the
+    // intermediate positions of a smooth scroll, or a position anchored above
+    // the bottom, would look like the user scrolled away.
     if (Date.now() < programmaticScrollUntilRef.current) return;
-    isPinnedToBottomRef.current = isHistoryNearBottom();
+    const el = historyRef.current;
+    if (!el) return;
+    if (lastAutoScrollTopRef.current !== null
+      && Math.abs(el.scrollTop - lastAutoScrollTopRef.current) <= 2) return;
+    lastAutoScrollTopRef.current = null;
+    followModeRef.current = isHistoryNearBottom() ? FOLLOW_BOTTOM : FOLLOW_OFF;
   }, [isHistoryNearBottom]);
+
+  const scrollHistoryTo = useCallback((top, behavior = 'auto') => {
+    const el = historyRef.current;
+    if (!el) return;
+    if (behavior === 'smooth') programmaticScrollUntilRef.current = Date.now() + 700;
+    el.scrollTo({ top, behavior });
+    lastAutoScrollTopRef.current = behavior === 'smooth' ? top : el.scrollTop;
+  }, []);
 
   const scrollHistoryToBottom = useCallback((behavior = 'auto') => {
     const el = historyRef.current;
     if (!el) return;
-    if (behavior === 'smooth') programmaticScrollUntilRef.current = Date.now() + 700;
-    el.scrollTo({ top: el.scrollHeight, behavior });
-  }, []);
+    scrollHistoryTo(maxScrollTopOf(el), behavior);
+  }, [scrollHistoryTo]);
 
-  useEffect(() => {
-    if (isAgentRunning && (chatThoughtStream || chatResponseStream) && isPinnedToBottomRef.current) {
+  // Scrolls as far down as the content allows without taking `anchor` (the
+  // start of the reply) above the top of the viewport.
+  const scrollHistoryToAnchor = useCallback((anchor) => {
+    const el = historyRef.current;
+    if (!el) return;
+    if (!anchor) {
       scrollHistoryToBottom();
+      return;
     }
-  }, [chatThoughtStream, chatResponseStream, isAgentRunning, scrollHistoryToBottom]);
+    scrollHistoryTo(anchoredScrollTop(topWithinScroller(el, anchor), maxScrollTopOf(el)));
+  }, [scrollHistoryTo, scrollHistoryToBottom]);
 
   useEffect(() => {
-    // A message the user just sent always brings the view back to the bottom.
-    if (chatMessages[chatMessages.length - 1]?.role === 'user') {
-      isPinnedToBottomRef.current = true;
+    if (!isAgentRunning || !(chatThoughtStream || chatResponseStream)) return;
+    if (followModeRef.current === FOLLOW_BOTTOM) {
+      scrollHistoryToBottom();
+    } else if (followModeRef.current === FOLLOW_TURN_START) {
+      // While only the reasoning streams there is no answer to anchor, and the
+      // reasoning shown here is a bounded tail, so its end is followed.
+      scrollHistoryToAnchor(liveResponseRef.current);
     }
-    if (!isPinnedToBottomRef.current) return;
-    scrollHistoryToBottom('smooth');
-  }, [chatMessages, scrollHistoryToBottom]);
+  }, [chatThoughtStream, chatResponseStream, isAgentRunning, scrollHistoryToBottom, scrollHistoryToAnchor]);
+
+  useEffect(() => {
+    const plan = planMessagesScroll(followModeRef.current, chatMessages);
+    followModeRef.current = plan.mode;
+    if (plan.action === 'bottom') {
+      scrollHistoryToBottom('smooth');
+    } else if (plan.action === 'anchor') {
+      const el = historyRef.current;
+      const anchor = el?.querySelector(`[data-chat-msg-index="${plan.index}"]`);
+      scrollHistoryToAnchor(anchor);
+      // The reply is anchored; later updates of this turn leave the view alone
+      // unless it was short enough to end at the bottom anyway.
+      if (el) followModeRef.current = isHistoryNearBottom() ? FOLLOW_BOTTOM : FOLLOW_OFF;
+    }
+  }, [chatMessages, scrollHistoryToBottom, scrollHistoryToAnchor, isHistoryNearBottom]);
 
   useEffect(() => {
     // Opening another chat starts at its bottom.
-    isPinnedToBottomRef.current = true;
+    followModeRef.current = FOLLOW_BOTTOM;
     scrollHistoryToBottom();
   }, [activeChatId, scrollHistoryToBottom]);
 
@@ -481,6 +536,12 @@ export default function ChatPanel({
   });
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [tempInput, setTempInput] = useState('');
+  // `/` completion: the command catalog (loaded the first time the user types
+  // a slash), the highlighted row, and the input Escape dismissed the menu for.
+  const [slashCommands, setSlashCommands] = useState(null);
+  const [slashCommandsError, setSlashCommandsError] = useState('');
+  const [slashMenuIndex, setSlashMenuIndex] = useState(0);
+  const [slashMenuDismissedFor, setSlashMenuDismissedFor] = useState(null);
   // MCP config panel state
   const [showMcpPanel, setShowMcpPanel] = useState(false);
   const [mcpUrlDraft, setMcpUrlDraft] = useState('');
@@ -581,7 +642,7 @@ export default function ChatPanel({
         signal: controller.signal,
         body: JSON.stringify({
           prompt: rawPrompt,
-          model: activeProject.model,
+          model: chatModels.model,
           project_path: activeProject?.path || activeProject?.project_name,
           stream: true,
         }),
@@ -748,18 +809,101 @@ export default function ChatPanel({
     }
   };
 
+  const rememberInput = (text) => {
+    if (!text) return;
+    setInputHistory(prev => {
+      if (prev[prev.length - 1] === text) return prev;
+      const newHist = [...prev, text].slice(-100);
+      setPreference('chatInputHistory', JSON.stringify(newHist));
+      return newHist;
+    });
+  };
+
+  const slashToken = activeProject && !isEvolvingPrompt ? slashQuery(chatInput) : null;
+  const slashMenuOpen = slashToken !== null && slashMenuDismissedFor !== chatInput;
+
+  // Fetched each time the menu opens, for the open project: the skills a user
+  // can run with `/name` change when a skill is installed or activated.
+  const slashProjectPath = activeProject?.project_path || '';
+  useEffect(() => {
+    if (!slashMenuOpen) setSlashCommands(null);
+  }, [slashMenuOpen, slashProjectPath]);
+
+  useEffect(() => {
+    if (!slashMenuOpen || slashCommands !== null) return undefined;
+    let cancelled = false;
+    fetch(`/api/gilzabots/slash-commands?projectPath=${encodeURIComponent(slashProjectPath)}`)
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        return data.commands || [];
+      })
+      .then((commands) => { if (!cancelled) { setSlashCommands(commands); setSlashCommandsError(''); } })
+      .catch((err) => { if (!cancelled) { setSlashCommands([]); setSlashCommandsError(err?.message || String(err)); } });
+    return () => { cancelled = true; };
+  }, [slashMenuOpen, slashCommands, slashProjectPath]);
+
+  const slashMatches = useMemo(
+    () => (slashMenuOpen ? filterSlashCommands(slashCommands || [], slashToken) : []),
+    [slashMenuOpen, slashCommands, slashToken],
+  );
+
+  // A new query starts at the best match.
+  useEffect(() => { setSlashMenuIndex(0); }, [slashToken]);
+
+  // Enter on a command: run it when it has a bare form, otherwise put it in
+  // the input with room for the arguments it needs.
+  const acceptSlashCommand = (command, { run }) => {
+    if (!command) return;
+    if (!run || requiresArguments(command)) {
+      setChatInput(completionText(command));
+      inputRef.current?.focus();
+      return;
+    }
+    if (isAgentRunning) {
+      showAlert?.(t('app.slashCommandWhileRunning', 'Slash commands cannot run while the agent is working. Stop the agent first.'));
+      return;
+    }
+    rememberInput(command.name);
+    setHistoryIndex(-1);
+    setTempInput('');
+    setChatInput('');
+    onRunSlashCommand?.(command.name);
+  };
+
+  // Returns true when the menu consumed the key.
+  const handleSlashMenuKeyDown = (e) => {
+    if (!slashMenuOpen || e.ctrlKey || e.altKey || e.metaKey) return false;
+    const count = slashMatches.length;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      setSlashMenuDismissedFor(chatInput);
+      return true;
+    }
+    if (!count) return false;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSlashMenuIndex(index => moveSelection(index, e.key === 'ArrowDown' ? 1 : -1, count));
+      return true;
+    }
+    const highlighted = slashMatches[Math.min(slashMenuIndex, count - 1)];
+    if (e.key === 'Tab' && !e.shiftKey) {
+      e.preventDefault();
+      acceptSlashCommand(highlighted, { run: false });
+      return true;
+    }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      acceptSlashCommand(highlighted, { run: true });
+      return true;
+    }
+    return false;
+  };
+
   const handleFormSubmit = (e) => {
     if (e) e.preventDefault();
     if ((!chatInput.trim() && (!pendingAttachments || pendingAttachments.length === 0)) || !activeProject) return;
-    const text = chatInput.trim();
-    if (text) {
-      setInputHistory(prev => {
-        if (prev[prev.length - 1] === text) return prev;
-        const newHist = [...prev, text].slice(-100);
-        setPreference('chatInputHistory', JSON.stringify(newHist));
-        return newHist;
-      });
-    }
+    rememberInput(chatInput.trim());
     setHistoryIndex(-1);
     setTempInput('');
     handleSendMessage(e);
@@ -776,6 +920,7 @@ export default function ChatPanel({
   }, [showAlert, t]);
 
   const handleKeyDown = (e) => {
+    if (handleSlashMenuKeyDown(e)) return;
     // Font zoom shortcuts: Ctrl+= / Ctrl+Plus, Ctrl+-, Ctrl+0
     if (e.ctrlKey && !e.altKey && !e.metaKey) {
       if (e.key === '=' || e.key === '+') {
@@ -831,7 +976,7 @@ export default function ChatPanel({
   // A local model runs on the user's own machine with a small context window,
   // and every attachment competes with the conversation for it. Cloud models
   // take much larger batches, so the warning is scoped to the local case.
-  const usesLocalModel = isLocalModelId(activeProject?.model, activeProject?.api_base);
+  const usesLocalModel = isLocalModelId(chatModels.model, activeProject?.api_base);
   const showLocalAttachmentWarning = usesLocalModel && (pendingAttachments?.length || 0) >= 2;
 
   // ---- Attachment helpers ----
@@ -1455,12 +1600,48 @@ export default function ChatPanel({
     }
   };
 
+  // The model of this one chat, per role. Stored on the chat like its reasoning
+  // effort; empty hands the chat back to the project's / global default.
+  const handleChatModelChange = async (role, modelId) => {
+    if (!activeProject || !activeChatId) return;
+    if (modelId === chatModelChoice(chats, activeChatId, role)) return;
+    try {
+      const res = await fetch('/api/chat/model', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_name: activeProject.name, chat_id: activeChatId, role, model: modelId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setChats(prev => withChatModel(prev, data.chat_id, data.role, data.model));
+    } catch (err) {
+      showAlert(t('chatPanel.chatModelSaveFailed', 'Could not save the chat model: {{message}}', {
+        message: err?.message || String(err),
+      }));
+    }
+  };
+
+  const catalogModelName = (modelId) => {
+    const entry = (globalModels || []).find(model => model?.id === modelId);
+    return entry?.name || modelId;
+  };
+  // What the empty entry of each selector stands for, so a chat that follows a
+  // default says which one: the project's, or the catalog's global default.
+  const orchestratorDefaultLabel = chatModels.defaultSource === 'project'
+    ? t('chatPanel.projectDefaultModel', 'Project default: {{model}}', { model: catalogModelName(chatModels.defaultModel) })
+    : chatModels.defaultSource === 'global'
+      ? t('chatPanel.globalDefaultModel', 'Global default: {{model}}', { model: catalogModelName(chatModels.defaultModel) })
+      : t('chatPanel.selectModel');
+  const workerDefaultLabel = chatModels.workerDefaultSource === 'project'
+    ? t('chatPanel.projectDefaultModel', 'Project default: {{model}}', { model: catalogModelName(chatModels.workerDefault) })
+    : t('chatPanel.workerSameAsOrchestrator', 'Same as orchestrator');
+
   const reasoningSelector = (() => {
     const chatEffort = chatReasoningEffort(chats, activeChatId);
-    const catalog = catalogReasoning(globalModels, activeProject?.model || '');
+    const catalog = catalogReasoning(globalModels, chatModels.model);
     // A worker without its own model runs on the orchestrator's (backend:
     // `project_worker = worker_model or model`).
-    const workerCatalog = catalogReasoning(globalModels, activeProject?.worker_model || activeProject?.model || '');
+    const workerCatalog = catalogReasoning(globalModels, chatModels.workerModel || chatModels.model);
     const anyModelReasons = catalog.supportsThinking || workerCatalog.supportsThinking;
     const levelLabels = {
       low: t('chatPanel.reasoningEffortLow', 'Low'),
@@ -2003,12 +2184,13 @@ export default function ChatPanel({
           <span style={modelSelectorLabelStyle}>{t('chatPanel.orchestrator', 'Orchestrator')}:</span>
           <ModelSelect
             style={modelSelectorInputStyle}
-            value={activeProject?.model || ''}
-            onChange={(val) => onModelChange?.('model', val)}
+            value={chatModelChoice(chats, activeChatId, 'model')}
+            onChange={(val) => handleChatModelChange('model', val)}
             globalModels={globalModels}
             onEditModels={onEditModels}
             onRefreshModels={onRefreshModels}
-            disabled={!activeProject}
+            disabled={!activeProject || !activeChatId}
+            placeholder={orchestratorDefaultLabel}
           />
         </div>
         <div style={modelSelectorGroupStyle}>
@@ -2016,13 +2198,13 @@ export default function ChatPanel({
           <span style={modelSelectorLabelStyle}>{t('chatPanel.worker', 'Worker')}:</span>
           <ModelSelect
             style={modelSelectorInputStyle}
-            value={activeProject?.worker_model || ''}
-            onChange={(val) => onModelChange?.('worker_model', val)}
+            value={chatModelChoice(chats, activeChatId, 'worker_model')}
+            onChange={(val) => handleChatModelChange('worker_model', val)}
             globalModels={globalModels}
             onEditModels={onEditModels}
             onRefreshModels={onRefreshModels}
-            disabled={!activeProject}
-            placeholder={t('chatPanel.workerSameAsOrchestrator', 'Same as orchestrator')}
+            disabled={!activeProject || !activeChatId}
+            placeholder={workerDefaultLabel}
           />
         </div>
       </div>
@@ -2249,6 +2431,68 @@ export default function ChatPanel({
             return null;
           }
 
+          if (msg._compaction) {
+            // Where the agent's context restarted from a summary. Every message
+            // above stays readable; the summary is what the model now carries.
+            const info = msg._compaction;
+            const label = info.trigger === 'auto'
+              ? t('chatPanel.compaction.autoLabel', 'Conversation compacted automatically')
+              : t('chatPanel.compaction.manualLabel', 'Conversation compacted');
+            const stats = info.preTokens > 0
+              ? t('chatPanel.compaction.stats', '{{before}} → {{after}} tokens', {
+                before: formatTokenCount(info.preTokens),
+                after: formatTokenCount(info.postTokens),
+              })
+              : '';
+            return (
+              <div key={i} className="chat-compaction-divider" data-chat-msg-index={i}>
+                <div className="chat-compaction-line">
+                  <span className="chat-compaction-rule" />
+                  <span
+                    className="chat-compaction-label"
+                    title={t('chatPanel.compaction.hint', 'The messages above stay in the chat. The agent continues from the summary below.')}
+                  >
+                    <Minimize2 size={12} />
+                    {label}
+                    {stats && <span className="chat-compaction-stats">· {stats}</span>}
+                  </span>
+                  <span className="chat-compaction-rule" />
+                </div>
+                {info.restoredFiles?.length > 0 && (
+                  <div className="chat-compaction-note">
+                    {t('chatPanel.compaction.restoredFiles', 'Files restored into the new context: {{files}}', { files: info.restoredFiles.join(', ') })}
+                  </div>
+                )}
+                {info.skippedFiles?.length > 0 && (
+                  <div
+                    className="chat-compaction-note"
+                    title={info.skippedFiles.map(item => `${item.path}: ${item.reason}`).join('\n')}
+                  >
+                    {t('chatPanel.compaction.skippedFiles', 'Not restored: {{files}}', { files: info.skippedFiles.map(item => item.path).join(', ') })}
+                  </div>
+                )}
+                {(info.hookFailures || []).map((hook, index) => (
+                  <div key={`hook-${index}`} className="chat-compaction-note chat-compaction-warning">
+                    <AlertTriangle size={11} />
+                    {t('chatPanel.compaction.hookFailed', '{{event}} hook failed ({{command}}): {{message}}', hook)}
+                  </div>
+                ))}
+                {info.summary && (
+                  <details className="chat-compaction-summary">
+                    <summary>
+                      {info.customInstructions
+                        ? t('chatPanel.compaction.showSummaryFocused', 'Show summary (focus: {{focus}})', { focus: info.customInstructions })
+                        : t('chatPanel.compaction.showSummary', 'Show summary')}
+                    </summary>
+                    <div className="chat-compaction-summary-body">
+                      <FormattedMessage content={info.summary} projectPath={activeProject?.project_path} />
+                    </div>
+                  </details>
+                )}
+              </div>
+            );
+          }
+
           const isSystem = msg.role === 'system';
           if (isSystem) {
             const isLastSystemAfterUserOnly = i === chatMessages.length - 1 && !chatMessages.slice(i + 1).some(m => m.role === 'user' || m.role === 'assistant');
@@ -2386,6 +2630,7 @@ export default function ChatPanel({
           return (
             <div
               key={i}
+              data-chat-msg-index={i}
               style={{ display: 'flex', flexDirection: 'column', gap: '4px', opacity: isQueued ? 0.65 : 1 }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2800,6 +3045,7 @@ export default function ChatPanel({
               ) : null}
               {chatResponseStream && (
                 <pre
+                  ref={liveResponseRef}
                   className="chat-stream-raw"
                   style={{
                     margin: chatThoughtStream && !hideThink ? '8px 0 0' : 0,
@@ -3002,6 +3248,16 @@ export default function ChatPanel({
               <X size={12} />
             </button>
           </div>
+        )}
+        {slashMenuOpen && (
+          <SlashCommandMenu
+            commands={slashMatches}
+            loading={slashCommands === null}
+            error={slashCommandsError}
+            selectedIndex={Math.min(slashMenuIndex, Math.max(slashMatches.length - 1, 0))}
+            onHover={setSlashMenuIndex}
+            onChoose={(command) => acceptSlashCommand(command, { run: true })}
+          />
         )}
         <div className="vscode-chat-input-row">
           {/* Hidden file input */}

@@ -22,7 +22,7 @@ export const RESERVED_EXTRA_MODEL_PARAM_NAMES = new Set([
   'think', 'extra_model_params',
   'temperature', 'max_tokens', 'seed', 'top_p', 'top_k', 'min_p',
   'frequency_penalty', 'presence_penalty', 'repetition_penalty', 'reasoning_effort',
-  'max_heartbeats', 'max_context_tokens', 'eviction_threshold',
+  'max_heartbeats', 'max_context_tokens', 'eviction_threshold', 'auto_compact_threshold',
   'memory_pressure_threshold', 'empty_response_reasoning_fallback',
   'max_idle_heartbeats', 'max_iterations', 'max_tool_calls', 'on_max_iterations',
   'debug', 'use_shared_router', 'loop_detection', 'loop_detection_limit',

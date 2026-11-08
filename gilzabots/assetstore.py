@@ -362,6 +362,61 @@ def install_asset(
     raise ValueError(f"Unknown asset type '{asset_type}'")
 
 
+def skill_requirements(meta: dict) -> list[dict]:
+    """The skill assets *meta* requires, transitively, dependencies first.
+
+    A skill's `.metadata` may list `requires: [<skill id>, ...]`: skills whose
+    instructions it loads (`load_skill`) and that it cannot work without, as a
+    Claude Code plugin ships the skills that call each other together. Raises
+    ValueError when a required id is not in the store, rather than installing a
+    skill that would fail at run time in the user's project.
+    """
+    by_id = {a.get("id"): a for a in _iter_assets("skill")}
+    ordered: list[dict] = []
+    seen: set[str] = {str(meta.get("id"))}
+
+    def visit(current: dict) -> None:
+        requires = current.get("requires") or []
+        if isinstance(requires, str):
+            requires = [requires]
+        for required_id in requires:
+            required_id = str(required_id)
+            if required_id in seen:
+                continue
+            seen.add(required_id)
+            required = by_id.get(required_id)
+            if required is None:
+                raise ValueError(
+                    f"skill '{current.get('id')}' requires '{required_id}', which is not in the Asset Store."
+                )
+            visit(required)
+            ordered.append(required)
+
+    visit(meta)
+    return ordered
+
+
+def install_skill_with_requirements(meta: dict, project_path: str, replace: bool = False) -> list[tuple[str, str]]:
+    """Install a skill asset and the skills it requires; return (name, summary) pairs.
+
+    A required skill the project already reaches -- installed locally, bundled
+    or in the user's skill folder -- is left as it is and not listed: its copy
+    may hold the user's own edits. The requested skill itself is always
+    installed (with *replace*, refreshed).
+    """
+    from .skills import find_skill_dir
+
+    installed: list[tuple[str, str]] = []
+    for required in skill_requirements(meta):
+        name = str(required.get("name") or required.get("id"))
+        if find_skill_dir(name, project_path) is not None:
+            continue
+        installed.append((name, install_asset(required, project_path)))
+    name = str(meta.get("name") or meta.get("id"))
+    installed.append((name, install_asset(meta, project_path, replace=replace)))
+    return installed
+
+
 def register_asset(asset_type: str, source_path: str, metadata: dict) -> Path:
     """Package a local directory as an asset and register it in the store."""
     if asset_type not in VALID_TYPES:

@@ -233,6 +233,7 @@ _NON_LITELLM_FIELDS = {
     "model", "strategy",
     # MemGPTAgentBlock params
     "max_heartbeats", "max_context_tokens", "eviction_threshold",
+    "auto_compact_threshold",
     "memory_pressure_threshold",
     "heartbeat_pressure_threshold",
     "empty_response_reasoning_fallback",
@@ -322,6 +323,9 @@ _MODEL_PARAMS_SCHEMA = {
     "max_heartbeats": {"type": int, "min": 1},
     "max_context_tokens": {"type": int, "min": 1},
     "eviction_threshold": {"type": float, "min": 0.0, "max": 1.0},
+    # Fraction of the window past which a turn compacts the conversation into a
+    # structured summary (gilzabots/compaction.py); 1.0 disables it.
+    "auto_compact_threshold": {"type": float, "min": 0.0, "max": 1.0},
     "memory_pressure_threshold": {"type": float, "min": 0.0, "max": 1.0},
     # Fraction of max_heartbeats spent past which the agent is warned to be brief.
     "heartbeat_pressure_threshold": {"type": float, "min": 0.0, "max": 1.0},
@@ -592,6 +596,27 @@ def get_agent_model(agent_name: str, default: str | None = None) -> str:
     return model
 
 
+def session_main_model(session) -> str:
+    """The orchestrator model a project session runs on.
+
+    For a ``ProjectData`` that is its chat's resolution (chat, then the
+    project's default, then the catalog's global default; see
+    ``project.resolve_chat_models``), never the bare ``projects.model`` column.
+    """
+    value = getattr(session, "active_model", None)
+    if value is None:
+        value = getattr(session, "model", None)
+    return str(value or "")
+
+
+def session_worker_model(session) -> str:
+    """The worker model a project session names ("" follows the orchestrator)."""
+    value = getattr(session, "active_worker_model", None)
+    if value is None:
+        value = getattr(session, "worker_model", None)
+    return str(value or "")
+
+
 def resolve_agent_model(agent_name: str) -> str:
     """Return the model *agent_name* actually runs on.
 
@@ -609,10 +634,10 @@ def resolve_agent_model(agent_name: str) -> str:
     try:
         from .tools import _PROJECT_SESSION
         if _PROJECT_SESSION:
-            if agent_name == "worker" and getattr(_PROJECT_SESSION, "worker_model", ""):
-                session_model = _PROJECT_SESSION.worker_model
-            elif getattr(_PROJECT_SESSION, "model", ""):
-                session_model = _PROJECT_SESSION.model
+            if agent_name == "worker" and session_worker_model(_PROJECT_SESSION):
+                session_model = session_worker_model(_PROJECT_SESSION)
+            elif session_main_model(_PROJECT_SESSION):
+                session_model = session_main_model(_PROJECT_SESSION)
     except Exception:
         pass
     return get_agent_model(agent_name, default=session_model)
@@ -654,10 +679,6 @@ def get_agent_llm_kwargs(
     try:
         from .tools import _PROJECT_SESSION
         if _PROJECT_SESSION:
-            explicit_worker_model = (
-                agent_name == "worker"
-                and bool(getattr(_PROJECT_SESSION, "worker_model", ""))
-            )
             if agent_name == "worker" and hasattr(_PROJECT_SESSION, "worker_model_params") and _PROJECT_SESSION.worker_model_params:
                 project_llm_params = {
                     k: v for k, v in _PROJECT_SESSION.worker_model_params.items()
@@ -690,7 +711,7 @@ def get_agent_llm_kwargs(
         if (
             _PROJECT_SESSION
             and agent_name == "worker"
-            and getattr(_PROJECT_SESSION, "worker_model", "")
+            and session_worker_model(_PROJECT_SESSION)
         ):
             explicit_project_worker = True
     except Exception:
@@ -1016,8 +1037,8 @@ def resolve_effective_num_ctx(
                 project_num_ctx = params.get("num_ctx")
             if resolved_model is None:
                 resolved_model = (
-                    getattr(_PROJECT_SESSION, "worker_model", None) if is_worker else None
-                ) or getattr(_PROJECT_SESSION, "model", None)
+                    session_worker_model(_PROJECT_SESSION) if is_worker else None
+                ) or session_main_model(_PROJECT_SESSION) or None
             if resolved_api_base is None:
                 resolved_api_base = (
                     getattr(_PROJECT_SESSION, "worker_api_base", None) if is_worker else None

@@ -1,0 +1,9 @@
+desc: Implement a piece of work from a spec or a set of tickets, test-first, closing
+  with a code review.
+id: implement
+name: implement
+pack: engineering-workflow
+requires:
+- tdd
+- code-review
+type: skill

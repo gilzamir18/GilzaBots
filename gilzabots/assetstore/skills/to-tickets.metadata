@@ -1,0 +1,6 @@
+desc: Break a plan, spec or the current conversation into tracer-bullet tickets, each
+  declaring its blocking edges, published to the configured tracker.
+id: to-tickets
+name: to-tickets
+pack: engineering-workflow
+type: skill

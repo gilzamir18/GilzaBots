@@ -1,0 +1,5 @@
+desc: The shape of a pull request body. Use when writing or editing a PR description.
+id: pr
+name: pr
+pack: engineering-workflow
+type: skill

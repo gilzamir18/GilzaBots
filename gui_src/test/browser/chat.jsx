@@ -10,6 +10,8 @@
 // refused, and `window.__editCalls` records what the panel handed over. What is
 // under test is what the panel does with either answer — whether a refused
 // edit keeps its text and says why, and whether the keys do what they promise.
+// `window.__turn` likewise stands in for the run stream, so the suite can check
+// where the history scrolls while a reply arrives.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import React, { useRef, useState } from 'react';
@@ -20,11 +22,22 @@ import '../../src/index.css';
 import ChatPanel from '../../src/components/ChatPanel.jsx';
 import { CustomDialogProvider } from '../../src/components/modals/CustomDialogProvider.jsx';
 
+// The `/` completion menu's catalog, in the shape `list_slash_commands` returns.
+const SLASH_COMMANDS = [
+  { name: '/help', aliases: ['/h'], usage: '[command]', description: 'Show what is available', details: '', group: 'help_group_session' },
+  { name: '/cost', aliases: ['/context'], usage: '', description: 'Token usage of this chat', details: '', group: 'help_group_session' },
+  { name: '/rename', aliases: [], usage: '<new_name>', description: 'Rename the current project', details: '', group: 'help_group_projects' },
+  { name: '/compact', aliases: [], usage: '[focus]', description: 'Summarize the conversation', details: '', group: 'help_group_chats' },
+];
+
 // The panel's own requests (settings, chat list) reach the Python server, which
 // vite does not run. They are answered empty so nothing logs network noise.
 (function installInertApi() {
   const real = window.fetch.bind(window);
   window.fetch = async (input, init) => {
+    if (String(input).startsWith('/api/gilzabots/slash-commands')) {
+      return new Response(JSON.stringify({ commands: SLASH_COMMANDS }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
     if (String(input).startsWith('/api/')) {
       return new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } });
     }
@@ -51,9 +64,22 @@ function Host() {
   const [chatContextUsage, setChatContextUsage] = useState(null);
   const [webSearchConfig, setWebSearchConfig] = useState({});
   const [heartbeatMode, setHeartbeatMode] = useState('medium');
+  const [isAgentRunning, setIsAgentRunning] = useState(false);
+  const [chatThoughtStream, setChatThoughtStream] = useState('');
+  const [chatResponseStream, setChatResponseStream] = useState('');
   const chatEndRef = useRef(null);
   window.__composerText = () => chatInput;
+  // Plays App.jsx's part in a turn, so the browser suite can watch where the
+  // history scrolls while a reply streams and when it lands.
+  window.__turn = {
+    setMessages: setChatMessages,
+    setRunning: setIsAgentRunning,
+    setThoughts: setChatThoughtStream,
+    setResponse: setChatResponseStream,
+  };
   window.__sentFromComposer = window.__sentFromComposer || [];
+  // Commands the panel asked App.jsx to run in their own window.
+  window.__slashRuns = window.__slashRuns || [];
 
   const onEditUserMessage = async (messageIndex, message, content) => {
     window.__editCalls.push({ messageIndex, id: message.id, content });
@@ -64,13 +90,18 @@ function Host() {
     return { accepted: true };
   };
 
+  // The window gives the panel a fixed height, so its history scrolls inside
+  // it instead of growing the page.
   return (
+    <div style={{ display: 'flex', height: '100vh' }}>
     <ChatPanel
       chatMessages={chatMessages}
       setChatMessages={setChatMessages}
       chatInput={chatInput}
       setChatInput={setChatInput}
-      isAgentRunning={false}
+      isAgentRunning={isAgentRunning}
+      chatThoughtStream={chatThoughtStream}
+      chatResponseStream={chatResponseStream}
       heartbeatMode={heartbeatMode}
       setHeartbeatMode={setHeartbeatMode}
       chatContextUsage={chatContextUsage}
@@ -81,6 +112,7 @@ function Host() {
       chatWidth={720}
       fillContainer
       handleSendMessage={() => { window.__sentFromComposer.push(chatInput); }}
+      onRunSlashCommand={(command) => { window.__slashRuns.push(command); }}
       onEditUserMessage={onEditUserMessage}
       chatEndRef={chatEndRef}
       webSearchConfig={webSearchConfig}
@@ -94,6 +126,7 @@ function Host() {
       setPendingAttachments={setPendingAttachments}
       isChatMode
     />
+    </div>
   );
 }
 

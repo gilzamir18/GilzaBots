@@ -486,8 +486,12 @@ def _history_path() -> str:
     return os.path.join(get_gilzabots_home(), HISTORY_FILENAME)
 
 
-def _setup_readline() -> None:
-    """Persistent input history and slash-command completion, when available."""
+def _setup_readline(extra_names: list[str] | None = None) -> None:
+    """Persistent input history and slash-command completion, when available.
+
+    *extra_names* are completed like commands: the skills the user may run in
+    this project with `/name` (PROJECT_DESIGN 2.29).
+    """
     try:
         import readline
     except ImportError:  # pragma: no cover - Windows without pyreadline
@@ -502,7 +506,7 @@ def _setup_readline() -> None:
     except OSError:
         pass
 
-    names = _registry.names()
+    names = sorted(set(_registry.names()) | set(extra_names or []))
 
     def complete(text: str, index: int):
         if not text.startswith("/"):
@@ -545,7 +549,8 @@ async def repl_loop(project: ProjectData, store: ProjectStore, args) -> None:
 
     set_project_context(project, store)
     renderer = cli_render.install()
-    _setup_readline()
+    from .skill_invocation import invocable_skills
+    _setup_readline([f"/{skill['name']}" for skill in invocable_skills(project.project_path)])
 
     state = REPLState(project, store, renderer=renderer)
 
@@ -572,7 +577,14 @@ async def repl_loop(project: ProjectData, store: ProjectStore, args) -> None:
             if user_input.startswith("/"):
                 cmd, *rest = user_input.split(maxsplit=1)
                 if cmd not in _registry:
-                    T.error(_("unknown_command", cmd=cmd))
+                    kind = _classify_skill_line(state.project, user_input)
+                    if kind == "unknown":
+                        T.error(_("unknown_command", cmd=cmd))
+                    elif kind == "skill":
+                        if not _has_model(state.project):
+                            T.error(_("cli_no_model_configured"))
+                        else:
+                            await run_turn(state, user_input, db_path=args.db)
                     continue
                 result = await _registry.dispatch(state, cmd, rest)
                 if result == "break":
@@ -651,6 +663,26 @@ async def run_once(project: ProjectData, store: ProjectStore, prompt: str, args)
     return 0 if completed else 130
 
 
+def _classify_skill_line(project: ProjectData, line: str) -> str:
+    """How a `/word` line that is not a built-in command is handled.
+
+    "skill" when it runs a skill the user may invoke (a turn, PROJECT_DESIGN
+    2.29); "error" when it names an installed skill that cannot run now, already
+    reported; "unknown" otherwise.
+    """
+    from .memgpt_runtime import main_agent_prompt_profile
+    from .skill_invocation import SkillInvocationError, resolve_skill_invocation
+
+    try:
+        invocation = resolve_skill_invocation(
+            project.project_path, line, profile=main_agent_prompt_profile(project)
+        )
+    except SkillInvocationError as exc:
+        T.error(str(exc))
+        return "error"
+    return "skill" if invocation is not None else "unknown"
+
+
 async def run_command_once(project: ProjectData, store: ProjectStore, line: str, args) -> int:
     """Run a single slash command and exit.
 
@@ -665,7 +697,11 @@ async def run_command_once(project: ProjectData, store: ProjectStore, line: str,
     set_project_context(project, store)
     cmd, *rest = line.split(maxsplit=1)
     if cmd not in _registry:
-        T.error(_("unknown_command", cmd=cmd))
+        kind = _classify_skill_line(project, line)
+        if kind == "skill":
+            return await run_once(project, store, line, args)
+        if kind == "unknown":
+            T.error(_("unknown_command", cmd=cmd))
         return 2
 
     renderer = cli_render.install()

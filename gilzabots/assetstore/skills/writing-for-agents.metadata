@@ -1,0 +1,6 @@
+desc: Reference for writing documents agents consume. Use when creating or editing
+  a skill (SKILL.md) or AGENTS.md, or any doc an agent is pointed at.
+id: writing-for-agents
+name: writing-for-agents
+pack: engineering-workflow
+type: skill

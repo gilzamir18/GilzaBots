@@ -1,0 +1,6 @@
+desc: Ask which skill or flow of the engineering pack fits your situation. A router
+  over the pack's skills.
+id: which-skill
+name: which-skill
+pack: engineering-workflow
+type: skill

@@ -7,6 +7,12 @@ Output = TypeVar("Output", bound=BaseModel)
 class Block(BaseModel, Generic[Input, Output]):
     name: str
     description: str = ""
+    # A tool that may run at the same time as the other concurrency-safe calls
+    # of the batch a model issued: it shares no mutable state with them and
+    # needs no answer from the user while it runs. Agent blocks that honour it
+    # (MemGPTAgentBlock) run consecutive such calls with asyncio.gather and keep
+    # every result in the order the calls were made. False runs it alone.
+    concurrency_safe: bool = False
 
     async def run(self, input: Input) -> Output:
         raise NotImplementedError

@@ -42,7 +42,7 @@ const VIEW_RESTORE_ATTEMPTS = 100;
 // `onViewStateChange` reports the same shape as the user scrolls and zooms. The
 // owner keeps it per document so a viewer unmounted by a tab switch comes back
 // where it was left (see utils/pdfViewState.js).
-const PdfPreview = forwardRef(({ base64Pdf, sourceUrl, directUrl, isCompiling, errorLog, activeProject, selectedFile, onSyncTexNavigate, onCollapse, onDocumentReady, latexCompileProblem, onFixLatexProblem, onLatexCompileError, onLatexCompileSuccess, onAskAboutPdf, speechSettingsSignal = 0, isAgentRunning = false, uiScale = 1, initialViewState = null, onViewStateChange }, ref) => {
+const PdfPreview = forwardRef(({ chatModel = '', base64Pdf, sourceUrl, directUrl, isCompiling, errorLog, activeProject, selectedFile, onSyncTexNavigate, onCollapse, onDocumentReady, latexCompileProblem, onFixLatexProblem, onLatexCompileError, onLatexCompileSuccess, onAskAboutPdf, speechSettingsSignal = 0, isAgentRunning = false, uiScale = 1, initialViewState = null, onViewStateChange }, ref) => {
   const { t, i18n } = useTranslation();
   const { showAlert, showConfirm } = useCustomDialog();
   const [numPages, setNumPages] = useState(null);
@@ -80,7 +80,7 @@ const PdfPreview = forwardRef(({ base64Pdf, sourceUrl, directUrl, isCompiling, e
     copy: handleCopyTranslation,
     close: closeTranslation,
   } = useSnippetTranslation({
-    model: activeProject?.model || '',
+    model: chatModel,
     uiLanguage: i18n.language,
   });
 
@@ -98,7 +98,7 @@ const PdfPreview = forwardRef(({ base64Pdf, sourceUrl, directUrl, isCompiling, e
     markNoteSaved: markLookupNoteSaved,
     close: closeLookup,
   } = useSnippetQuery({
-    model: activeProject?.model || '',
+    model: chatModel,
     projectPath: activeProject?.project_path || '',
   });
   const lookupSelectionRef = useRef([]);

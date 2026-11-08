@@ -1,0 +1,8 @@
+desc: Review the changes since a fixed point (commit, branch, tag or merge-base) on
+  two axes, Standards (the project's documented coding standards) and Spec (what the
+  originating ticket or spec asked for), as two parallel subagents. Use when the user
+  wants a branch, a PR or work-in-progress reviewed, or asks to "review since X".
+id: code-review
+name: code-review
+pack: engineering-workflow
+type: skill

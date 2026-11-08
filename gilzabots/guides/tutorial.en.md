@@ -360,6 +360,14 @@ specialised capabilities.
   bundled version of the same name. If the catalog version is updated, the Asset Store
   detects the drift and shows an **"Update local copy"** button. If you want to revert to
   the built-in version, click **"Restore bundled"**.
+- **Skills that need other skills** — some skills load others while they work. Installing
+  one also installs and activates the skills it needs (a copy you already have is left
+  as it is).
+- **Two ways a skill runs** — the agent picks a skill by itself when your request fits
+  its description, or you run it by typing **`/name`** in the chat, followed by what it
+  should work on (`/grill-with-docs my plan`). Typing `/` lists the commands and, marked
+  **skill**, the skills you can run. Some skills run only that way: they never appear to
+  the agent until you type them. See the engineering skills topic below.
 
 ### 2. LaTeX Templates (`LaTeX templates` tab)
 
@@ -370,6 +378,91 @@ beamer presentations, CVs).
 - **Conflict detection & safety** — if any template file already exists in your project,
   GilzaBots detects the conflict, warns you, lists the conflicting files, and asks for
   explicit confirmation before overwriting anything.
+
+## skill-pack :: How do I use the engineering skills (grill-with-docs, tdd, code-review…)?
+
+The Asset Store carries a pack of 26 skills for planning and building software, adapted
+from Matt Pocock's MIT-licensed skills. They take you from an idea to tested, reviewed
+code in small, deliberate steps.
+
+### Installing
+
+- **In the window:** Asset Store → Skills → Catalog → install the skill. The skills it
+  needs come with it, and all of them are activated in the project.
+- **In the terminal:** `/load_asset skill grill-with-docs` installs it and what it needs;
+  then activate each one with `/addskill` (here: `grilling`, `domain-modeling`,
+  `grill-with-docs`).
+
+Installed skills live in `<project>/.gilzabots/skills/`. `/skills` lists them.
+
+### Running a skill
+
+Type `/` in the chat, pick the skill, and write after its name what it should work on:
+
+```
+/grill-with-docs I want to export chats to PDF
+```
+
+The line you typed stays in the chat; the agent receives the skill's instructions with
+your text. Some skills (the ones that *orchestrate* a flow, like `grill-with-docs`,
+`to-spec` or `implement`) run **only** when you type them. Others (`tdd`, `code-review`,
+`diagnosing-bugs`, `prototype`, `research`…) can also be picked by the agent itself
+when your request fits, and the flows above load them along the way.
+
+If you are not sure which one fits, run **`/which-skill what you want to do`**: it
+points you to the flow and tells you which skills are still missing.
+
+### The main flow: idea → shipped code
+
+1. **`/grill-with-docs <idea>`** — an interview in rounds. Each round lists numbered
+   questions with a recommended answer (➡️); answer them all at once ("1 yes, 2 no,
+   prefer X"). The agent looks up facts in the code and on the web by itself and asks
+   you only for decisions. Along the way it records the project's terms in
+   `GLOSSARY.md` and offers to record hard-to-reverse decisions as ADRs in `docs/adr/`.
+   It ends when no question is left, and confirms with you before acting.
+2. **`/to-spec`** — turns the conversation into a spec (no new questions).
+3. **`/to-tickets`** — splits it into small tickets, each saying which ones block it.
+4. **`/implement`** — builds the work test-first (`tdd`) and closes with a two-axis
+   review (`code-review`: the project's standards, and the spec), then commits.
+5. **`/retro`** — afterwards, suggests improvements to the agent's environment
+   (checks, `AGENTS.md`, coding standards).
+
+Keep steps 1–3 in **one chat**, so the spec and tickets build on the same thinking.
+Before the first `/to-spec`, run **`/setup-engineering-skills`** once: it asks where
+tickets live (GitHub, GitLab or local files under `.scratch/`) and writes that down in
+`docs/agents/` and in `AGENTS.md`.
+
+### The other skills
+
+- **Interviews:** `/grill-me` (the same interview, writing no files), `grilling` (the
+  interview routine the others use), `/to-questionnaire` (a questionnaire for someone
+  who knows what you don't), `/wait-what` (re-explain the last message plainly).
+- **Building and fixing:** `tdd`, `diagnosing-bugs` (hard bugs: builds a reproduction
+  that fails first, then fixes with a regression test), `code-review`, `prototype`
+  (throwaway code that answers a design question), `pr` (the shape of a pull request
+  description), `wizard` (a script that walks *you* through steps only a person can
+  do, such as creating API keys).
+- **Planning big work:** `/wayfinder` (a map of decision tickets for work too big for
+  one session), `/triage` (sort incoming issues and write briefs an agent can act on),
+  `/improve-codebase-architecture` (a visual report of refactoring opportunities).
+- **Knowledge:** `research` (reads primary sources in the background and saves a cited
+  note), `domain-modeling` (the glossary and ADRs), `codebase-design` (vocabulary for
+  designing modules), `/teach` (learn a topic over several sessions), `/handoff` (a
+  summary for another session or agent), `writing-for-agents` (how to write skills and
+  `AGENTS.md`).
+
+### Good to know
+
+- **`AGENTS.md`** at the project root is read by the agent on every turn: put the
+  project's standing instructions there (how to run the tests, conventions).
+- Several skills start **subagents**: helper agents that only read (files, Git, the
+  web) and report back, several at a time. They never change your files; the activity
+  log shows them as `subagent:…`.
+- When a flow says to start fresh, open a **new chat** (New Chat in the chat panel, or
+  `/chat new <name>`). Do **not** use
+  `/clear`: in GilzaBots it erases every chat of the project.
+- If a skill answers "installed but not active", activate it with `/addskill <name>` or
+  in the Asset Store's *Active in project* tab.
 
 ## local-models :: Tips for local models (Ollama)
 
@@ -822,8 +915,11 @@ of starting over.
 
 **Slash commands** — messages starting with `/` are GilzaBots commands rather than
 prompts: `/help`, `/clear`, `/skills`, `/models`, `/set-main-model <id>`,
-`/set-worker-model <id>`, `/undo`, `/commit <msg>`, and others. Type `/help` for the
-full list.
+`/set-worker-model <id>`, `/undo`, `/commit <msg>`, and others. Typing `/` opens a
+list of the commands that narrows as you type: ↑/↓ to pick one, Enter to run it
+(a command that needs an argument is put in the box for you to complete), Tab to
+complete it, Esc to close the list. A command's output opens in a window of its
+own and is never added to the conversation.
 
 ## command-line :: Can I run GilzaBots from the terminal, without the window?
 

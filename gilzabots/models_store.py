@@ -144,6 +144,7 @@ def normalize_model_entry(model: Dict[str, Any]) -> Dict[str, Any]:
     # worker has no run_skill and therefore nothing to delegate to.
     _policy = str(entry.get("orchestrator_policy", "") or "direct").strip().lower()
     entry["orchestrator_policy"] = _policy if _policy in ("direct", "delegate") else "direct"
+    entry["is_default"] = bool(entry.get("is_default", False))
     _num_ctx = entry.get("num_ctx")
     try:
         entry["num_ctx"] = int(_num_ctx) if _num_ctx not in (None, "") else None
@@ -469,6 +470,7 @@ def _connect() -> sqlite3.Connection:
             prompt_profile TEXT NOT NULL DEFAULT 'full',
             orchestrator_policy TEXT NOT NULL DEFAULT 'direct',
             num_ctx INTEGER,
+            is_default INTEGER NOT NULL DEFAULT 0,
             extra_json TEXT NOT NULL DEFAULT '{{}}',
             sort_order INTEGER NOT NULL DEFAULT 0
         )
@@ -497,6 +499,13 @@ def _connect() -> sqlite3.Connection:
         conn.execute(f"ALTER TABLE {_MODELS_TABLE} ADD COLUMN num_ctx INTEGER")
     except sqlite3.OperationalError:
         pass
+    # The global default model: the one a chat runs on when neither the chat nor
+    # its project names a model. At most one row carries the flag; see
+    # `set_default_model` and the first-model rule in `add_or_update_model`.
+    try:
+        conn.execute(f"ALTER TABLE {_MODELS_TABLE} ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
     _migrate_legacy_rows(conn)
     return conn
 
@@ -523,6 +532,7 @@ def _row_to_model(row: sqlite3.Row) -> Dict[str, Any]:
         "prompt_profile": row["prompt_profile"] or "full",
         "orchestrator_policy": row["orchestrator_policy"] or "direct",
         "num_ctx": row["num_ctx"],
+        "is_default": bool(row["is_default"]),
         "connection_id": row["connection_id"] or "",
         "connection_label": row["conn_label"] if has_connection else "",
     })
@@ -532,7 +542,7 @@ def _model_extra_json(model: Dict[str, Any]) -> str:
     known = {
         "id", "provider", "name", "api_key", "api_base", "supports_thinking",
         "requires_single_system_message", "prompt_profile", "orchestrator_policy",
-        "num_ctx", "previous_id",
+        "num_ctx", "previous_id", "is_default",
         "connection_id", "connection_label",
     }
     extra = {k: v for k, v in model.items() if k not in known}
@@ -571,6 +581,7 @@ def load_models() -> List[Dict[str, Any]]:
                 gm.prompt_profile AS prompt_profile,
                 gm.orchestrator_policy AS orchestrator_policy,
                 gm.num_ctx AS num_ctx,
+                gm.is_default AS is_default,
                 gm.extra_json AS extra_json,
                 gm.sort_order AS sort_order,
                 gm.connection_id AS connection_id,
@@ -623,17 +634,21 @@ def save_models(models: List[Dict[str, Any]]) -> None:
     # lands in the same mtime tick as the read that filled the cache would
     # otherwise keep serving the pre-write catalog for the rest of the process.
     _invalidate_models_cache()
+    default_written = False
     with _connect() as conn:
         conn.execute(f"DELETE FROM {_MODELS_TABLE}")
         for index, raw_model in enumerate(models or []):
             model = normalize_model_entry(raw_model)
             if not model.get("id"):
                 continue
+            # At most one default: a list carrying the flag twice keeps the first.
+            is_default = bool(model.get("is_default")) and not default_written
+            default_written = default_written or is_default
             conn.execute(
                 f"""
                 INSERT INTO {_MODELS_TABLE}
-                (id, provider, name, api_key, api_base, connection_id, supports_thinking, requires_single_system_message, prompt_profile, orchestrator_policy, num_ctx, extra_json, sort_order)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, provider, name, api_key, api_base, connection_id, supports_thinking, requires_single_system_message, prompt_profile, orchestrator_policy, num_ctx, is_default, extra_json, sort_order)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     model["id"],
@@ -647,6 +662,7 @@ def save_models(models: List[Dict[str, Any]]) -> None:
                     model.get("prompt_profile", "full"),
                     model.get("orchestrator_policy", "direct"),
                     model.get("num_ctx"),
+                    int(is_default),
                     _model_extra_json(model),
                     index,
                 ),
@@ -841,6 +857,9 @@ def load_local_ollama_models() -> List[Dict[str, Any]]:
         configured_ids.add(model_id)
 
     if additions:
+        # Same first-model rule as `add_or_update_model`: importing into an
+        # empty catalog makes the first imported model the default.
+        additions[0]["is_default"] = not configured_models
         save_models([*configured_models, *additions])
 
     return additions
@@ -1058,11 +1077,17 @@ def add_or_update_model(model_data: Dict[str, Any]) -> None:
     # never taken from the caller (a form echoes back whatever the listing held)
     # and survives an edit only while the entry still names the same model.
     model_data["discovered_num_ctx"] = None
+    # The default flag is not form data either: an edit keeps the entry's own
+    # flag (a rename included), and only `set_default_model` moves it. The one
+    # implicit assignment is the first model of an empty catalog, which becomes
+    # the default so a chat has something to run on from the start.
+    model_data["is_default"] = not models
     updated = False
     for i, m in enumerate(models):
         if m.get("id") == (previous_id or model_id):
             if _same_model_identity(m, model_data):
                 model_data["discovered_num_ctx"] = m.get("discovered_num_ctx")
+            model_data["is_default"] = bool(m.get("is_default"))
             models[i] = model_data
             updated = True
             break
@@ -1110,8 +1135,45 @@ def set_discovered_num_ctx(model_id: str, value: int | None) -> bool:
     _invalidate_models_cache()
     return True
 
+def get_default_model_id() -> str:
+    """Return the id of the global default model, or "" when none is marked."""
+    for model in load_models():
+        if model.get("is_default"):
+            return str(model.get("id") or "")
+    return ""
+
+
+def set_default_model(model_id: str) -> Dict[str, Any]:
+    """Mark *model_id* as the global default model and return its entry.
+
+    Exactly one entry carries the flag afterwards. An unknown id raises
+    ``ValueError``: a default that names no catalog entry would leave every chat
+    without a model while the setting looked saved.
+    """
+    clean_id = str(model_id or "").strip()
+    if not clean_id:
+        raise ValueError("Model id is required")
+    _invalidate_models_cache()
+    with _connect() as conn:
+        exists = conn.execute(
+            f"SELECT 1 FROM {_MODELS_TABLE} WHERE id = ?", (clean_id,)
+        ).fetchone()
+        if exists is None:
+            raise ValueError(f"Model '{clean_id}' does not exist")
+        conn.execute(
+            f"UPDATE {_MODELS_TABLE} SET is_default = CASE WHEN id = ? THEN 1 ELSE 0 END",
+            (clean_id,),
+        )
+    _invalidate_models_cache()
+    return get_model(clean_id) or {}
+
+
 def delete_model(model_id: str) -> bool:
-    """Delete a model by ID. Returns True if deleted, False if not found."""
+    """Delete a model by ID. Returns True if deleted, False if not found.
+
+    Deleting the default model leaves the catalog without one; no other entry
+    is promoted in its place, since which model should run is the user's call.
+    """
     models = load_models()
     initial_length = len(models)
 

@@ -84,6 +84,25 @@ export function ModelCatalogProvider({ children }) {
     }
   }, [refresh]);
 
+  // Marks the global default model: what a chat runs on when neither the chat
+  // nor its project names one. Returns the backend outcome, like saveModel.
+  const setDefaultModel = useCallback(async (modelId) => {
+    try {
+      const res = await fetch(`${MODELS_ENDPOINT}/default`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: modelId })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { ok: false, error: data.error || 'model_default_failed' };
+      await refresh();
+      return { ok: true };
+    } catch (e) {
+      console.error(e);
+      return { ok: false, error: 'model_default_failed' };
+    }
+  }, [refresh]);
+
   const loadLocalOllamaModels = useCallback(async () => {
     try {
       const res = await fetch(`${MODELS_ENDPOINT}/load-local-ollama`, { method: 'POST' });
@@ -197,11 +216,11 @@ export function ModelCatalogProvider({ children }) {
 
   const value = useMemo(
     () => ({
-      models, refresh, saveModel, deleteModel, loadLocalOllamaModels,
+      models, refresh, saveModel, deleteModel, setDefaultModel, loadLocalOllamaModels,
       connections, refreshConnections, saveConnection, deleteConnection,
       startOpenRouterOAuth, completeOpenRouterOAuth, cancelOpenRouterOAuth,
     }),
-    [models, refresh, saveModel, deleteModel, loadLocalOllamaModels,
+    [models, refresh, saveModel, deleteModel, setDefaultModel, loadLocalOllamaModels,
       connections, refreshConnections, saveConnection, deleteConnection,
       startOpenRouterOAuth, completeOpenRouterOAuth, cancelOpenRouterOAuth]
   );

@@ -43,9 +43,10 @@ _DEFAULTS: dict[str, Any] = {
     # Graphics mode for the embedded browser window: "auto" uses the GPU,
     # "off" runs Chromium without it. QtWebEngine loads the graphics driver
     # into the GilzaBots process itself, so a driver fault kills the whole
-    # application; "off" is the recovery for a machine where that happens.
-    # Only takes effect at the next launch (see gilzabots/webengine_env.py).
-    "webengine_gpu": "auto",
+    # application, which is why "off" is the default and acceleration is
+    # opt-in. Only takes effect at the next launch (see
+    # gilzabots/webengine_env.py: GPU_DEFAULT, which must match this value).
+    "webengine_gpu": "off",
     # Name of the project the desktop window had open last, reopened at the
     # next launch. Kept here rather than in localStorage because localStorage
     # is per origin, and the origin carries the server port: a launch that

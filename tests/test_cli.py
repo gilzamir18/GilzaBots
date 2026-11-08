@@ -795,7 +795,8 @@ def test_a_terminal_only_command_is_refused_by_the_gui(tmp_path):
     assert not _registry.is_cli_only("/mode")
 
     result = asyncio.run(agent_stdin.handle_slash_command({"prompt": "/thoughts on"}))
-    assert result["status"] == "done"
+    # A refusal, so the command's window shows it as one.
+    assert result["status"] == "error"
     assert "/thoughts" in result["messages"][0]
 
 

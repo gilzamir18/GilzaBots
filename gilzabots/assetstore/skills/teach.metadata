@@ -1,0 +1,6 @@
+desc: Teach the user a new skill or concept over several sessions, using the project
+  as a stateful teaching workspace.
+id: teach
+name: teach
+pack: engineering-workflow
+type: skill

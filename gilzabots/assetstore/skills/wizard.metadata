@@ -1,0 +1,8 @@
+desc: Generate an interactive wizard script that walks a human through steps only
+  they can perform. Use when provisioning infrastructure, setting up credentials or
+  CI secrets, walking an unfamiliar third-party dashboard, or running a one-off migration
+  or cutover; not for steps you can perform yourself.
+id: wizard
+name: wizard
+pack: engineering-workflow
+type: skill

@@ -33,33 +33,34 @@ def settings_file(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_graphics_defaults_to_using_the_gpu(settings_file):
+async def test_graphics_defaults_to_hardware_acceleration_off(settings_file):
     server, responses = _server_with_capture()
     await server.route_api("GET", "/api/settings/graphics", {}, {}, b"", AsyncMock())
 
     status, body, _ = responses[0]
     assert status == 200
-    assert body["webengine_gpu"] == "auto"
+    assert body["webengine_gpu"] == "off"
     assert body["source"] == "settings"
 
 
 @pytest.mark.asyncio
-async def test_turning_the_gpu_off_is_saved_and_asks_for_a_restart(settings_file):
+async def test_turning_the_gpu_on_is_saved_and_asks_for_a_restart(settings_file):
     """QtWebEngine reads its flags before the window exists, so it needs one."""
+    ide_server._STARTUP_DIAGNOSTICS = {"webengine_gpu": "off"}
     server, responses = _server_with_capture()
-    monkey_body = json.dumps({"webengine_gpu": "off"}).encode()
+    monkey_body = json.dumps({"webengine_gpu": "auto"}).encode()
     await server.route_api(
         "POST", "/api/settings/graphics", {}, {}, monkey_body, AsyncMock()
     )
 
     status, body, _ = responses[0]
     assert status == 200
-    assert body["webengine_gpu"] == "off"
+    assert body["webengine_gpu"] == "auto"
     assert body["requiresRestart"] is True
-    assert json.loads(settings_file.read_text(encoding="utf-8"))["webengine_gpu"] == "off"
+    assert json.loads(settings_file.read_text(encoding="utf-8"))["webengine_gpu"] == "auto"
 
     # Saving the mode the running process already uses asks for nothing.
-    ide_server._STARTUP_DIAGNOSTICS = {"webengine_gpu": "off"}
+    ide_server._STARTUP_DIAGNOSTICS = {"webengine_gpu": "auto"}
     await server.route_api(
         "POST", "/api/settings/graphics", {}, {}, monkey_body, AsyncMock()
     )
@@ -67,13 +68,13 @@ async def test_turning_the_gpu_off_is_saved_and_asks_for_a_restart(settings_file
 
 
 @pytest.mark.asyncio
-async def test_an_unknown_value_never_locks_the_app_into_software_rendering(settings_file):
+async def test_an_unknown_value_is_saved_as_the_default_mode(settings_file):
     server, responses = _server_with_capture()
     await server.route_api(
         "POST", "/api/settings/graphics", {}, {},
         json.dumps({"webengine_gpu": "nonsense"}).encode(), AsyncMock(),
     )
-    assert responses[0][1]["webengine_gpu"] == "auto"
+    assert responses[0][1]["webengine_gpu"] == "off"
 
 
 @pytest.mark.asyncio

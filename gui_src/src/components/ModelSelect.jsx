@@ -84,6 +84,7 @@ export default function ModelSelect({
               title={m.api_base ? `${t('editModelsModal.apiBaseUrl', 'API Base URL')}: ${m.api_base}` : undefined}
             >
               {modelOptionLabel(m, providerModels)}
+              {m.is_default ? ` (${t('modelSelect.globalDefaultSuffix', 'global default')})` : ''}
             </option>
           ))}
         </optgroup>

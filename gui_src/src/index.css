@@ -1746,9 +1746,116 @@ input:focus, select:focus, textarea:focus {
 }
 
 .vscode-chat-form {
+  position: relative;
   padding: 12px;
   border-top: 1px solid var(--vscode-border);
   background-color: var(--vscode-bg);
+}
+
+/* The composer's `/` completion list, opened above the form like an editor's
+   suggest widget (SlashCommandMenu.jsx). */
+.slash-command-menu {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: calc(100% - 4px);
+  z-index: 40;
+  max-height: min(320px, calc(50 * var(--ui-vh)));
+  overflow-y: auto;
+  background-color: var(--vscode-bg);
+  border: 1px solid var(--vscode-widget-border);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.slash-command-menu-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+  color: var(--vscode-text-fg);
+}
+
+.slash-command-menu-item.is-selected {
+  background-color: var(--vscode-list-activeSelectionBg);
+  color: var(--vscode-list-activeSelectionFg);
+}
+
+.slash-command-menu-name {
+  font-family: var(--vscode-editor-font-family);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.slash-command-menu-usage {
+  font-family: var(--vscode-editor-font-family);
+  color: var(--vscode-text-muted);
+  white-space: nowrap;
+}
+
+.slash-command-menu-badge {
+  flex: none;
+  padding: 0 5px;
+  border: 1px solid var(--vscode-text-muted);
+  border-radius: 3px;
+  font-size: 0.8em;
+  color: var(--vscode-text-muted);
+  white-space: nowrap;
+}
+
+.slash-command-menu-desc {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--vscode-text-muted);
+  text-align: right;
+}
+
+.slash-command-menu-item.is-selected .slash-command-menu-usage,
+.slash-command-menu-item.is-selected .slash-command-menu-desc {
+  color: var(--vscode-list-activeSelectionDescriptionFg);
+}
+
+.slash-command-menu-status {
+  padding: 6px 10px;
+  color: var(--vscode-text-muted);
+}
+
+.slash-command-menu-hint {
+  margin-top: 4px;
+  padding: 4px 10px 2px;
+  border-top: 1px solid var(--vscode-border);
+  color: var(--vscode-text-subtle);
+  font-size: 11px;
+}
+
+/* The window a `/` command answers in (SlashCommandOutputModal.jsx). */
+.slash-command-output-name {
+  font-family: var(--vscode-editor-font-family);
+}
+
+.slash-command-output-body {
+  flex: 1;
+  min-height: 80px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.slash-command-output-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--vscode-text-muted);
+}
+
+.slash-command-output-error {
+  color: var(--vscode-fg-danger);
 }
 
 /* Chat composer toolbar and effort / heartbeat mode selector */
@@ -4331,6 +4438,88 @@ select {
   color: var(--vscode-descriptionForeground, #858585);
   padding: 0;
   border: none;
+}
+
+/* Where the agent's context was compacted into a summary (/compact). */
+.chat-compaction-divider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 14px 0;
+  clear: both;
+}
+
+.chat-compaction-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.chat-compaction-rule {
+  flex: 1;
+  height: 0;
+  border-top: 1px dashed var(--vscode-border, rgba(255, 255, 255, 0.18));
+}
+
+.chat-compaction-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+  min-width: 0;
+  max-width: 80%;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground, #858585);
+  text-align: center;
+}
+
+.chat-compaction-stats {
+  opacity: 0.8;
+}
+
+.chat-compaction-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 85%;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground, #858585);
+  text-align: center;
+  word-break: break-word;
+}
+
+.chat-compaction-warning {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+}
+
+.chat-compaction-summary {
+  width: 100%;
+  font-size: 12px;
+}
+
+.chat-compaction-summary > summary {
+  cursor: pointer;
+  text-align: center;
+  font-size: 11px;
+  color: var(--vscode-textLink-foreground, #3794ff);
+  list-style: none;
+}
+
+.chat-compaction-summary > summary::-webkit-details-marker {
+  display: none;
+}
+
+.chat-compaction-summary-body {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-left: 2px solid var(--vscode-border, rgba(255, 255, 255, 0.18));
+  background: var(--vscode-badge-background, rgba(255, 255, 255, 0.04));
+  border-radius: 4px;
+  max-height: 420px;
+  overflow: auto;
 }
 
 .chat-msg-badge-waiting {

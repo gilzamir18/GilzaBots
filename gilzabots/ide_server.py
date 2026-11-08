@@ -2943,6 +2943,42 @@ class AsyncHTTPServer:
                 "status": "ok", "chat_id": chat_id, "reasoning_effort": stored,
             }).encode(), "application/json")
 
+        elif path == '/api/chat/model' and method == 'POST':
+            # The model one chat runs on, for one role ("model" = orchestrator,
+            # "worker_model"). Empty clears it, so the chat follows the project's
+            # default and then the catalog's global default. Read from the store
+            # when the next turn builds its orchestrator, like the effort above.
+            from gilzabots.config import DEFAULT_DB_PATH
+            from gilzabots.project import ChatNotFoundError, ProjectStore
+            store = ProjectStore(db_path=DEFAULT_DB_PATH)
+            project_name = data.get("project_name")
+            chat_id = data.get("chat_id")
+            role = data.get("role")
+            if not project_name or not chat_id or not role or "model" not in data:
+                self.send_response(writer, 400, b'{"error":"project_name, chat_id, role and model required"}', "application/json")
+                return
+            try:
+                previous = store.list_chat_models(project_name).get(chat_id, {}).get(role, "")
+                stored = store.set_chat_model(project_name, chat_id, role, data.get("model"))
+            except ChatNotFoundError as e:
+                self.send_response(writer, 404, json.dumps({"error": str(e)}).encode(), "application/json")
+                return
+            except ValueError as e:
+                self.send_response(writer, 400, json.dumps({"error": str(e)}).encode(), "application/json")
+                return
+            # Same pre-fetch as a project model change (§2.8): only on an actual
+            # change, and only for a model served by the local Ollama.
+            if stored and stored != previous and stored.startswith("ollama/"):
+                from gilzabots.config import is_local_model
+                from gilzabots.models_store import get_model
+                entry = get_model(stored) or {}
+                if is_local_model(stored, entry.get("api_base", "")):
+                    from gilzabots.ollama_manager import pull_model_in_background
+                    pull_model_in_background(stored.split("ollama/", 1)[1])
+            self.send_response(writer, 200, json.dumps({
+                "status": "ok", "chat_id": chat_id, "role": role, "model": stored,
+            }).encode(), "application/json")
+
         elif path == '/api/chat/branch' and method == 'POST':
             from gilzabots.config import DEFAULT_DB_PATH
             from gilzabots.project import ProjectStore
@@ -3159,8 +3195,15 @@ class AsyncHTTPServer:
             # Each chat carries its own reasoning effort ("" = follow the model
             # catalog), so the composer can show it without a request per chat.
             efforts = store.list_chat_reasoning_efforts(project_name)
+            # Likewise its models ("" = follow the project's default).
+            chat_models = store.list_chat_models(project_name)
             chats = [
-                {**chat, "reasoning_effort": efforts.get(chat.get("id"), "")}
+                {
+                    **chat,
+                    "reasoning_effort": efforts.get(chat.get("id"), ""),
+                    "model": chat_models.get(chat.get("id"), {}).get("model", ""),
+                    "worker_model": chat_models.get(chat.get("id"), {}).get("worker_model", ""),
+                }
                 for chat in (project.chats or [])
             ]
             self.send_response(writer, 200, json.dumps({
@@ -3245,7 +3288,11 @@ class AsyncHTTPServer:
                 return
             chat_id = str(uuid.uuid4())
             effort = store.create_chat(project_name, chat_id, chat_name)
-            self.send_response(writer, 200, json.dumps({"id": chat_id, "name": chat_name, "reasoning_effort": effort}).encode(), "application/json")
+            # A new chat names no model: it follows the project's default.
+            self.send_response(writer, 200, json.dumps({
+                "id": chat_id, "name": chat_name, "reasoning_effort": effort,
+                "model": "", "worker_model": "",
+            }).encode(), "application/json")
 
         # 6a-bis. Built-in tutorial chat.
         #
@@ -3551,6 +3598,12 @@ class AsyncHTTPServer:
                 "compile_on_save_full": getattr(project, "compile_on_save_full", False),
             }
             self.send_response(writer, 200, json.dumps(res_data).encode(), "application/json")
+
+        # 6b'. Slash Command catalog (the chat composer's `/` completion menu)
+        elif path == '/api/gilzabots/slash-commands' and method == 'GET':
+            from gilzabots.agent_stdin import list_slash_commands
+            payload = {"commands": list_slash_commands(query.get('projectPath', [''])[0])}
+            self.send_response(writer, 200, json.dumps(payload).encode('utf-8'), "application/json")
 
         # 6c. Slash Command
         elif path == '/api/gilzabots/slash-command' and method == 'POST':
@@ -4505,6 +4558,18 @@ class AsyncHTTPServer:
             except Exception as e:
                 self.send_response(writer, 500, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
                 
+        elif path == '/api/settings/models/default' and method == 'POST':
+            # Marks the global default model: what a chat runs on when neither
+            # the chat nor its project names a model.
+            from gilzabots.models_store import set_default_model
+            try:
+                model = set_default_model(str(data.get("id") or ""))
+                self.send_response(writer, 200, json.dumps({"success": True, "model": model}).encode('utf-8'), "application/json")
+            except ValueError as e:
+                self.send_response(writer, 400, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
+            except Exception as e:
+                self.send_response(writer, 500, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
+
         elif path == '/api/settings/models/load-local-ollama' and method == 'POST':
             from gilzabots.models_store import (
                 LocalOllamaNotInstalledError,
@@ -4741,13 +4806,27 @@ class AsyncHTTPServer:
                         "files": len(template_entries(match)),
                     }).encode('utf-8'), "application/json")
                     return
-                summary = install_asset(match, project_path)
+                # The skills it requires come with it and are activated with it
+                # (`requires` in the asset's metadata): a skill that loads one
+                # the project lacks would fail only when the user runs it.
+                from gilzabots.assetstore import install_skill_with_requirements, skill_requirements
+                installed = install_skill_with_requirements(match, project_path)
                 skill_name = match.get('name', asset_id)
                 declared = read_skills_yaml(project_path) or []
-                if skill_name not in declared and skill_name not in MANDATORY_SKILLS:
-                    declared.append(skill_name)
-                    write_skills_yaml(project_path, declared)
-                self.send_response(writer, 200, json.dumps({"success": True, "message": summary}).encode('utf-8'), "application/json")
+                # Every requirement is activated, including one the project
+                # already had and that was therefore not installed again.
+                names = [str(r.get('name') or r.get('id')) for r in skill_requirements(match)] + [skill_name]
+                for name in names:
+                    if name not in declared and name not in MANDATORY_SKILLS:
+                        declared.append(name)
+                write_skills_yaml(project_path, declared)
+                summary = "; ".join(message for _, message in installed)
+                self.send_response(writer, 200, json.dumps({
+                    "success": True,
+                    "message": summary,
+                    "installed": [name for name, _ in installed],
+                    "skill": skill_name,
+                }).encode('utf-8'), "application/json")
             except Exception as e:
                 self.send_response(writer, 500, json.dumps({"error": str(e)}).encode('utf-8'), "application/json")
 
@@ -5825,7 +5904,7 @@ class AsyncHTTPServer:
             self.send_response(writer, 200, json.dumps({
                 "previous_run_failures": _STARTUP_DIAGNOSTICS.get("previous_run_failures", []),
                 "crash_log_path": _STARTUP_DIAGNOSTICS.get("crash_log_path", ""),
-                "webengine_gpu": _STARTUP_DIAGNOSTICS.get("webengine_gpu", "auto"),
+                "webengine_gpu": _STARTUP_DIAGNOSTICS.get("webengine_gpu", "off"),
             }).encode('utf-8'), "application/json")
 
         # 7q. LaTeX settings — GET

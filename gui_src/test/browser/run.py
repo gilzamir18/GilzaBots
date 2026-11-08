@@ -893,6 +893,127 @@ async def check_chat_message_edit(page: Page, check: Checks) -> None:
           await page.js(f"!({MESSAGE_EDITOR_JS}) && window.__editCalls.length === 2"))
 
 
+CHAT_HISTORY_JS = "document.querySelector('.vscode-chat-history')"
+
+# Where things sit in the chat history's viewport, in viewport pixels.
+CHAT_SCROLL_STATE_JS = f"""(() => {{
+  const h = {CHAT_HISTORY_JS};
+  const top = h.getBoundingClientRect().top;
+  const rows = h.querySelectorAll('[data-chat-msg-index]');
+  const last = rows[rows.length - 1];
+  const live = h.querySelector('pre.chat-stream-raw');
+  return {{
+    scrollTop: h.scrollTop,
+    fromBottom: h.scrollHeight - h.scrollTop - h.clientHeight,
+    lastMessageTop: last ? last.getBoundingClientRect().top - top : null,
+    liveResponseTop: live ? live.getBoundingClientRect().top - top : null,
+  }};
+}})()"""
+
+
+def long_text(label: str, lines: int) -> str:
+    return "\n\n".join(f"{label} paragraph {n}: " + "words " * 12 for n in range(lines))
+
+
+async def check_chat_reply_scroll(page: Page, check: Checks) -> None:
+    """A reply is read from its start, not from its end.
+
+    The history used to follow the bottom for the whole turn, so a reply
+    taller than the panel landed with its last line in view and the user had
+    to scroll back up to find where it began. What needs a browser is the
+    geometry: where the reply's first line actually ends up once the panel has
+    laid it out.
+    """
+    base = page.url.split(HARNESS_PATH)[0]
+    await page.cmd("Page.navigate", {"url": f"{base}{CHAT_PATH}"})
+    if not await wait_js(page, f"!!window.__ready && !!window.__turn && !!{CHAT_HISTORY_JS}", timeout=30):
+        check("chat harness loads", False, "the turn controls never appeared")
+        return
+
+    older = []
+    for n in range(12):
+        older.append({"role": "user", "content": f"Old question {n}"})
+        older.append({"role": "assistant", "content": long_text(f"Old answer {n}", 3)})
+    await page.js(f"window.__turn.setMessages({json.dumps(older)})")
+    await asyncio.sleep(1.0)
+
+    async def state():
+        return await page.js(CHAT_SCROLL_STATE_JS)
+
+    async def send(question: str) -> None:
+        await page.js(
+            f"window.__turn.setMessages(prev => [...prev, {json.dumps({'role': 'user', 'content': question})}]);"
+            " window.__turn.setRunning(true);"
+        )
+        await asyncio.sleep(1.0)  # the smooth scroll to the new message
+
+    async def stream(label: str, lines: int) -> None:
+        text = ""
+        for n in range(lines):
+            text += ("\n\n" if text else "") + f"{label} paragraph {n}: " + "words " * 12
+            await page.js(f"window.__turn.setResponse({json.dumps(text)})")
+            await asyncio.sleep(0.03)
+        await asyncio.sleep(SETTLE)
+
+    async def answer(content: str) -> None:
+        reply = {"role": "assistant", "content": content}
+        await page.js(
+            "window.__turn.setResponse('');"
+            f" window.__turn.setMessages(prev => [...prev, {json.dumps(reply)}]);"
+        )
+        await asyncio.sleep(SETTLE)
+        await page.js("window.__turn.setRunning(false)")
+        await asyncio.sleep(SETTLE)
+
+    # Anchored means the first line sits just under the top edge (the 8px
+    # margin, times whatever zoom the panel carries), not at the bottom.
+    def at_top(offset) -> bool:
+        return offset is not None and 0 <= offset <= 24
+
+    await send("A question with a long answer")
+    now = await state()
+    check("sending a message shows it at the bottom", now["fromBottom"] <= 48, f"state={now}")
+
+    await stream("Streamed", 80)
+    now = await state()
+    check("a long streamed reply stops at its first line",
+          at_top(now["liveResponseTop"]) and now["fromBottom"] > 200, f"state={now}")
+
+    await answer(long_text("Final", 80))
+    now = await state()
+    check("the finished reply opens at its start",
+          at_top(now["lastMessageTop"]) and now["fromBottom"] > 200, f"state={now}")
+
+    await send("A question with a short answer")
+    await stream("Short", 2)
+    await answer("A short answer.")
+    now = await state()
+    check("a short reply is shown whole at the bottom", now["fromBottom"] <= 48, f"state={now}")
+
+    await send("A question whose answer the user scrolls away from")
+    await stream("Partial", 10)
+    await page.js(f"{CHAT_HISTORY_JS}.scrollTop = 0")
+    await asyncio.sleep(SETTLE)
+    await stream("Partial", 60)
+    await answer(long_text("Ignored", 60))
+    now = await state()
+    check("a user who scrolled away is left there", now["scrollTop"] <= 2, f"state={now}")
+
+    # Ctrl+= zooms the history with CSS `zoom`, which changes the units its
+    # geometry is reported in; the anchor must still land on the first line.
+    await page.js(f"{CHAT_HISTORY_JS}.style.zoom = '1.5'")
+    await page.js(f"{CHAT_HISTORY_JS}.scrollTop = {CHAT_HISTORY_JS}.scrollHeight")
+    await asyncio.sleep(SETTLE)
+    await send("A question asked with the chat zoomed in")
+    await stream("Zoomed", 60)
+    await answer(long_text("Zoomed final", 60))
+    now = await state()
+    check("a zoomed chat also opens the reply at its start",
+          now["lastMessageTop"] is not None and 0 <= now["lastMessageTop"] <= 36
+          and now["fromBottom"] > 200, f"state={now}")
+    await page.js(f"{CHAT_HISTORY_JS}.style.zoom = ''")
+
+
 async def check_editor_file_switch(page: Page, check: Checks) -> None:
     """Monaco shows the file the tab names, even when the switch keeps focus.
 
@@ -1000,6 +1121,122 @@ async def check_editor_file_switch(page: Page, check: Checks) -> None:
           f"text {now['text'][-30:]!r}")
 
 
+COMPOSER_JS = "document.querySelector('.vscode-chat-form textarea.vscode-chat-textarea')"
+SLASH_MENU_JS = """(() => {
+  const menu = document.querySelector('.slash-command-menu');
+  if (!menu) return null;
+  const items = [...menu.querySelectorAll('.slash-command-menu-item')];
+  const r = menu.getBoundingClientRect();
+  return {
+    names: items.map(i => i.querySelector('.slash-command-menu-name').textContent),
+    selected: items.findIndex(i => i.classList.contains('is-selected')),
+    top: r.top, bottom: r.bottom, height: r.height,
+    composerTop: document.querySelector('.vscode-chat-input-row').getBoundingClientRect().top,
+  };
+})()"""
+
+
+async def check_chat_slash_menu(page: Page, check: Checks) -> None:
+    """Typing `/` opens a command list; a command never becomes a message.
+
+    The composer used to send `/help` as text, and the panel wrote the command
+    and its output into the conversation. What only a browser can show is that
+    the list is on screen above the composer and that the keys reach it while
+    the textarea keeps the focus: arrows must move the highlight instead of the
+    caret, and Enter must run the command instead of submitting the form.
+    """
+    base = page.url.split(HARNESS_PATH)[0]
+    await page.cmd("Page.navigate", {"url": f"{base}{CHAT_PATH}"})
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        if await page.js(f"!!window.__ready && !!({COMPOSER_JS})"):
+            break
+        await asyncio.sleep(0.2)
+    else:
+        check("chat harness loads", False, "the composer never rendered")
+        return
+    await asyncio.sleep(0.3)
+    box = await page.js(
+        f"(() => {{ const r = ({COMPOSER_JS}).getBoundingClientRect();"
+        " return {x: r.left + r.width / 2, y: r.top + r.height / 2}; })()"
+    )
+    await page.click(box["x"], box["y"])
+    await asyncio.sleep(SETTLE)
+
+    async def menu():
+        return await page.js(SLASH_MENU_JS)
+
+    async def clear_composer():
+        await page.chord("a", "KeyA", 65)
+        await page.key("Backspace", 8)
+        await asyncio.sleep(SETTLE)
+
+    await page.type_text("/")
+    await asyncio.sleep(0.6)
+    shown = await menu()
+    check("a bare slash opens the command list",
+          bool(shown) and shown["names"] == ["/help", "/cost", "/rename", "/compact"], f"menu={shown}")
+    if not shown:
+        return
+    check("the list sits above the composer, on screen",
+          shown["height"] > 0 and shown["top"] >= 0 and shown["bottom"] <= shown["composerTop"] + 8,
+          f"menu={shown}")
+
+    await page.type_text("co")
+    await asyncio.sleep(SETTLE)
+    shown = await menu()
+    check("typing narrows it, prefix matches first",
+          shown and shown["names"] == ["/cost", "/compact"] and shown["selected"] == 0, f"menu={shown}")
+
+    await page.key("ArrowDown", 40, code="ArrowDown")
+    await asyncio.sleep(SETTLE)
+    shown = await menu()
+    check("ArrowDown moves the highlight", shown and shown["selected"] == 1, f"menu={shown}")
+    check("the input keeps the focus", await page.js(f"document.activeElement === ({COMPOSER_JS})"))
+
+    await page.key("Enter", 13, text="\r")
+    await asyncio.sleep(SETTLE)
+    runs = await page.js("window.__slashRuns")
+    check("Enter runs the highlighted command", runs == ["/compact"], f"runs={runs}")
+    check("as a command, not as a message",
+          await page.js("window.__sentFromComposer.length === 0 && window.__composerText() === ''"))
+    check("and the list closes", await menu() is None)
+
+    await page.type_text("/ren")
+    await asyncio.sleep(SETTLE)
+    await page.key("Enter", 13, text="\r")
+    await asyncio.sleep(SETTLE)
+    check("a command that needs an argument is put in the box instead",
+          await page.js("window.__composerText()") == "/rename "
+          and await page.js("window.__slashRuns.length") == 1,
+          f"composer={await page.js('window.__composerText()')!r}")
+    check("and the list closes while the arguments are typed", await menu() is None)
+
+    await clear_composer()
+    await page.type_text("/he")
+    await asyncio.sleep(SETTLE)
+    await page.key("Tab", 9, code="Tab")
+    await asyncio.sleep(SETTLE)
+    check("Tab completes the name with room for arguments",
+          await page.js("window.__composerText()") == "/help "
+          and await page.js(f"document.activeElement === ({COMPOSER_JS})"),
+          f"composer={await page.js('window.__composerText()')!r}")
+
+    await clear_composer()
+    await page.type_text("/")
+    await asyncio.sleep(SETTLE)
+    await page.key("Escape", 27, code="Escape")
+    await asyncio.sleep(SETTLE)
+    check("Escape closes the list and keeps the text",
+          await menu() is None and await page.js("window.__composerText()") == "/")
+
+    await clear_composer()
+    await page.type_text("and/or")
+    await asyncio.sleep(SETTLE)
+    check("a slash inside prose opens nothing", await menu() is None)
+    await clear_composer()
+
+
 SUITE = (
     check_terminal_selection,
     check_pdf_tab_switch,
@@ -1007,6 +1244,8 @@ SUITE = (
     check_pdf_lookup,
     check_pdf_translation_popup,
     check_chat_message_edit,
+    check_chat_reply_scroll,
+    check_chat_slash_menu,
     check_editor_file_switch,
 )
 

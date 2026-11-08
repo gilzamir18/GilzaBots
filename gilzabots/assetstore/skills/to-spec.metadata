@@ -1,0 +1,6 @@
+desc: 'Turn the current conversation into a spec and publish it to the project''s
+  issue tracker: no interview, just synthesis of what was already discussed.'
+id: to-spec
+name: to-spec
+pack: engineering-workflow
+type: skill

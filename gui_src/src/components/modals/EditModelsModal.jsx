@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Search, Plus, Trash2, Edit2, RefreshCw } from 'lucide-react';
+import { X, Search, Plus, Trash2, Edit2, RefreshCw, Star } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useCustomDialog } from './CustomDialogProvider';
 import OpenRouterOAuthButton from './OpenRouterOAuthButton';
@@ -11,7 +11,8 @@ export default function EditModelsModal({
   onEditModel,
   onAddModel,
   onManageConnections,
-  onLoadLocalOllama
+  onLoadLocalOllama,
+  onSetDefaultModel
 }) {
   const { t } = useTranslation();
   const { showConfirm } = useCustomDialog();
@@ -109,6 +110,7 @@ export default function EditModelsModal({
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--vscode-widget-border)', background: 'var(--vscode-editor-inactiveSelectionBackground)' }}>
+                    <th style={{ padding: '8px', textAlign: 'center', whiteSpace: 'nowrap' }} title={t('editModelsModal.defaultColumnHint')}>{t('editModelsModal.defaultColumn')}</th>
                     <th style={{ padding: '8px', textAlign: 'left', whiteSpace: 'nowrap' }}>{t('editModelsModal.provider')}</th>
                     <th style={{ padding: '8px', textAlign: 'left', whiteSpace: 'nowrap' }}>{t('editModelsModal.modelName')}</th>
                     <th style={{ padding: '8px', textAlign: 'left', whiteSpace: 'nowrap' }}>ID</th>
@@ -122,6 +124,28 @@ export default function EditModelsModal({
                 <tbody>
                   {filteredModels.map((model) => (
                     <tr key={model.id} style={{ borderBottom: '1px solid var(--vscode-widget-border)' }} title={model.api_base ? `${t('editModelsModal.apiBaseUrl', 'API Base URL')}: ${model.api_base}` : undefined}>
+                      <td style={{ padding: '8px', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        {/* The global default: what a chat runs on when neither the chat nor its project names a model. */}
+                        {model.is_default ? (
+                          <span
+                            title={t('editModelsModal.isDefault')}
+                            aria-label={t('editModelsModal.isDefault')}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--vscode-textLink-foreground)' }}
+                          >
+                            <Star size={14} fill="currentColor" />
+                            {t('editModelsModal.defaultBadge')}
+                          </span>
+                        ) : (
+                          <button
+                            className="vscode-icon-button"
+                            title={t('editModelsModal.setAsDefault')}
+                            aria-label={t('editModelsModal.setAsDefault')}
+                            onClick={() => onSetDefaultModel?.(model.id)}
+                          >
+                            <Star size={14} />
+                          </button>
+                        )}
+                      </td>
                       <td style={{ padding: '8px', whiteSpace: 'nowrap' }}>{model.connection_label || model.provider}</td>
                       <td style={{ padding: '8px' }}>{model.name}</td>
                       <td style={{ padding: '8px', color: 'var(--vscode-descriptionForeground)' }}>{model.id}</td>

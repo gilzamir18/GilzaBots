@@ -71,7 +71,7 @@ def test_oversized_log_routes_the_orchestrator_to_a_skill(tmp_path, monkeypatch)
     target.write_text("x" * 400_000, encoding="utf-8")
     _use_window(monkeypatch, num_ctx=128000, used_tokens=120_000)
     monkeypatch.setattr(tools, "_resolve_path", lambda p: str(target))
-    monkeypatch.setattr(tools, "_IN_SKILL_WORKER", False)
+    tools.set_worker_context(False)
 
     with pytest.raises(ValueError) as excinfo:
         _read_file(str(target))
@@ -89,10 +89,12 @@ def test_oversized_log_does_not_tell_a_worker_to_use_run_skill(tmp_path, monkeyp
     target.write_text("x" * 400_000, encoding="utf-8")
     _use_window(monkeypatch, num_ctx=128000, used_tokens=120_000)
     monkeypatch.setattr(tools, "_resolve_path", lambda p: str(target))
-    monkeypatch.setattr(tools, "_IN_SKILL_WORKER", True)
-
-    with pytest.raises(ValueError) as excinfo:
-        _read_file(str(target))
+    tools.set_worker_context(True)
+    try:
+        with pytest.raises(ValueError) as excinfo:
+            _read_file(str(target))
+    finally:
+        tools.set_worker_context(False)
 
     message = str(excinfo.value)
     assert "large data/log file" in message
@@ -102,9 +104,9 @@ def test_oversized_log_does_not_tell_a_worker_to_use_run_skill(tmp_path, monkeyp
 
 def test_worker_context_flag_round_trips():
     tools.set_worker_context(True)
-    assert tools._IN_SKILL_WORKER is True
+    assert tools.in_helper_context() is True
     tools.set_worker_context(False)
-    assert tools._IN_SKILL_WORKER is False
+    assert tools.in_helper_context() is False
 
 
 def test_exhausted_window_reports_exhaustion_rather_than_paging(tmp_path, monkeypatch):

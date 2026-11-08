@@ -230,10 +230,12 @@ def test_a_worker_is_told_to_convert_an_unreadable_file_itself(tmp_path, monkeyp
     target = tmp_path / "old.xls"
     target.write_bytes(b"\xd0\xcf\x11\xe0\x00\x00legacy")
     _prepare(monkeypatch, target)
-    monkeypatch.setattr(tools, "_IN_SKILL_WORKER", True)
-
-    with pytest.raises(ValueError) as excinfo:
-        _read_file(str(target))
+    tools.set_worker_context(True)
+    try:
+        with pytest.raises(ValueError) as excinfo:
+            _read_file(str(target))
+    finally:
+        tools.set_worker_context(False)
     message = str(excinfo.value)
     assert "You have run_command" in message
     assert "run_skill" not in message
@@ -296,10 +298,12 @@ def test_a_missing_file_tells_a_helper_where_it_may_write(tmp_path, monkeypatch)
     """A helper writes only its scratch area; a project file goes in its report."""
     target = _prepare_missing(monkeypatch, tmp_path)
     monkeypatch.setattr(tools, "_ORCHESTRATOR_HAS_TERMINAL", False)
-    monkeypatch.setattr(tools, "_IN_SKILL_WORKER", True)
-
-    with pytest.raises(ValueError) as excinfo:
-        _read_file(str(target))
+    tools.set_worker_context(True)
+    try:
+        with pytest.raises(ValueError) as excinfo:
+            _read_file(str(target))
+    finally:
+        tools.set_worker_context(False)
     message = str(excinfo.value)
     assert "'.gilzabots/'" in message
     assert "report" in message

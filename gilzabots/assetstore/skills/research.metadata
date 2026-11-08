@@ -1,0 +1,7 @@
+desc: Investigate a question against high-trust primary sources and save the findings
+  as a cited Markdown file in the project. Use when the user wants a topic researched,
+  docs or API facts gathered, or reading legwork delegated to a background agent.
+id: research
+name: research
+pack: engineering-workflow
+type: skill

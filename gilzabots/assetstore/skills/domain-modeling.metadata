@@ -1,0 +1,6 @@
+desc: Build and sharpen a project's domain model. Use when discussing project terminology,
+  writing or editing GLOSSARY.md, or recording or editing an ADR.
+id: domain-modeling
+name: domain-modeling
+pack: engineering-workflow
+type: skill

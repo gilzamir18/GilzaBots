@@ -1,0 +1,12 @@
+desc: Plan a huge chunk of work (more than one session can hold) as a shared map of
+  decision tickets on the issue tracker, and resolve them one at a time until the
+  way to the destination is clear.
+id: wayfinder
+name: wayfinder
+pack: engineering-workflow
+requires:
+- grilling
+- domain-modeling
+- research
+- prototype
+type: skill

@@ -376,6 +376,15 @@ especializadas à IA.
   versão embutida de mesmo nome. Se o catálogo for atualizado, a Asset Store detecta a
   diferença e exibe o botão **"Atualizar cópia local"**. Para voltar à versão que vem de
   fábrica com o GilzaBots, basta clicar em **"Restaurar embutida"**.
+- **Skills que precisam de outras skills** — algumas skills carregam outras enquanto
+  trabalham. Instalar uma delas também instala e ativa as que ela precisa (uma cópia
+  que você já tenha fica como está).
+- **Duas formas de uma skill rodar** — o agente escolhe a skill sozinho quando o seu
+  pedido combina com a descrição dela, ou você a roda digitando **`/nome`** no chat,
+  seguido do que ela deve trabalhar (`/grill-with-docs meu plano`). Digitar `/` lista os
+  comandos e, marcadas como **skill**, as skills que você pode rodar. Algumas skills só
+  rodam assim: o agente nem as vê até você digitá-las. Veja o tópico das skills de
+  engenharia, logo abaixo.
 
 ### 2. Templates LaTeX (aba `Templates LaTeX`)
 
@@ -387,6 +396,94 @@ livros, apresentações Beamer, currículos).
 - **Detecção de conflitos e segurança** — se algum arquivo do template já existir no seu
   projeto, o GilzaBots detecta o conflito, avisa você, lista os arquivos concorrentes e
   pede confirmação explícita antes de sobrescrever.
+
+## skill-pack :: Como uso as skills de engenharia (grill-with-docs, tdd, code-review…)?
+
+A Asset Store traz um pacote de 26 skills para planejar e construir software, adaptadas
+das skills de Matt Pocock (licença MIT). Elas levam você de uma ideia até código testado
+e revisado, em passos pequenos e deliberados.
+
+### Instalando
+
+- **Na janela:** Asset Store → Skills → Catálogo → instale a skill. As skills de que ela
+  precisa vêm junto, e todas são ativadas no projeto.
+- **No terminal:** `/load_asset skill grill-with-docs` instala a skill e o que ela
+  precisa; depois ative cada uma com `/addskill` (aqui: `grilling`, `domain-modeling`,
+  `grill-with-docs`).
+
+As skills instaladas ficam em `<projeto>/.gilzabots/skills/`. `/skills` lista todas.
+
+### Rodando uma skill
+
+Digite `/` no chat, escolha a skill e escreva depois do nome o que ela deve trabalhar:
+
+```
+/grill-with-docs quero exportar os chats para PDF
+```
+
+A linha que você digitou fica no chat; o agente recebe as instruções da skill junto com
+o seu texto. Algumas skills (as que *conduzem* um fluxo, como `grill-with-docs`,
+`to-spec` ou `implement`) rodam **só** quando você as digita. Outras (`tdd`,
+`code-review`, `diagnosing-bugs`, `prototype`, `research`…) também podem ser escolhidas
+pelo próprio agente quando o pedido combina, e os fluxos acima as carregam no caminho.
+
+Se não souber qual usar, rode **`/which-skill o que você quer fazer`**: ela indica o
+fluxo e avisa quais skills ainda faltam instalar.
+
+### O fluxo principal: ideia → código entregue
+
+1. **`/grill-with-docs <ideia>`** — uma entrevista em rodadas. Cada rodada traz
+   perguntas numeradas com uma resposta recomendada (➡️); responda todas de uma vez
+   ("1 sim, 2 não, prefiro X"). O agente procura sozinho os fatos no código e na web e só
+   pergunta a você o que é decisão. No caminho, registra os termos do projeto no
+   `GLOSSARY.md` e oferece registrar decisões difíceis de reverter como ADRs em
+   `docs/adr/`. Termina quando não sobra pergunta e confirma com você antes de agir.
+2. **`/to-spec`** — transforma a conversa numa especificação (sem novas perguntas).
+3. **`/to-tickets`** — divide em tickets pequenos, cada um dizendo quais o bloqueiam.
+4. **`/implement`** — constrói com testes primeiro (`tdd`) e fecha com uma revisão em
+   dois eixos (`code-review`: os padrões do projeto e a especificação), depois faz o
+   commit.
+5. **`/retro`** — ao final, sugere melhorias no ambiente do agente (verificações,
+   `AGENTS.md`, padrões de código).
+
+Mantenha os passos 1–3 **no mesmo chat**, para a especificação e os tickets partirem do
+mesmo raciocínio. Antes do primeiro `/to-spec`, rode uma vez
+**`/setup-engineering-skills`**: ela pergunta onde ficam os tickets (GitHub, GitLab ou
+arquivos locais em `.scratch/`) e registra isso em `docs/agents/` e no `AGENTS.md`.
+
+### As outras skills
+
+- **Entrevistas:** `/grill-me` (a mesma entrevista, sem gravar arquivos), `grilling` (a
+  rotina de entrevista que as outras usam), `/to-questionnaire` (um questionário para
+  quem sabe o que você não sabe), `/wait-what` (reexplica a última mensagem com
+  palavras simples).
+- **Construir e corrigir:** `tdd`, `diagnosing-bugs` (bugs difíceis: primeiro monta uma
+  reprodução que falha, depois corrige com um teste de regressão), `code-review`,
+  `prototype` (código descartável que responde a uma dúvida de design), `pr` (o formato
+  da descrição de um pull request), `wizard` (um script que guia *você* pelos passos que
+  só uma pessoa pode fazer, como criar chaves de API).
+- **Planejar trabalho grande:** `/wayfinder` (um mapa de tickets de decisão para
+  trabalho grande demais para uma sessão), `/triage` (organiza issues que chegam e
+  escreve briefings que um agente consegue executar), `/improve-codebase-architecture`
+  (um relatório visual de oportunidades de refatoração).
+- **Conhecimento:** `research` (lê fontes primárias em segundo plano e salva uma nota
+  com citações), `domain-modeling` (o glossário e os ADRs), `codebase-design`
+  (vocabulário para projetar módulos), `/teach` (aprender um assunto ao longo de várias
+  sessões), `/handoff` (um resumo para outra sessão ou outro agente),
+  `writing-for-agents` (como escrever skills e o `AGENTS.md`).
+
+### Bom saber
+
+- O **`AGENTS.md`** na raiz do projeto é lido pelo agente a cada turno: coloque nele as
+  instruções permanentes do projeto (como rodar os testes, convenções).
+- Várias skills iniciam **subagentes**: agentes auxiliares que só leem (arquivos, Git, a
+  web) e devolvem um relatório, vários ao mesmo tempo. Eles nunca alteram seus arquivos;
+  o log de atividade os mostra como `subagent:…`.
+- Quando um fluxo diz para começar do zero, abra um **novo chat** (Novo Chat no painel
+  de chat, ou `/chat new <nome>`). **Não** use `/clear`: no GilzaBots ele apaga todos os
+  chats do projeto.
+- Se uma skill responder "installed but not active", ative-a com `/addskill <nome>` ou na
+  aba *Ativas no projeto* da Asset Store.
 
 ## local-models :: Dicas para modelos locais (Ollama)
 
@@ -854,8 +951,11 @@ corrigidas em vez de recomeçar do zero.
 
 **Comandos de barra** — mensagens que começam com `/` são comandos do GilzaBots, e não
 prompts: `/help`, `/clear`, `/skills`, `/models`, `/set-main-model <id>`,
-`/set-worker-model <id>`, `/undo`, `/commit <msg>`, entre outros. Digite `/help` para ver
-a lista completa.
+`/set-worker-model <id>`, `/undo`, `/commit <msg>`, entre outros. Digitar `/` abre uma
+lista dos comandos que se estreita conforme você digita: ↑/↓ para escolher, Enter para
+executar (um comando que precisa de argumento vai para a caixa para você completar),
+Tab para completar, Esc para fechar a lista. A saída de um comando abre em uma janela
+própria e nunca é adicionada à conversa.
 
 ## command-line :: Posso usar o GilzaBots pelo terminal, sem a janela?
 

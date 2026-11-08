@@ -1,0 +1,10 @@
+desc: Scan a codebase for deepening opportunities, present them as a visual HTML report,
+  then grill through whichever one you pick.
+id: improve-codebase-architecture
+name: improve-codebase-architecture
+pack: engineering-workflow
+requires:
+- codebase-design
+- grilling
+- domain-modeling
+type: skill

@@ -565,7 +565,7 @@ def _friendly_llm_error(exc: Exception, project=None) -> str:
     #print(f"\n[DEBUG ERROR TRACE] Caught Exception: {type(exc).__name__}")
     #print(f"[DEBUG ERROR TRACE] Raw Exception Message: {msg}\n")
     low = msg.lower()
-    model = getattr(project, "model", None) or "the configured model"
+    model = (_session_main_model(project) if project is not None else "") or "the configured model"
     api_base = getattr(project, "api_base", "") or ""
 
     if (
@@ -1812,7 +1812,7 @@ def _prepare_turn_attachments(
     """
     from gilzabots.config import model_supports_vision as _model_supports_vision
 
-    _model_name = (current_project.model if current_project else None) or ""
+    _model_name = _session_main_model(current_project) if current_project else ""
     _mp = getattr(current_project, "model_params", {}) or {}
     # LiteLLM's registry, or the user's `force_vision` for a local vision model
     # it does not list -- one rule, shared with the helper catalog.
@@ -1879,6 +1879,7 @@ def _prepare_turn_attachments(
     return prompt, final_attachments, attachment_aliases
 
 from gilzabots.config import DEFAULT_MODEL, DEFAULT_DB_PATH, sanitize_model_params
+from gilzabots.config import session_main_model as _session_main_model
 from gilzabots.project import ProjectStore, ProjectData
 from gilzabots.memgpt_runtime import build_chat_orchestrator
 from agenticblocks.blocks.llm.agent import AgentInput, LLMAgentBlock
@@ -2124,16 +2125,31 @@ async def handle_slash_command(data: dict) -> dict:
         await handle_load_project(data)
 
     from gilzabots.cli_commands import REPLState, _registry
+    from gilzabots.i18n import _ as _translate
     import gilzabots.terminal as T
 
     if cmd not in _registry:
-        return {"status": "done", "messages": [f"🔴 Comando desconhecido: {cmd}. Digite /help para ajuda."]}
+        # `/name` of a skill the user may run is a turn, not a command: the
+        # front-end sends it as a chat message (PROJECT_DESIGN 2.29).
+        from gilzabots.skill_invocation import SkillInvocationError, resolve_skill_invocation
+        from gilzabots.memgpt_runtime import main_agent_prompt_profile
+
+        project_path = data.get("project_path") or getattr(current_project, "project_path", "") or ""
+        try:
+            invocation = resolve_skill_invocation(
+                project_path, prompt, profile=main_agent_prompt_profile(current_project)
+                if current_project is not None else "full",
+            )
+        except SkillInvocationError as exc:
+            return {"status": "error", "messages": [f"🔴 {exc}"]}
+        if invocation is not None:
+            return {"status": "skill", "name": invocation.name}
+        return {"status": "error", "messages": [f"🔴 {_translate('unknown_command', cmd=cmd)}"]}
 
     # A terminal-only command reaching the GUI would run against a REPLState with
     # no renderer and report success for something that did not happen.
     if _registry.is_cli_only(cmd):
-        from gilzabots.i18n import _ as _translate
-        return {"status": "done", "messages": [f"🔴 {_translate('cli_command_cli_only', cmd=cmd)}"]}
+        return {"status": "error", "messages": [f"🔴 {_translate('cli_command_cli_only', cmd=cmd)}"]}
 
     messages = []
 
@@ -2262,11 +2278,14 @@ async def handle_slash_command(data: dict) -> dict:
     state    = REPLState(current_project, current_store)
     cmd_args = args[0].split() if args else []
 
+    failure: dict = {}
+
     async def _run_cmd():
         try:
             await _registry.dispatch(state, cmd, cmd_args)
         except Exception as e:
-            messages.append(f"🔴 Erro ao executar comando: {e}")
+            failure["error"] = str(e)
+            messages.append(f"🔴 {_translate('slash_command_failed', cmd=cmd, error=e)}")
         finally:
             _restore()
             if not confirm_future.done():
@@ -2277,22 +2296,33 @@ async def handle_slash_command(data: dict) -> dict:
     # Wait until command finishes OR pauses for confirmation
     signal = await confirm_future
 
+    def _finish() -> dict:
+        _close_literal_run()
+        # An empty text is reported as empty: the front-end says "no output" in
+        # the user's language instead of this module inventing a message.
+        response_text = "\n".join(m for m in messages if m is not None)
+        # A command may have erased the context the panel indicator was
+        # describing (/clear, /clear_chat). Return the occupancy that is true
+        # now — null once it was reset — so the indicator does not keep
+        # reporting a deleted conversation.
+        result = {
+            "status": "error" if failure else "done",
+            "messages": [response_text],
+            "context_usage": _current_context_usage(data.get("chat_id")),
+        }
+        if failure:
+            result["error"] = failure["error"]
+        if state.last_compaction:
+            result["compaction"] = state.last_compaction
+        return result
+
     if signal.get("needs_confirm"):
         # Store the running task so /slash-command/continue can resume it
-        _pending_slash_tasks[confirm_info["id"]] = (cmd_task, messages)
+        _pending_slash_tasks[confirm_info["id"]] = (cmd_task, _finish)
         return {"status": "confirm", **confirm_info}
 
     await cmd_task
-    _close_literal_run()
-    response_text = "\n".join(m for m in messages if m is not None) or f"Comando {cmd} concluído."
-    # A command may have erased the context the panel indicator was describing
-    # (/clear, /clear_chat). Return the occupancy that is true now — null once it
-    # was reset — so the indicator does not keep reporting a deleted conversation.
-    return {
-        "status": "done",
-        "messages": [response_text],
-        "context_usage": _current_context_usage(data.get("chat_id")),
-    }
+    return _finish()
 
 
 def _current_context_usage(chat_id: str | None) -> dict | None:
@@ -2354,15 +2384,58 @@ async def handle_slash_command_continue(data: dict) -> dict:
 
     entry = _pending_slash_tasks.pop(req_id, None)
     if entry:
-        cmd_task, messages = entry
-        try:
-            await cmd_task
-        except Exception:
-            pass
-        response_text = "\n".join(m for m in messages if m is not None) or "Comando executado com sucesso."
-        return {"status": "done", "messages": [response_text]}
+        cmd_task, finish = entry
+        # The task reports its own failure through `finish`; it never raises.
+        await cmd_task
+        # The same result shape as a command that needed no confirmation, so
+        # /clear's answer also carries the context occupancy it reset.
+        return finish()
 
     return {"status": "done", "messages": []}
+
+
+def list_slash_commands(project_path: str = "") -> list[dict]:
+    """The commands the desktop chat can run, for its `/` completion menu.
+
+    Read from the same registry ``handle_slash_command`` dispatches through, so
+    the menu can neither offer a command the door refuses (terminal-only ones
+    are left out) nor miss one that was added. Grouped in `/help`'s order.
+
+    With *project_path*, the skills the user may run there with `/name` follow
+    the commands (``kind: "skill"``), from the same resolution the turn engine
+    applies (`skill_invocation.invocable_skills`).
+    """
+    from gilzabots.cli_commands import _grouped_entries
+
+    commands = []
+    for group_key, entries in _grouped_entries(include_cli_only=False):
+        for entry in entries:
+            commands.append({
+                "name": entry["name"],
+                "aliases": list(entry["aliases"]),
+                "usage": entry["usage"],
+                "description": entry["description"],
+                "details": entry["details"],
+                "group": group_key,
+                "kind": "command",
+            })
+    if project_path:
+        from gilzabots.skill_invocation import invocable_skills
+
+        for skill in invocable_skills(project_path):
+            hint = str(skill.get("argument_hint") or "").strip()
+            commands.append({
+                "name": f"/{skill['name']}",
+                "aliases": [],
+                # Optional by construction: a skill always runs bare, so the
+                # hint is shown in brackets and Enter on the row runs it.
+                "usage": f"[{hint}]" if hint else "",
+                "description": str(skill.get("description") or ""),
+                "details": "",
+                "group": "help_group_invocable_skills",
+                "kind": "skill",
+            })
+    return commands
 
 
 def _restore_transient_project_mode(initial_project_mode: str | None, agent_type: str) -> None:
@@ -2555,13 +2628,14 @@ async def _handle_run(data: dict):
             data.get("chat_id") or "",
         ))
 
-    # A project starts with no model configured. Fail fast with a clear diagnostic
-    # instead of silently substituting DEFAULT_MODEL for the user's (absent) choice.
+    # The chat's model resolves from the chat, then the project's default, then
+    # the catalog's global default. When none names a model, fail fast with a
+    # clear diagnostic instead of silently substituting DEFAULT_MODEL.
     if (
         agent_type in ("orchestrator", "chat_orchestrator")
         and not model
         and current_project is not None
-        and not str(getattr(current_project, "model", "") or "").strip()
+        and not _session_main_model(current_project).strip()
     ):
         from gilzabots.i18n import _ as _translate
         print_event("error", {"agent": agent_type, "message": _translate("no_model_configured")})
@@ -2602,7 +2676,7 @@ async def _handle_run(data: dict):
             prompt = await resume_prompt_for_chat(
                 current_store,
                 current_project,
-                model=str(model or getattr(current_project, "model", "") or ""),
+                model=str(model or _session_main_model(current_project) or ""),
                 on_summarizing=_announce_summary,
             )
         except ThoughtSummaryError as exc:
@@ -2616,6 +2690,31 @@ async def _handle_run(data: dict):
             })
             print_event("agent_finished", {"agent": agent_type})
             return
+
+    # `/name [arguments]` of a skill the user may run (PROJECT_DESIGN 2.29): the
+    # model receives the skill's instructions and the arguments, and the chat
+    # stores and shows the line the user typed.
+    if (
+        agent_type in ("orchestrator", "chat_orchestrator")
+        and not data.get("resume_interrupted")
+        and current_project is not None
+    ):
+        from gilzabots.memgpt_runtime import main_agent_prompt_profile
+        from gilzabots.skill_invocation import SkillInvocationError, resolve_skill_invocation
+
+        try:
+            invocation = resolve_skill_invocation(
+                getattr(current_project, "project_path", "") or "",
+                prompt,
+                profile=main_agent_prompt_profile(current_project),
+            )
+        except SkillInvocationError as exc:
+            print_event("error", {"agent": agent_type, "message": str(exc)})
+            print_event("agent_finished", {"agent": agent_type})
+            return
+        if invocation is not None:
+            display_prompt = display_prompt or prompt.strip()
+            prompt = invocation.prompt
 
     initial_project_mode = None
     if current_project:
@@ -2948,6 +3047,30 @@ async def _handle_run(data: dict):
     def _on_response_wait(wait) -> None:
         print_event("provider_wait", _provider_wait_payload(wait, agent_type))
 
+    def _on_compaction(event) -> None:
+        """Report an automatic compaction and mark it in the chat.
+
+        The visible history is untouched; the activity row is what lets the
+        panel draw the divider again after a reload. The next request's
+        ``_on_iteration`` reports the compacted occupancy, and the turn's
+        ``finally`` saves the compacted state.
+        """
+        from gilzabots.compaction import (
+            COMPACTION_STREAM_EVENT,
+            compaction_payload,
+            record_compaction,
+        )
+
+        payload = compaction_payload(event)
+        if event.phase == "completed" and current_store and current_project:
+            try:
+                payload["timestamp"] = record_compaction(
+                    current_store, current_project, event, agent=agent_type,
+                )
+            except Exception:
+                pass
+        print_event(COMPACTION_STREAM_EVENT, {"agent": agent_type, **payload})
+
     # Inline editing has a final-response-only transport contract. Do not bind
     # callbacks that could emit intermediate model content.
     if agent_type != "inline_editor":
@@ -2975,6 +3098,15 @@ async def _handle_run(data: dict):
             agent.on_response_wait = _on_response_wait
         elif hasattr(agent, "agent") and hasattr(agent.agent, "on_response_wait"):
             agent.agent.on_response_wait = _on_response_wait
+
+        if agent_type in ("orchestrator", "chat_orchestrator") and hasattr(agent, "on_compaction"):
+            agent.on_compaction = _on_compaction
+            if hasattr(agent, "on_compacted_context") and current_project is not None:
+                # PreCompact/PostCompact hooks and the restored files, exactly
+                # as /compact does (gilzabots/compaction.py).
+                from gilzabots.compaction import attach_compaction_extensions
+
+                attach_compaction_extensions(agent, current_project)
 
     if agent_type != "inline_editor":
         print_event("agent_started", {"agent": agent_type, "model": agent.model})
@@ -3199,6 +3331,18 @@ async def _handle_run(data: dict):
         # here on nothing will drain it, so a message still accepted would be
         # accepted into a turn that can no longer deliver it.
         _close_turn_inbox(agent, turn_inbox, agent_type)
+        # A background subagent whose report was not collected has no reader once
+        # the turn is over (PROJECT_DESIGN 2.30); stopped, and said so.
+        from gilzabots.subagents import cancel_background_agents
+        _stopped_subagents = cancel_background_agents()
+        if _stopped_subagents:
+            print_event("warning", {
+                "agent": agent_type,
+                "message": (
+                    f"Stopped {len(_stopped_subagents)} background subagent(s) still running when the "
+                    f"turn ended: {', '.join(_stopped_subagents)}."
+                ),
+            })
         # Persist the orchestrator's working memory even when the turn failed or was
         # interrupted: the partial context is what a resume needs, and the
         # compatibility layer repairs any tool call left without its result.
@@ -3491,7 +3635,10 @@ async def handle_stdin_run(data: dict) -> None:
             # The project `load_project` opened keeps its in-memory overrides;
             # only its chat view moves to the new chat.
             opened = store.load(name, chat_id=chat_id)
-            for field_name in ("chats", "current_chat_id", "chat_reasoning_effort", "history"):
+            for field_name in (
+                "chats", "current_chat_id", "chat_reasoning_effort",
+                "chat_model", "chat_worker_model", "history",
+            ):
                 setattr(current_project, field_name, getattr(opened, field_name))
             set_project_context(current_project, store)
             current_memgpt = build_chat_orchestrator(current_project, store)

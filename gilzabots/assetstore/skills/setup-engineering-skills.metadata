@@ -1,0 +1,7 @@
+desc: 'Configure this project for the engineering skills: its issue tracker, triage
+  label vocabulary and domain doc layout. Run once before first using the other engineering
+  skills.'
+id: setup-engineering-skills
+name: setup-engineering-skills
+pack: engineering-workflow
+type: skill

@@ -1,0 +1,9 @@
+desc: A relentless interview to sharpen a plan or design, which records the glossary
+  and ADRs as it goes.
+id: grill-with-docs
+name: grill-with-docs
+pack: engineering-workflow
+requires:
+- grilling
+- domain-modeling
+type: skill

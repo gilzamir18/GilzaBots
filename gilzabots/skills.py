@@ -4,10 +4,12 @@ import os
 # ===========================================================================
 # Skills-oriented architecture (target design) — see docs/specs/06
 # ---------------------------------------------------------------------------
-# A skill is a DIRECTORY containing a SKILL.md (Anthropic format). Frontmatter
-# carries only `name`, `description`, and an optional `model`. Discovery loads
-# Level-1 metadata (name + description) into the MemGPT system prompt; the body
-# and bundled resources/scripts (Level 2/3) are read on demand by the sub-agent.
+# A skill is a DIRECTORY containing a SKILL.md (Anthropic format). Frontmatter is
+# YAML: Claude Code's `name`, `description`, `disable-model-invocation`,
+# `user-invocable` and `argument-hint`, plus GilzaBots' `model`, `role`,
+# `extends` and `icon`. Discovery loads Level-1 metadata (name + description)
+# into the MemGPT system prompt; the body and bundled resources/scripts
+# (Level 2/3) are read on demand.
 # ===========================================================================
 
 # The chat-orchestrator skill is always loaded regardless of skills.yaml.
@@ -60,35 +62,76 @@ def skill_search_dirs(project_path: str = "") -> list[str]:
     return out
 
 
+class FrontmatterError(ValueError):
+    """A SKILL.md whose frontmatter is not a YAML mapping."""
+
+
 def _parse_frontmatter(text: str) -> tuple[dict, str]:
     """Split a SKILL.md into (frontmatter dict, body).
 
-    Accepts standard YAML frontmatter delimited by leading/trailing `---`.
-    Only flat `key: value` pairs are read (name, description, model); this avoids
-    a hard YAML dependency for the common case. Returns ({}, text) when absent.
+    The frontmatter is YAML delimited by leading/trailing `---`, read with
+    ``yaml.safe_load`` exactly as Claude Code reads a skill's: quoted values lose
+    their quotes, block scalars span lines, and booleans are booleans. Keys are
+    lowercased. Returns ({}, text) when there is no frontmatter.
+
+    Raises FrontmatterError when the block is not valid YAML or not a mapping.
+    The old reader split each line at its first colon; YAML rejects some lines
+    it accepted (an unquoted value that itself contains ": "), and such a file is
+    reported with the parser's message rather than read by a second, guessing
+    reader (PROJECT_DESIGN 2.29).
     """
-    fm: dict[str, str] = {}
     stripped = text.lstrip("﻿")  # tolerate BOM
     if not stripped.startswith("---"):
-        return fm, text
-    # Find the closing delimiter line
+        return {}, text
     lines = stripped.splitlines()
     if not lines or lines[0].strip() != "---":
-        return fm, text
+        return {}, text
     end = None
     for i in range(1, len(lines)):
         if lines[i].strip() == "---":
             end = i
             break
     if end is None:
-        return fm, text
-    for line in lines[1:end]:
-        if not line.strip() or ":" not in line:
-            continue
-        key, _, val = line.partition(":")
-        fm[key.strip().lower()] = val.strip()
+        return {}, text
+    import yaml
+
+    raw = "\n".join(lines[1:end])
+    try:
+        data = yaml.safe_load(raw) if raw.strip() else {}
+    except yaml.YAMLError as exc:
+        detail = " ".join(str(exc).split())
+        raise FrontmatterError(
+            f"the frontmatter is not valid YAML ({detail}). Quote a value that contains "
+            "': ' or starts with a special character."
+        ) from exc
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        raise FrontmatterError("the frontmatter must be a YAML mapping of `key: value` pairs.")
+    fm = {str(key).strip().lower(): value for key, value in data.items()}
     body = "\n".join(lines[end + 1:]).strip()
     return fm, body
+
+
+def _fm_text(fm: dict, key: str) -> str:
+    """A frontmatter value as text ("" when absent or null)."""
+    value = fm.get(key)
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _fm_flag(fm: dict, key: str, default: bool) -> bool:
+    """A boolean frontmatter field; anything but true/false is an error."""
+    if key not in fm or fm[key] is None:
+        return default
+    value = fm[key]
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in ("true", "false"):
+        return text == "true"
+    raise FrontmatterError(f"`{key}` must be true or false, not {value!r}.")
 
 
 def parse_skill_md(skill_dir: str, profile: str = "full") -> dict | None:
@@ -97,10 +140,19 @@ def parse_skill_md(skill_dir: str, profile: str = "full") -> dict | None:
     Returned dict:
       name, description, model (optional, "" if absent),
       role ("helper" or "instructions", the default; see HELPER_ROLE),
+      disable_model_invocation (Claude Code's `disable-model-invocation`: only
+        the user reaches the skill, by typing `/name`; the agent's catalog and
+        `load_skill` leave it out),
+      user_invocable (Claude Code's `user-invocable`, default true: whether
+        `/name` reaches it),
+      argument_hint (Claude Code's `argument-hint`, shown after `/name`),
+      error ("" when the SKILL.md is usable, else why it is not),
       dir (absolute path to the skill directory),
       manifest (absolute path to SKILL.md),
       body (Level-2 instructions text).
-    The directory name is the canonical fallback for `name`.
+    The directory name is the canonical fallback for `name`. A skill whose
+    frontmatter cannot be read is still returned, with `error` set and an empty
+    body, so it is listed as unusable instead of vanishing.
 
     *profile* (see `gilzabots/prompt_profiles.py`) optionally overrides the body
     with a sibling ``SKILL.<profile>.md`` file when one exists next to
@@ -119,7 +171,10 @@ def parse_skill_md(skill_dir: str, profile: str = "full") -> dict | None:
             text = f.read()
     except Exception:
         return None
-    fm, body = _parse_frontmatter(text)
+    try:
+        fm, body = _parse_frontmatter(text)
+    except FrontmatterError as exc:
+        return _unusable_skill(skill_dir, manifest, str(exc))
 
     profile = (profile or "full").strip().lower()
     if profile and profile != "full":
@@ -133,25 +188,50 @@ def parse_skill_md(skill_dir: str, profile: str = "full") -> dict | None:
             except Exception:
                 pass
 
-    name = fm.get("name") or os.path.basename(os.path.normpath(skill_dir))
-    description = fm.get("description", "")
-    model = fm.get("model", "")
-    extends = fm.get("extends", "")
-    icon = fm.get("icon", "")
+    try:
+        disable_model_invocation = _fm_flag(fm, "disable-model-invocation", False)
+        user_invocable = _fm_flag(fm, "user-invocable", True)
+    except FrontmatterError as exc:
+        return _unusable_skill(skill_dir, manifest, str(exc), name=_fm_text(fm, "name"))
+
+    name = _fm_text(fm, "name") or os.path.basename(os.path.normpath(skill_dir))
     # An unknown role is kept as written, not coerced: `skill_role` reports it,
     # and both run_skill and load_skill refuse the skill with that diagnostic
     # instead of guessing which agent was meant to run it.
-    role = (fm.get("role", "") or INSTRUCTIONS_ROLE).strip().lower()
+    role = (_fm_text(fm, "role") or INSTRUCTIONS_ROLE).lower()
     return {
         "name": name,
-        "description": description,
-        "model": model,
-        "extends": extends,
-        "icon": icon,
+        "description": _fm_text(fm, "description"),
+        "model": _fm_text(fm, "model"),
+        "extends": _fm_text(fm, "extends"),
+        "icon": _fm_text(fm, "icon"),
         "role": role,
+        "disable_model_invocation": disable_model_invocation,
+        "user_invocable": user_invocable,
+        "argument_hint": _fm_text(fm, "argument-hint"),
+        "error": "",
         "dir": os.path.abspath(skill_dir),
         "manifest": os.path.abspath(manifest),
         "body": body,
+    }
+
+
+def _unusable_skill(skill_dir: str, manifest: str, error: str, name: str = "") -> dict:
+    """The metadata of a skill whose SKILL.md cannot be used, with the reason."""
+    return {
+        "name": name or os.path.basename(os.path.normpath(skill_dir)),
+        "description": "",
+        "model": "",
+        "extends": "",
+        "icon": "",
+        "role": INSTRUCTIONS_ROLE,
+        "disable_model_invocation": False,
+        "user_invocable": False,
+        "argument_hint": "",
+        "error": f"{SKILL_MANIFEST}: {error}",
+        "dir": os.path.abspath(skill_dir),
+        "manifest": os.path.abspath(manifest),
+        "body": "",
     }
 
 
@@ -299,6 +379,21 @@ def skill_role(skill_meta: dict) -> str:
 
 def is_helper_skill(skill_meta: dict) -> bool:
     return skill_role(skill_meta) == HELPER_ROLE
+
+
+def skill_error(skill_meta: dict) -> str:
+    """Why the skill cannot be used, or "" when it can."""
+    return str(skill_meta.get("error") or "")
+
+
+def is_model_invocable(skill_meta: dict) -> bool:
+    """Whether the agent may reach the skill on its own (catalog, load_skill, run_skill)."""
+    return not skill_error(skill_meta) and not skill_meta.get("disable_model_invocation", False)
+
+
+def is_user_invocable(skill_meta: dict) -> bool:
+    """Whether the user may run the skill by typing `/name` (Claude Code's rule)."""
+    return not skill_error(skill_meta) and bool(skill_meta.get("user_invocable", True))
 
 
 def local_skill_dir(skill_name: str, project_path: str) -> str | None:

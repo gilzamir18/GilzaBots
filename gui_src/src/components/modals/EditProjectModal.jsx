@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useModelValidation } from './useModelValidation';
 import { useCustomDialog } from './CustomDialogProvider';
 import ModelSelect from '../ModelSelect';
+import { globalDefaultModelId } from '../../utils/chatModels.js';
 
 // Numeric input helper to avoid repetition in the advanced params grid.
 function ParamNumber({ label, value, onChange, step, min, max, placeholder }) {
@@ -69,6 +70,7 @@ export default function EditProjectModal({
           presence_penalty: { min: -2, max: 2 },
           min_p: { min: 0, max: 1 },
           eviction_threshold: { min: 0, max: 1 },
+          auto_compact_threshold: { min: 0, max: 1 },
           memory_pressure_threshold: { min: 0, max: 1 },
           heartbeat_pressure_threshold: { min: 0, max: 1 },
           max_tokens: { min: 1 },
@@ -384,12 +386,17 @@ export default function EditProjectModal({
                 <label className="vscode-sidebar-section-title" style={{ padding: 0 }}>{t('editProjectModal.mainModel')}</label>
                 {/* The catalog is the only source of project models, so the field cannot
                     hold a model the project would not be able to resolve at run time. */}
+                {/* The project's default model: what its chats run on unless a chat
+                    picks its own. Empty follows the catalog's global default. */}
                 <ModelSelect
                   value={editingProject.model || ''}
                   onChange={value => setProjectModel(value, 'main')}
                   globalModels={globalModels}
                   showActions={false}
                   className=""
+                  placeholder={globalDefaultModelId(globalModels)
+                    ? t('modelSelect.followGlobalDefault', { model: globalDefaultModelId(globalModels) })
+                    : undefined}
                   style={{ borderColor: getBorderColor(modelStatus), borderWidth: modelStatus !== 'unknown' ? '2px' : '1px' }}
                 />
                 {modelStatus === 'green' && <span style={{ fontSize: '11px', color: 'var(--vscode-fg-success)' }}>{t('editProjectModal.modelSuitable')}</span>}
@@ -433,6 +440,11 @@ export default function EditProjectModal({
                         <ParamNumber label={t('editProjectModal.evictionThreshold')} step="0.05" min="0" max="1" placeholder={t('editProjectModal.defaultOne')}
                           value={editingProject.model_params?.eviction_threshold}
                           onChange={e => setParam('eviction_threshold', parseNum(e.target.value, true))} />
+                        {/* Fraction of the window past which a turn compacts the
+                            conversation into a summary (/compact); 1 disables it. */}
+                        <ParamNumber label={t('editProjectModal.autoCompactThreshold')} step="0.05" min="0" max="1" placeholder={t('editProjectModal.defaultAutoCompact')}
+                          value={editingProject.model_params?.auto_compact_threshold}
+                          onChange={e => setParam('auto_compact_threshold', parseNum(e.target.value, true))} />
                         <ParamNumber label={t('editProjectModal.memoryPressureThreshold')} step="0.05" min="0" max="1" placeholder={t('editProjectModal.defaultMemoryPressure')}
                           value={editingProject.model_params?.memory_pressure_threshold}
                           onChange={e => setParam('memory_pressure_threshold', parseNum(e.target.value, true))} />

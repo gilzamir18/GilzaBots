@@ -374,6 +374,20 @@
     }
   },
   "chatPanel": {
+    "compaction": {
+      "manualLabel": "Conversation compacted",
+      "autoLabel": "Conversation compacted automatically",
+      "stats": "{{before}} → {{after}} tokens",
+      "hint": "The messages above stay in the chat. The agent continues from the summary below.",
+      "showSummary": "Show summary",
+      "showSummaryFocused": "Show summary (focus: {{focus}})",
+      "startedLog": "Context window almost full: compacting the conversation...",
+      "completedLog": "Conversation compacted.",
+      "failedLog": "Automatic compaction failed: {{error}}",
+      "restoredFiles": "Files restored into the new context: {{files}}",
+      "skippedFiles": "Not restored: {{files}}",
+      "hookFailed": "{{event}} hook failed ({{command}}): {{message}}"
+    },
     "header": "GILZABOTS CHAT",
     "contextMeasured": "Context: {{used}} used / {{available}} free of {{total}} tokens.\nEffective window: num_ctx={{total}} — this is the real cap, not the model's maximum. Raise num_ctx in the project settings to use more.",
     "contextEstimated": "Context: ~{{used}} used / ~{{available}} free of {{total}} tokens (estimated until the first model response).\nEffective window: num_ctx={{total}} — this is the real cap, not the model's maximum.",
@@ -518,7 +532,10 @@
     "noChatOpen": "No chat is open. Send a message to start a new chat.",
     "defaultChatName": "New Chat",
     "editUnavailable": "Editing is not available here.",
-    "editNotApplied": "The edit was not applied."
+    "editNotApplied": "The edit was not applied.",
+    "projectDefaultModel": "Project default: {{model}}",
+    "globalDefaultModel": "Global default: {{model}}",
+    "chatModelSaveFailed": "Could not save the chat model: {{message}}"
   },
   "chatSidebar": {
     "newChat": "New Chat",
@@ -595,7 +612,7 @@
     "description": "Description",
     "apiKey": "API Key (Optional)",
     "apiBase": "API Base URL (Optional)",
-    "aiModel": "AI Model",
+    "aiModel": "Default Model",
     "executionMode": "Execution Mode",
     "projectNamePlaceholder": "Ex: My Web Server",
     "projectPathPlaceholder": "Ex: /home/user/projects/my-app",
@@ -619,7 +636,7 @@
     "internalId": "Internal ID (read-only)",
     "displayName": "Display Name *",
     "projectPath": "Absolute Path",
-    "mainModel": "Main Model",
+    "mainModel": "Default Model",
     "mode": "Mode",
     "workerModel": "Worker Model",
     "workerModelPlaceholder": "Same as main model",
@@ -648,10 +665,12 @@
     "debug": "Debug",
     "maxContextTokens": "Max Context Tokens (MemGPT)",
     "evictionThreshold": "Eviction Threshold",
+    "autoCompactThreshold": "Auto-compact Threshold",
     "memoryPressureThreshold": "Memory Pressure Threshold",
     "heartbeatPressureThreshold": "Heartbeat Pressure Threshold",
     "defaultContextWindow": "default: from model, see Edit Models",
     "defaultOne": "default: 1.0",
+    "defaultAutoCompact": "default: 0.8 (1 disables)",
     "defaultTopK": "default: 40",
     "defaultMemgptHeartbeats": "default: 50 (guardrail)",
     "defaultSameAsNumCtx": "default: same as num_ctx",
@@ -927,7 +946,13 @@
     "ollamaNotInstalled": "Ollama is not installed.",
     "ollamaUnavailable": "Ollama is installed, but its local service is unavailable.",
     "loadLocalOllamaFailed": "Unable to load local Ollama models.",
-    "apiBaseUrl": "API Base URL"
+    "apiBaseUrl": "API Base URL",
+    "defaultColumn": "Default",
+    "defaultColumnHint": "The global default model: what a chat runs on when neither the chat nor its project names a model",
+    "defaultBadge": "Default",
+    "isDefault": "Global default model",
+    "setAsDefault": "Set as the global default model",
+    "setDefaultFailed": "Could not mark the default model: {{message}}"
   },
   "modelForm": {
     "addTitle": "Add Model",
@@ -1262,7 +1287,9 @@
     "editEmpty": "The edited message is empty.",
     "editNotSent": "The edited message was not sent.",
     "editBranchNotSent": "The branch \"{{name}}\" was created, but the edited message was not sent ({{error}}). It is in the message box: send it from there.",
-    "monitorChatMissing": "The chat of this monitor event no longer exists."
+    "monitorChatMissing": "The chat of this monitor event no longer exists.",
+    "runningCommand": "Running {{command}}",
+    "slashCommandSyncFailed": "Could not reload the chat after the command: {{error}}"
   },
   "onboarding": {
     "welcome": "Welcome to GilzaBots! ",
@@ -1357,7 +1384,9 @@
   },
   "modelSelect": {
     "notInCatalog": "Not in the model catalog",
-    "notInCatalogTitle": "'{{id}}' is not registered in the model catalog. Select a registered model or add it under Edit Models."
+    "notInCatalogTitle": "'{{id}}' is not registered in the model catalog. Select a registered model or add it under Edit Models.",
+    "globalDefaultSuffix": "global default",
+    "followGlobalDefault": "Global default: {{model}}"
   },
   "wysiwyg": {
     "bold": "Bold (\\textbf)",
@@ -1895,5 +1924,18 @@
       "no_chat": "no chat",
       "invalid": "invalid"
     }
+  },
+  "slashCommand": {
+    "running": "Running…",
+    "waitingConfirmation": "Waiting for your confirmation…",
+    "noOutput": "The command finished without output.",
+    "copy": "Copy output",
+    "copied": "Copied",
+    "loading": "Loading commands…",
+    "loadFailed": "Could not load the commands: {{error}}",
+    "noMatch": "No command matches.",
+    "menuLabel": "Commands",
+    "menuHint": "↑↓ to navigate · Enter to run · Tab to complete · Esc to close",
+    "skillBadge": "skill"
   }
 }

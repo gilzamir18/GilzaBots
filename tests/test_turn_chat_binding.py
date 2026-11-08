@@ -232,24 +232,41 @@ def test_a_second_start_from_this_window_cannot_idle_the_running_turn():
     send = _function_body(app, "const handleSendMessage = async (")
     inline = _function_body(app, "const handleSendMessageWithPrompt = async (")
     edit = _function_body(app, "const handleEditUserMessage = async (")
+    slash = _function_body(app, "const runSlashCommand = async (")
 
+    # Calls that return without starting a turn of this function: the queue
+    # call joins the running turn, and a slash command runs in its own window
+    # under a lock it takes itself (checked below).
+    handoffs = (
+        "await queueMessageForRunningAgent(userText, attachmentsSnapshot, targetChatId);\n        return;",
+        "await runSlashCommand(commandText);\n        return;",
+        # A `/name` skill comes back through handleSendMessage with
+        # `skillInvocation`, which takes the lock itself (PROJECT_DESIGN 2.29).
+        "await runSlashCommand(userText.trim(), {\n"
+        "        onSkill: () => handleSendMessage(e, retryMsg, { ...options, skillInvocation: true }),\n"
+        "      });\n      return;",
+    )
     for body in (send, inline):
         assert "|| isAgentRunning)" not in body, "a start must not rely on render-time state alone"
         assert "localTurnRef.current = true;" in body
         # The lock is taken before the first await, so a second call sees it.
         lock = body.index("localTurnRef.current = true;")
-        # (The composer's queue call is the one await there: it returns without
-        # starting a turn.)
-        guarded = body[body.index("isTurnBusy()"):lock].replace(
-            "await queueMessageForRunningAgent(userText, attachmentsSnapshot, targetChatId);\n        return;", ""
-        )
+        guarded = body[body.index("isTurnBusy()"):lock]
+        for handoff in handoffs:
+            guarded = guarded.replace(handoff, "")
         assert "await " not in guarded
         assert body.count("localTurnRef.current = false;") >= 1
 
     # Every exit after the lock in handleSendMessage releases it: a failed
-    # creation of the chat a first message starts, the failed truncate, the
-    # slash-command path and the run itself.
-    assert send.count("localTurnRef.current = false;") == 4
+    # creation of the chat a first message starts, the failed truncate and the
+    # run itself.
+    assert send.count("localTurnRef.current = false;") == 3
+
+    # A slash command checks and takes the same lock with no await between,
+    # and releases it on every exit.
+    slash_lock = slash.index("localTurnRef.current = true;")
+    assert "await " not in slash[slash.index("isTurnBusy()"):slash_lock]
+    assert "if (!released) localTurnRef.current = false;" in slash[slash.index("finally {", slash_lock):]
 
     assert "isTurnBusy()" in edit
     branch = edit.index("editBranchInFlightRef.current = true;")

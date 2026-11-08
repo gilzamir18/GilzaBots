@@ -72,7 +72,7 @@ export default function SettingsModal({
   const [gilzabotsHome, setGilzaBotsHome] = React.useState('');
   const [gilzabotsHomeError, setGilzaBotsHomeError] = React.useState('');
   const [draftSynctexEnabled, setDraftSynctexEnabled] = React.useState(false);
-  const [webengineGpu, setWebengineGpu] = React.useState('auto');
+  const [webengineGpu, setWebengineGpu] = React.useState('off');
   const [workspaceHiddenExtensions, setWorkspaceHiddenExtensions] = React.useState([]);
   const [tectonicInstallMessage, setTectonicInstallMessage] = React.useState('');
   const [pandocInstallMessage, setPandocInstallMessage] = React.useState('');

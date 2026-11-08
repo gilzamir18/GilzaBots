@@ -58,11 +58,15 @@ from .config import (
     get_agent_max_heartbeats,
     get_agent_model,
     get_project_agent_params,
+    session_main_model as _session_main_model,
+    session_worker_model as _session_worker_model,
 )
 from .skills import (
     HELPER_ROLE,
     INSTRUCTIONS_ROLE,
     skill_role,
+    skill_error,
+    is_model_invocable,
     active_skills,
     find_skill_dir,
     level1_metadata,
@@ -71,8 +75,10 @@ from .skills import (
 )
 
 from .tools import get_helper_tools
+from .subagents import build_subagent_tools
 from .project import tutorial_chat_id
 from .prompt_profiles import ACHIEVEMENTS_POLICY
+from .compaction import DEFAULT_AUTO_COMPACT_THRESHOLD
 from .think_stream import InlineReasoningStreamSplitter
 
 CHAT_ORCHESTRATOR_SKILL = "chat-orchestrator"
@@ -417,7 +423,7 @@ def _helper_vision_params(project, model: str) -> dict:
     worker parameters.
     """
     main_params = dict(getattr(project, "model_params", None) or {})
-    if model and model == (getattr(project, "model", "") or ""):
+    if model and model == _session_main_model(project):
         return main_params
     worker_params = getattr(project, "worker_model_params", None) or {}
     return dict(worker_params) if worker_params else main_params
@@ -449,7 +455,14 @@ def _skill_catalog(skills: list[dict], project_model: str | None,
     for skill in skills:
         role = skill_role(skill)
         description = str(skill.get("description", "") or "").strip()
-        if role == HELPER_ROLE:
+        if skill_error(skill):
+            invalid.append(f"- {skill['name']}: unusable -- {skill_error(skill)}")
+        elif not is_model_invocable(skill):
+            # Claude Code's `disable-model-invocation`: only the user reaches it,
+            # by typing `/name`, so it costs the agent no context and is never a
+            # target the agent could pick by itself.
+            continue
+        elif role == HELPER_ROLE:
             model = _helper_model_for(skill, project_model, project_worker)
             vision = "yes" if model_supports_vision(model, _helper_vision_params(project, model)) else "no"
             helpers.append(f"- {skill['name']}: {description} [model: {model or '(none)'}; vision: {vision}]")
@@ -616,6 +629,16 @@ def build_run_skill_tool(
         meta = parse_skill_md(skill_dir)
         if meta is None:
             return f"[ERROR] skill '{skill_name}' has no valid SKILL.md."
+        if skill_error(meta):
+            return (
+                f"[ERROR] '{skill_name}' cannot run: {skill_error(meta)} Tell the user the "
+                "skill's SKILL.md needs fixing."
+            )
+        if not is_model_invocable(meta):
+            return (
+                f"[ERROR] '{skill_name}' is invoked by the user only (they type /{skill_name}); "
+                "it is not yours to run."
+            )
 
 
         # >> INHERITANCE LOGIC START <<
@@ -1043,8 +1066,11 @@ def build_load_skill_tool(project_path: str, profile: str = "full"):
     )
     async def load_skill(skill_name: str) -> str:
         active = [s for s in active_skills(project_path) if s["name"] != CHAT_ORCHESTRATOR_SKILL]
-        loadable = [s["name"] for s in active if skill_role(s) == INSTRUCTIONS_ROLE]
-        helpers = [s["name"] for s in active if skill_role(s) == HELPER_ROLE]
+        loadable = [
+            s["name"] for s in active
+            if skill_role(s) == INSTRUCTIONS_ROLE and is_model_invocable(s)
+        ]
+        helpers = [s["name"] for s in active if skill_role(s) == HELPER_ROLE and is_model_invocable(s)]
         if skill_name == CHAT_ORCHESTRATOR_SKILL:
             return f"[ERROR] '{CHAT_ORCHESTRATOR_SKILL}' is you; its instructions are already your own."
         meta_by_name = {s["name"]: s for s in active}
@@ -1054,51 +1080,147 @@ def build_load_skill_tool(project_path: str, profile: str = "full"):
                 f"{loadable}. Helpers, delegated with run_skill: {helpers}. Never invent skill names, "
                 "and never pass one of your own tools as one."
             )
+        if not skill_error(meta_by_name[skill_name]) and not is_model_invocable(meta_by_name[skill_name]):
+            return (
+                f"[ERROR] '{skill_name}' is invoked by the user only (they type /{skill_name}); you "
+                f"cannot load it. Skills you can load: {loadable}."
+            )
         role = skill_role(meta_by_name[skill_name])
         if role == HELPER_ROLE:
             return (
                 f"[ERROR] '{skill_name}' is a helper, not a skill you carry out: delegate the job "
                 f"with run_skill('{skill_name}', context)."
             )
-        if role != INSTRUCTIONS_ROLE:
-            return (
-                f"[ERROR] '{skill_name}' cannot be loaded: its SKILL.md declares role '{role}', and only "
-                f"'{HELPER_ROLE}' or '{INSTRUCTIONS_ROLE}' is accepted. Tell the user the skill's "
-                "SKILL.md needs fixing."
-            )
-
-        skill_dir = meta_by_name[skill_name]["dir"]
-        meta = parse_skill_md(skill_dir, profile=profile)
-        if meta is None or not meta.get("body"):
-            return f"[ERROR] skill '{skill_name}' has no valid SKILL.md."
-        body = meta["body"]
-        dirs = [skill_dir]
-        parent_name = meta.get("extends")
-        if parent_name:
-            parent_dir = find_skill_dir(parent_name, project_path)
-            if parent_name not in meta_by_name or parent_dir is None:
-                return f"[ERROR] skill '{skill_name}' requires parent '{parent_name}', which is not active."
-            parent = parse_skill_md(parent_dir, profile=profile)
-            if parent and parent.get("body"):
-                body = parent["body"] + "\n\n" + body
-            dirs.insert(0, parent_dir)
-
-        scripts = _skill_script_paths(dirs)
-        scripts_block = (
-            "Scripts bundled with it (absolute paths; keep the double quotes, paths may contain spaces):\n"
-            + "\n".join(f'  "{p}"' for p in scripts) + "\n"
-            if scripts else ""
-        )
+        rendered, error = render_skill_instructions(skill_name, project_path, profile, active)
+        if error:
+            return f"[ERROR] {error}"
         return (
             f"[skill '{skill_name}' loaded] Carry out these instructions yourself, with your own tools. "
             "Where they speak of the orchestrator's or a worker's context, that is the user's request "
             "in this conversation; where they speak of a report, that is your answer to the user.\n"
-            f"Skill directory: {skill_dir}\n"
-            f"{scripts_block}\n"
-            f"{body}"
+            f"{rendered}"
         )
 
     return load_skill
+
+
+#: The project's own instructions for agents, read from the project root on
+#: every turn (PROJECT_DESIGN 2.31): the file Claude Code calls CLAUDE.md, under
+#: the name the other agent tools share.
+PROJECT_INSTRUCTIONS_FILE = "AGENTS.md"
+#: Above this many characters only the start is put in the prompt, and the
+#: prompt says so and where the rest is.
+PROJECT_INSTRUCTIONS_MAX_CHARS = 40_000
+
+
+def project_instructions_block(project_path: str) -> str:
+    """The `AGENTS.md` block of the main agent's and subagents' prompts, or ""."""
+    if not project_path:
+        return ""
+    path = os.path.join(project_path, PROJECT_INSTRUCTIONS_FILE)
+    if not os.path.isfile(path):
+        return ""
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            text = handle.read()
+    except OSError as exc:
+        return (
+            f"\n## Project instructions ({PROJECT_INSTRUCTIONS_FILE})\n"
+            f"The project has {path}, but it could not be read ({exc.strerror}).\n"
+        )
+    text = text.strip()
+    if not text:
+        return ""
+    note = ""
+    if len(text) > PROJECT_INSTRUCTIONS_MAX_CHARS:
+        note = (
+            f"\n\n[Only the first {PROJECT_INSTRUCTIONS_MAX_CHARS} of {len(text)} characters are shown. "
+            f"Read the rest with read_file('{path}') when the task touches it.]"
+        )
+        text = text[:PROJECT_INSTRUCTIONS_MAX_CHARS]
+    return (
+        f"\n## Project instructions ({PROJECT_INSTRUCTIONS_FILE})\n"
+        f"The project's own instructions for agents working in it, from {path}. Follow them. "
+        "When one conflicts with what the user asks in this conversation, the user's request wins.\n\n"
+        f"{text}{note}\n"
+    )
+
+
+def main_agent_prompt_profile(project) -> str:
+    """The prompt profile (full/light) of the model the project's main agent runs on.
+
+    The same resolution `build_chat_orchestrator` uses, so a skill the user runs
+    with `/name` is rendered for the body variant `load_skill` would return.
+    """
+    from .config import model_prompt_profile
+
+    model = get_agent_model("memgpt", get_agent_model("chat_agent", _session_main_model(project)))
+    return model_prompt_profile(model)
+
+
+def render_skill_instructions(
+    skill_name: str,
+    project_path: str,
+    profile: str = "full",
+    active: list[dict] | None = None,
+) -> tuple[str, str]:
+    """The instructions of an active ``instructions`` skill, as (text, error).
+
+    One rendering for the two doors into a skill the main agent carries out:
+    ``load_skill``, when the agent reaches it, and ``/name``, when the user does
+    (`gilzabots/skill_invocation.py`). The text is the skill directory, the
+    scripts bundled with it and its body for *profile*, its parent's body first
+    when it ``extends`` one. *error* is "" on success, else the diagnostic and
+    *text* is "".
+    """
+    if active is None:
+        active = [s for s in active_skills(project_path) if s["name"] != CHAT_ORCHESTRATOR_SKILL]
+    meta_by_name = {s["name"]: s for s in active}
+    if skill_name not in meta_by_name:
+        return "", f"skill '{skill_name}' is not active in this project."
+    if skill_error(meta_by_name[skill_name]):
+        return "", (
+            f"'{skill_name}' cannot be used: {skill_error(meta_by_name[skill_name])} "
+            "Tell the user the skill's SKILL.md needs fixing."
+        )
+    role = skill_role(meta_by_name[skill_name])
+    if role != INSTRUCTIONS_ROLE:
+        if role == HELPER_ROLE:
+            return "", f"'{skill_name}' is a helper: it is delegated with run_skill, not loaded."
+        return "", (
+            f"'{skill_name}' cannot be loaded: its SKILL.md declares role '{role}', and only "
+            f"'{HELPER_ROLE}' or '{INSTRUCTIONS_ROLE}' is accepted. Tell the user the skill's "
+            "SKILL.md needs fixing."
+        )
+
+    skill_dir = meta_by_name[skill_name]["dir"]
+    meta = parse_skill_md(skill_dir, profile=profile)
+    if meta is None or not meta.get("body"):
+        return "", f"skill '{skill_name}' has no valid SKILL.md."
+    body = meta["body"]
+    dirs = [skill_dir]
+    parent_name = meta.get("extends")
+    if parent_name:
+        parent_dir = find_skill_dir(parent_name, project_path)
+        if parent_name not in meta_by_name or parent_dir is None:
+            return "", f"skill '{skill_name}' requires parent '{parent_name}', which is not active."
+        parent = parse_skill_md(parent_dir, profile=profile)
+        if parent and parent.get("body"):
+            body = parent["body"] + "\n\n" + body
+        dirs.insert(0, parent_dir)
+
+    scripts = _skill_script_paths(dirs)
+    scripts_block = (
+        "Scripts bundled with it (absolute paths; keep the double quotes, paths may contain spaces):\n"
+        + "\n".join(f'  "{p}"' for p in scripts) + "\n"
+        if scripts else ""
+    )
+    return (
+        f"Skill directory: {skill_dir} (files the instructions link to, such as `FORMAT.md`, are "
+        "in it: read them there with read_file)\n"
+        f"{scripts_block}\n"
+        f"{body}"
+    ), ""
 
 
 # ---------------------------------------------------------------------------
@@ -1247,7 +1369,7 @@ def derive_context_usage_from_state(project, store) -> dict | None:
     if not state or not state.get("internal_history"):
         return None
 
-    project_model = getattr(project, "model", None) or ""
+    project_model = _session_main_model(project)
     model = get_agent_model("memgpt", get_agent_model("chat_agent", project_model))
     try:
         probe = MemGPTAgentBlock(
@@ -1431,8 +1553,8 @@ def chat_orchestrator_system_prompt(project, store=None) -> str:
     another project's turn is running.
     """
     project_path = getattr(project, "project_path", "") or os.getcwd()
-    project_model = getattr(project, "model", None) or ""
-    project_worker = getattr(project, "worker_model", "") or project_model
+    project_model = _session_main_model(project)
+    project_worker = _session_worker_model(project) or project_model
 
     # Resolved early because the prompt profile (full/light) depends on the
     # orchestrator's model and, in turn, decides which skill-body variant and
@@ -1537,6 +1659,7 @@ def chat_orchestrator_system_prompt(project, store=None) -> str:
         f"{_current_date_instruction()}\n\n"
         f"{body}\n\n"
         f"{project_block}\n"
+        f"{project_instructions_block(project_path)}"
         f"{catalog}\n"
         f"{_HELPER_POLICY_BLOCKS[orchestrator_policy]}\n"
         f"{MONITORS_PROMPT_BLOCK}"
@@ -1661,11 +1784,12 @@ def build_chat_orchestrator(project, store=None) -> MemGPTAgentBlock:
     )
 
     project_path = getattr(project, "project_path", "") or os.getcwd()
-    # An unconfigured project keeps an empty model here. The orchestrator is still
-    # built (so the project can be opened and configured), but handle_run refuses to
-    # run it instead of silently substituting DEFAULT_MODEL for the user's choice.
-    project_model = getattr(project, "model", None) or ""
-    project_worker = getattr(project, "worker_model", "") or project_model
+    # The chat's resolved model (chat, project default, global default). When none
+    # resolves it stays empty: the orchestrator is still built (so the project can
+    # be opened and configured), but handle_run refuses to run it instead of
+    # silently substituting DEFAULT_MODEL for the user's choice.
+    project_model = _session_main_model(project)
+    project_worker = _session_worker_model(project) or project_model
 
     # Scope all file/terminal tools to the project directory. Without this,
     # get_project_path() falls back to the cwd (the GilzaBots repo root) and the
@@ -1713,6 +1837,9 @@ def build_chat_orchestrator(project, store=None) -> MemGPTAgentBlock:
         *(wrap_tool(tool) for tool in get_diagnostic_tools()),
         *(wrap_tool(tool) for tool in get_ide_control_tools()),
         wrap_tool(build_load_skill_tool(project_path, model_prompt_profile(model))),
+        # Read-only subagents (PROJECT_DESIGN 2.30): their tools are all safe, so
+        # planning may use them too.
+        *(wrap_tool(tool) for tool in build_subagent_tools(project)),
     ]
 
     # The terminal has no editor to report, and the snapshot a desktop session
@@ -1807,6 +1934,12 @@ def build_chat_orchestrator(project, store=None) -> MemGPTAgentBlock:
         # Start evicting before the window is completely full: at 1.0 there is no
         # headroom left for the model's own answer once the request is assembled.
         eviction_threshold=_agent_params.get("eviction_threshold", 0.85),
+        # Claude Code-style compaction: past this fraction the whole context is
+        # replaced by a structured summary before eviction is considered
+        # (gilzabots/compaction.py). 1.0 disables it.
+        auto_compact_threshold=float(
+            _agent_params.get("auto_compact_threshold", DEFAULT_AUTO_COMPACT_THRESHOLD)
+        ),
         memory_pressure_threshold=_agent_params.get("memory_pressure_threshold", 0.7),
         # Warn the model that its step budget is running out while it still has
         # steps to react: a turn that hits max_heartbeats is cut off mid-work and
@@ -1882,8 +2015,8 @@ def build_chat_orchestrator(project, store=None) -> MemGPTAgentBlock:
     run_skill = build_run_skill_tool(
         memgpt, 
         project.project_path,
-        project_model=project.model,
-        project_worker=project.worker_model,
+        project_model=_session_main_model(project),
+        project_worker=_session_worker_model(project),
         _project_ref=project,
         _store_ref=store,
     )

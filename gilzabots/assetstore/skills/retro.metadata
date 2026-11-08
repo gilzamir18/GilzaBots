@@ -1,0 +1,8 @@
+desc: Conduct a retrospective on a coding session and suggest improvements to the
+  agent's environment, most severe first.
+id: retro
+name: retro
+pack: engineering-workflow
+requires:
+- writing-for-agents
+type: skill

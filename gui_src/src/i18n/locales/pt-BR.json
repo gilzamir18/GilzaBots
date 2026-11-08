@@ -374,6 +374,20 @@
     }
   },
   "chatPanel": {
+    "compaction": {
+      "manualLabel": "Conversa compactada",
+      "autoLabel": "Conversa compactada automaticamente",
+      "stats": "{{before}} → {{after}} tokens",
+      "hint": "As mensagens acima continuam no chat. O agente continua a partir do resumo abaixo.",
+      "showSummary": "Mostrar resumo",
+      "showSummaryFocused": "Mostrar resumo (foco: {{focus}})",
+      "startedLog": "Janela de contexto quase cheia: compactando a conversa...",
+      "completedLog": "Conversa compactada.",
+      "failedLog": "A compactação automática falhou: {{error}}",
+      "restoredFiles": "Arquivos restaurados no novo contexto: {{files}}",
+      "skippedFiles": "Não restaurados: {{files}}",
+      "hookFailed": "O hook {{event}} falhou ({{command}}): {{message}}"
+    },
     "header": "GILZABOTS CHAT",
     "contextMeasured": "Contexto: {{used}} usados / {{available}} livres de {{total}} tokens.\nJanela efetiva: num_ctx={{total}} — este é o teto real, não o máximo do modelo. Aumente num_ctx nas configurações do projeto para usar mais.",
     "contextEstimated": "Contexto: ~{{used}} usados / ~{{available}} livres de {{total}} tokens (estimado até a primeira resposta do modelo).\nJanela efetiva: num_ctx={{total}} — este é o teto real, não o máximo do modelo.",
@@ -518,7 +532,10 @@
     "noChatOpen": "Nenhum chat aberto. Envie uma mensagem para começar um novo chat.",
     "defaultChatName": "Novo Chat",
     "editUnavailable": "A edição não está disponível aqui.",
-    "editNotApplied": "A edição não foi aplicada."
+    "editNotApplied": "A edição não foi aplicada.",
+    "projectDefaultModel": "Padrão do projeto: {{model}}",
+    "globalDefaultModel": "Padrão global: {{model}}",
+    "chatModelSaveFailed": "Não foi possível salvar o modelo do chat: {{message}}"
   },
   "chatSidebar": {
     "newChat": "Novo Chat",
@@ -595,7 +612,7 @@
     "description": "Descrição",
     "apiKey": "Chave de API (Opcional)",
     "apiBase": "URL Base da API (Opcional)",
-    "aiModel": "Modelo de IA",
+    "aiModel": "Modelo Padrão",
     "executionMode": "Modo de Execução",
     "projectNamePlaceholder": "Ex: Meu Servidor Web",
     "projectPathPlaceholder": "Ex: /home/usuario/projetos/meu-app",
@@ -619,7 +636,7 @@
     "internalId": "ID Interno (somente leitura)",
     "displayName": "Nome de Exibição *",
     "projectPath": "Caminho Absoluto",
-    "mainModel": "Modelo Principal",
+    "mainModel": "Modelo Padrão",
     "mode": "Modo",
     "workerModel": "Modelo do Worker",
     "workerModelPlaceholder": "Igual ao modelo principal",
@@ -648,10 +665,12 @@
     "debug": "Debug",
     "maxContextTokens": "Max Context Tokens (MemGPT)",
     "evictionThreshold": "Eviction Threshold",
+    "autoCompactThreshold": "Limiar de Autocompactação",
     "memoryPressureThreshold": "Memory Pressure Threshold",
     "heartbeatPressureThreshold": "Heartbeat Pressure Threshold",
     "defaultContextWindow": "padrão: do modelo, ver Editar Modelos",
     "defaultOne": "padrão: 1.0",
+    "defaultAutoCompact": "padrão: 0.8 (1 desativa)",
     "defaultTopK": "padrão: 40",
     "defaultMemgptHeartbeats": "padrão: 50 (guardrail)",
     "defaultSameAsNumCtx": "padrão: igual a num_ctx",
@@ -927,7 +946,13 @@
     "ollamaNotInstalled": "Ollama não instalado.",
     "ollamaUnavailable": "O Ollama está instalado, mas o serviço local não está disponível.",
     "loadLocalOllamaFailed": "Não foi possível carregar os modelos locais do Ollama.",
-    "apiBaseUrl": "URL Base da API"
+    "apiBaseUrl": "URL Base da API",
+    "defaultColumn": "Padrão",
+    "defaultColumnHint": "O modelo padrão global: o que um chat usa quando nem o chat nem o projeto indicam um modelo",
+    "defaultBadge": "Padrão",
+    "isDefault": "Modelo padrão global",
+    "setAsDefault": "Definir como modelo padrão global",
+    "setDefaultFailed": "Não foi possível marcar o modelo padrão: {{message}}"
   },
   "modelForm": {
     "addTitle": "Adicionar Modelo",
@@ -1262,7 +1287,9 @@
     "editEmpty": "A mensagem editada está vazia.",
     "editNotSent": "A mensagem editada não foi enviada.",
     "editBranchNotSent": "A branch \"{{name}}\" foi criada, mas a mensagem editada não foi enviada ({{error}}). Ela está na caixa de mensagem: envie-a por lá.",
-    "monitorChatMissing": "O chat deste evento de monitor não existe mais."
+    "monitorChatMissing": "O chat deste evento de monitor não existe mais.",
+    "runningCommand": "Executando {{command}}",
+    "slashCommandSyncFailed": "Não foi possível recarregar o chat após o comando: {{error}}"
   },
   "onboarding": {
     "welcome": "Bem-vindo ao GilzaBots! 🚀",
@@ -1357,7 +1384,9 @@
   },
   "modelSelect": {
     "notInCatalog": "Fora do catálogo de modelos",
-    "notInCatalogTitle": "'{{id}}' não está registrado no catálogo de modelos. Selecione um modelo registrado ou adicione-o em Editar Modelos."
+    "notInCatalogTitle": "'{{id}}' não está registrado no catálogo de modelos. Selecione um modelo registrado ou adicione-o em Editar Modelos.",
+    "globalDefaultSuffix": "padrão global",
+    "followGlobalDefault": "Padrão global: {{model}}"
   },
   "wysiwyg": {
     "bold": "Negrito (\\textbf)",
@@ -1948,5 +1977,18 @@
       "no_chat": "sem chat",
       "invalid": "inválido"
     }
+  },
+  "slashCommand": {
+    "running": "Executando…",
+    "waitingConfirmation": "Aguardando sua confirmação…",
+    "noOutput": "O comando terminou sem saída.",
+    "copy": "Copiar saída",
+    "copied": "Copiado",
+    "loading": "Carregando comandos…",
+    "loadFailed": "Não foi possível carregar os comandos: {{error}}",
+    "noMatch": "Nenhum comando corresponde.",
+    "menuLabel": "Comandos",
+    "menuHint": "↑↓ para navegar · Enter para executar · Tab para completar · Esc para fechar",
+    "skillBadge": "skill"
   }
 }

@@ -526,6 +526,15 @@ def _init_schema(db_path: str) -> None:
         except sqlite3.OperationalError:
             pass
 
+        # Models the user picked for this one chat. Empty means the chat follows
+        # the project's default model, then the catalog's global default (see
+        # `resolve_chat_models`).
+        for column in ("model", "worker_model"):
+            try:
+                conn.execute(f"ALTER TABLE project_chats ADD COLUMN {column} TEXT NOT NULL DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass
+
         try:
             conn.execute("ALTER TABLE project_history ADD COLUMN chat_id TEXT NOT NULL DEFAULT 'main'")
         except sqlite3.OperationalError:
@@ -622,17 +631,69 @@ def _stored_chat_reasoning_effort(value) -> str:
 
 
 def _inherit_chat_reasoning_effort(conn, name: str, source_chat_id: str, new_chat_id: str) -> None:
-    """Carry the source chat's reasoning effort over to a chat branched from it.
+    """Carry the source chat's reasoning effort and models over to a branch.
 
     A branch continues the same conversation with the same model, so it keeps
-    the depth the user chose for it; the selector still shows and changes it.
+    the model and the depth the user chose for it; the selectors still show and
+    change them.
     """
-    conn.execute(
-        "UPDATE project_chats SET reasoning_effort = COALESCE(("
-        "SELECT reasoning_effort FROM project_chats WHERE project = ? AND id = ?), '')"
-        " WHERE project = ? AND id = ?",
-        (name, source_chat_id, name, new_chat_id),
-    )
+    for column in ("reasoning_effort", "model", "worker_model"):
+        conn.execute(
+            f"UPDATE project_chats SET {column} = COALESCE(("
+            f"SELECT {column} FROM project_chats WHERE project = ? AND id = ?), '')"
+            " WHERE project = ? AND id = ?",
+            (name, source_chat_id, name, new_chat_id),
+        )
+
+
+# The per-chat model columns, by the role name the APIs use for them.
+CHAT_MODEL_ROLES = ("model", "worker_model")
+
+
+@dataclass(frozen=True)
+class ChatModelResolution:
+    """Which model a chat runs on, and where that choice came from.
+
+    ``model_source`` is ``"chat"`` (picked for this chat), ``"project"`` (the
+    project's default model), ``"global"`` (the catalog's default model) or
+    ``""`` when none of them names a model. ``worker_model`` is ``""`` when the
+    worker follows the orchestrator, with ``worker_source`` ``"orchestrator"``.
+    """
+
+    model: str
+    model_source: str
+    worker_model: str
+    worker_source: str
+
+
+def resolve_chat_models(project) -> ChatModelResolution:
+    """Resolve the orchestrator and worker models of *project*'s current chat.
+
+    Orchestrator: the chat's own model, else the project's default model
+    (``projects.model``), else the catalog's global default. Worker: the chat's
+    own worker model, else the project's worker model, else the orchestrator's.
+    """
+    chat_model = str(getattr(project, "chat_model", "") or "").strip()
+    project_model = str(getattr(project, "model", "") or "").strip()
+    if chat_model:
+        model, model_source = chat_model, "chat"
+    elif project_model:
+        model, model_source = project_model, "project"
+    else:
+        from .models_store import get_default_model_id
+
+        model = get_default_model_id()
+        model_source = "global" if model else ""
+
+    chat_worker = str(getattr(project, "chat_worker_model", "") or "").strip()
+    project_worker = str(getattr(project, "worker_model", "") or "").strip()
+    if chat_worker:
+        worker_model, worker_source = chat_worker, "chat"
+    elif project_worker:
+        worker_model, worker_source = project_worker, "project"
+    else:
+        worker_model, worker_source = "", "orchestrator"
+    return ChatModelResolution(model, model_source, worker_model, worker_source)
 
 
 @dataclass
@@ -643,9 +704,15 @@ class ProjectData:
     current_chat_id: str = ""
     # Reasoning effort chosen for `current_chat_id`; "" follows the model catalog.
     chat_reasoning_effort: str = ""
+    # Models picked for `current_chat_id`; "" follows the project's defaults.
+    chat_model: str = ""
+    chat_worker_model: str = ""
     mode: str = "plan"
+    # The project's default model (stored in `projects.model`). What a turn runs
+    # on is `active_model`, which lets the chat override it and falls back to the
+    # catalog's global default.
     model: str = ""
-    worker_model: str = ""   # "" → falls back to the project.model
+    worker_model: str = ""   # "" → falls back to the orchestrator's model
     project_name: str = ""
     project_path: str = ""
     skills: list = field(default_factory=lambda: ["gilzabots"])
@@ -673,6 +740,16 @@ class ProjectData:
         self.plan_text = ""
         self.subplans = []
         self.results = {}
+
+    @property
+    def active_model(self) -> str:
+        """The orchestrator model the current chat runs on ("" when none resolves)."""
+        return resolve_chat_models(self).model
+
+    @property
+    def active_worker_model(self) -> str:
+        """The current chat's worker model; "" means it follows the orchestrator."""
+        return resolve_chat_models(self).worker_model
 
     def context_header(self) -> str:
         """Returns a project context string to prepend to every prompt."""
@@ -1068,10 +1145,11 @@ class ProjectStore:
             # their own created_at, so this is when a chat was made, not when it
             # arrived; rowid breaks ties, the later insert first.
             chats_rows = conn.execute(
-                "SELECT id, name, reasoning_effort FROM project_chats WHERE project = ? ORDER BY created_at DESC, rowid DESC", (name,)
+                "SELECT id, name, reasoning_effort, model, worker_model FROM project_chats WHERE project = ? ORDER BY created_at DESC, rowid DESC", (name,)
             ).fetchall()
             chats = [{"id": r["id"], "name": r["name"]} for r in chats_rows]
             chat_efforts = {r["id"]: _stored_chat_reasoning_effort(r["reasoning_effort"]) for r in chats_rows}
+            chat_models = {r["id"]: (r["model"] or "", r["worker_model"] or "") for r in chats_rows}
 
             if chat_id is None:
                 chat_id = chats[0]["id"] if chats else ""
@@ -1115,6 +1193,8 @@ class ProjectStore:
                 chats=chats,
                 current_chat_id=chat_id,
                 chat_reasoning_effort=chat_efforts.get(chat_id, ""),
+                chat_model=chat_models.get(chat_id, ("", ""))[0],
+                chat_worker_model=chat_models.get(chat_id, ("", ""))[1],
                 mode=row["mode"],
                 model=_available_project_model(row["model"]),
                 worker_model=_available_project_model(row["worker_model"] if "worker_model" in row.keys() else (row["alternative_model"] if "alternative_model" in row.keys() else "")),
@@ -1918,6 +1998,50 @@ class ProjectStore:
         with _conn(self.db_path) as conn:
             cursor = conn.execute(
                 "UPDATE project_chats SET reasoning_effort = ? WHERE project = ? AND id = ?",
+                (stored, name, chat_id),
+            )
+            if not cursor.rowcount:
+                raise ChatNotFoundError(
+                    f"Chat '{chat_id}' does not exist in project '{name}'"
+                )
+        return stored
+
+    def list_chat_models(self, name: str) -> dict:
+        """Return ``{chat_id: {"model": ..., "worker_model": ...}}`` for every chat.
+
+        An empty value means the chat follows the project's default for that role.
+        """
+        with _conn(self.db_path) as conn:
+            rows = conn.execute(
+                "SELECT id, model, worker_model FROM project_chats WHERE project = ?",
+                (name,),
+            ).fetchall()
+        return {
+            r["id"]: {"model": r["model"] or "", "worker_model": r["worker_model"] or ""}
+            for r in rows
+        }
+
+    def set_chat_model(self, name: str, chat_id: str, role: str, model_id) -> str:
+        """Store the model one chat uses for *role* and return the stored id.
+
+        *role* is ``"model"`` (orchestrator) or ``"worker_model"``. An empty id
+        clears the choice, so the chat follows the project's default again. A
+        non-empty id must name a catalog entry: a chat pointed at an unknown
+        model would fail on its next turn while the selector looked saved.
+        Raises ``ValueError`` for an unknown role or model and
+        :class:`ChatNotFoundError` for an unknown chat.
+        """
+        if role not in CHAT_MODEL_ROLES:
+            raise ValueError(f"Unknown chat model role '{role}'")
+        stored = str(model_id or "").strip()
+        if stored:
+            from .models_store import get_model
+
+            if get_model(stored) is None:
+                raise ValueError(f"Model '{stored}' is not in the model catalog")
+        with _conn(self.db_path) as conn:
+            cursor = conn.execute(
+                f"UPDATE project_chats SET {role} = ? WHERE project = ? AND id = ?",
                 (stored, name, chat_id),
             )
             if not cursor.rowcount:

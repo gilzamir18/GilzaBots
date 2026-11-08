@@ -1,0 +1,7 @@
+desc: Diagnosis loop for hard bugs and performance regressions. Use when the user
+  says "diagnose" or "debug this", or reports something broken, throwing, failing
+  or slow.
+id: diagnosing-bugs
+name: diagnosing-bugs
+pack: engineering-workflow
+type: skill

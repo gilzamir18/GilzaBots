@@ -77,6 +77,7 @@ _RELEASE_REFLECTION_BEFORE = frozenset({
     "tool_result",
     "thought",
     "info",
+    "warning",
     "problem",
     "error",
     "agent_finished",
@@ -308,13 +309,26 @@ class TerminalEventRenderer:
             T.console.print(f"  [dim]⌞ {result}[/dim]")
 
     def _on_info(self, data: dict) -> None:
+        self._print_notice(data, "dim")
+
+    def _on_warning(self, data: dict) -> None:
+        self._print_notice(data, "yellow")
+
+    def _print_notice(self, data: dict, style: str) -> None:
+        """An info or warning line, with the agent that sent it.
+
+        Both texts are escaped: a subagent's label is written by the model, and
+        a `[` in it would otherwise be read as Rich markup.
+        """
+        from rich.markup import escape
+
         message = str(data.get("message") or "").strip()
         if not message:
             return
         self._close_visible_run()
         agent = str(data.get("agent") or "")
-        label = f"[dim]{agent}:[/dim] " if agent else ""
-        T.console.print(f"  {label}[dim]{message}[/dim]")
+        label = f"[dim]{escape(agent)}:[/dim] " if agent else ""
+        T.console.print(f"  {label}[{style}]{escape(message)}[/{style}]")
 
     def _on_provider_wait(self, data: dict) -> None:
         """The provider has been silent past the threshold, or stopped being.
@@ -332,6 +346,25 @@ class TerminalEventRenderer:
             return
         key = "cli_provider_wait_stream" if data.get("phase") == "stream" else "cli_provider_wait"
         T.warning(f"{label}{_(key, seconds=seconds)}")
+
+    def _on_context_compaction(self, data: dict) -> None:
+        """The turn compacted its context because the window passed the threshold."""
+        self._close_visible_run()
+        phase = data.get("phase")
+        if phase == "started":
+            T.info(_("cli_compact_auto_started", before=int(data.get("pre_tokens") or 0)))
+        elif phase == "completed":
+            T.success(_(
+                "cli_compact_done",
+                count=int(data.get("messages_compacted") or 0),
+                before=int(data.get("pre_tokens") or 0),
+                after=int(data.get("post_tokens") or 0),
+            ))
+            from .compaction import print_compaction_details
+
+            print_compaction_details(data)
+        elif phase == "failed":
+            T.warning(_("cli_compact_auto_failed", error=str(data.get("error") or "")))
 
     def _on_problem(self, data: dict) -> None:
         self._close_visible_run()

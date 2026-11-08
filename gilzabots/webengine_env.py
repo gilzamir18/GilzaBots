@@ -31,10 +31,12 @@ Chromium still does to collect GPU information. All three rows rendered the canv
 correctly. An earlier version of this module applied only the flag, and its claim
 that the renderer could no longer take the process down was not true.
 
-That is a real cost, so it is never applied silently: `GPU_OFF` is chosen by the
-user, in Settings or through ``GILZABOTS_DISABLE_GPU``, and the choice is recorded
-in the crash log next to the run it belongs to, which is what makes "did turning
-it off help?" an answerable question.
+That is a real cost in compositing smoothness, and it is the default anyway
+(`GPU_DEFAULT`): a slower window is preferred to one that can vanish with the
+application inside it. The user can turn acceleration back on in Settings or,
+for a single run, through ``GILZABOTS_DISABLE_GPU=0``; whichever mode a run used
+is recorded in the crash log next to it, which is what makes "did the GPU cause
+this?" an answerable question.
 
 The Linux default is the one exception, and it predates this module: QtWebEngine's
 GPU process can abort at startup when Mesa's Zink/EGL layer cannot acquire a DRM
@@ -59,6 +61,9 @@ QUICK_BACKEND_SOFTWARE = "software"
 GPU_AUTO = "auto"
 GPU_OFF = "off"
 GPU_MODES = (GPU_AUTO, GPU_OFF)
+# The mode used when nothing was chosen: no saved value, or one that cannot be
+# read. Hardware acceleration is opt-in (see the module docstring).
+GPU_DEFAULT = GPU_OFF
 
 _TRUE = {"1", "true", "yes", "on"}
 _FALSE = {"0", "false", "no", "off"}
@@ -72,15 +77,18 @@ _APPLIED_OVER: dict[str, str | None] = {}
 def normalize_gpu_mode(value: Any) -> str:
     """Coerce a stored or user-supplied value into a valid mode.
 
-    Anything unrecognised becomes `GPU_AUTO`: a corrupted settings file must not
-    leave the application permanently in software rendering with no explanation.
+    Anything unrecognised becomes `GPU_DEFAULT`, the same mode a missing value
+    gets, so a corrupted settings file behaves like a fresh one.
     """
     text = str(value or "").strip().lower()
     if text in GPU_MODES:
         return text
     if text in _TRUE:  # "disable gpu: true", written by an older or hand-edited file
         return GPU_OFF
-    return GPU_AUTO
+    # "disable gpu: false". `False` needs its own test: `value or ""` turns it into "".
+    if value is False or text in _FALSE:
+        return GPU_AUTO
+    return GPU_DEFAULT
 
 
 def resolve_gpu_mode(
@@ -103,7 +111,7 @@ def resolve_gpu_mode(
 
     if settings is not None and settings.get("webengine_gpu") is not None:
         return normalize_gpu_mode(settings.get("webengine_gpu")), "settings"
-    return GPU_AUTO, "default"
+    return GPU_DEFAULT, "default"
 
 
 def _append_flag(flags: str, flag: str) -> str:

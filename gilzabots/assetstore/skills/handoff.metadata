@@ -1,0 +1,6 @@
+desc: Compact the current conversation into a handoff document for another agent or
+  session to pick up.
+id: handoff
+name: handoff
+pack: engineering-workflow
+type: skill
