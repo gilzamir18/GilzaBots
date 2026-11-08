@@ -11,7 +11,7 @@ import { enterLayout, layoutAfterOpeningFile, layoutAllowsChatToggle, layoutHasC
 import { compactChatLayoutFor } from './utils/chatCompact';
 import { clearAnsweredRequest, confirmRequestDialog, dialogRequestKey, normalizeInputRequest } from './utils/askQuestion';
 import { readRunConflict, RUN_CONFLICT_TURN_STOPPING } from './utils/agentRunConflict';
-import { isSlashCommandText } from './utils/slashCommands.js';
+import { isBuiltinSlashCommand, isSlashCommandText } from './utils/slashCommands.js';
 import { interruptedTurnContent } from './utils/turnMarkers.js';
 import { settleAtHandoff } from './utils/editHandoff.js';
 import { formatWaitDuration, providerWaitFromEvent } from './utils/providerWait.js';
@@ -3725,11 +3725,32 @@ export default function App() {
     await syncChatAfterCommand(chatId);
   };
 
+  // The built-in commands, as `/api/gilzabots/slash-commands` lists them
+  // without a project (no skills). The registry is fixed for the server's
+  // lifetime, so it is read once; a failed read is retried next time.
+  const builtinSlashCommandsRef = useRef(null);
+  const loadBuiltinSlashCommands = async () => {
+    if (builtinSlashCommandsRef.current) return builtinSlashCommandsRef.current;
+    try {
+      const res = await fetch('/api/gilzabots/slash-commands');
+      if (!res.ok) return [];
+      const commands = (await res.json())?.commands;
+      if (!Array.isArray(commands)) return [];
+      builtinSlashCommandsRef.current = commands;
+      return commands;
+    } catch {
+      return [];
+    }
+  };
+
   // Runs a `/` command in its own window (SlashCommandOutputModal). Nothing is
   // written to the conversation: neither the command line nor its output.
   // A `/name` the backend reports as a skill the user may run is the
   // exception: it is a turn, sent as a chat message (PROJECT_DESIGN 2.29), by
-  // `options.onSkill` when the caller has its own way of sending it.
+  // `options.onSkill` when the caller has its own way of sending it, and no
+  // window is opened for it at all. The window therefore opens on "running"
+  // only for a built-in command; any other `/name` (a skill, or an unknown
+  // word) gets one only once the backend has answered that it is not a skill.
   const runSlashCommand = async (commandText, options = {}) => {
     if (!activeProject) return;
     if (isTurnBusy()) {
@@ -3739,7 +3760,9 @@ export default function App() {
     const chatId = activeChatIdRef.current || '';
     const command = commandText.split(/\s+/, 1)[0];
     localTurnRef.current = true;
-    setSlashCommandOutput({ command: commandText, status: 'running', text: '' });
+    if (isBuiltinSlashCommand(await loadBuiltinSlashCommands(), command)) {
+      setSlashCommandOutput({ command: commandText, status: 'running', text: '' });
+    }
     addLog('info', t('app.runningCommand', 'Running {{command}}', { command: commandText }));
     let released = false;
     try {

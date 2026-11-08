@@ -1234,6 +1234,37 @@ async def check_chat_slash_menu(page: Page, check: Checks) -> None:
     await page.type_text("and/or")
     await asyncio.sleep(SETTLE)
     check("a slash inside prose opens nothing", await menu() is None)
+
+    await clear_composer()
+    await page.type_text("please run /co")
+    await asyncio.sleep(SETTLE)
+    shown = await menu()
+    check("a /word at the end of a message opens the list",
+          shown and shown["names"] == ["/cost", "/compact"], f"menu={shown}")
+    await page.key("Enter", 13, text="\r")
+    await asyncio.sleep(SETTLE)
+    check("Enter there completes the word and runs nothing",
+          await page.js("window.__composerText()") == "please run /cost "
+          and await page.js("window.__slashRuns.length") == 1
+          and await page.js("window.__sentFromComposer.length") == 0
+          and await menu() is None,
+          f"composer={await page.js('window.__composerText()')!r}")
+
+    await clear_composer()
+    await page.type_text("/he now")
+    for _ in range(4):
+        await page.key("ArrowLeft", 37, code="ArrowLeft")
+    await asyncio.sleep(SETTLE)
+    shown = await menu()
+    check("the /word under the caret opens the list mid-text",
+          shown and shown["names"][:1] == ["/help"], f"menu={shown}")
+    await page.key("Tab", 9, code="Tab")
+    await asyncio.sleep(SETTLE)
+    caret = await page.js(f"({COMPOSER_JS}).selectionStart")
+    check("Tab writes the name over the word and puts the caret past it",
+          await page.js("window.__composerText()") == "/help now" and caret == 6
+          and await menu() is None,
+          f"composer={await page.js('window.__composerText()')!r} caret={caret}")
     await clear_composer()
 
 

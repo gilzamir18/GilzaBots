@@ -28,7 +28,7 @@ import ModelSelect from './ModelSelect.jsx';
 import { chatModelChoice, resolveChatModels, withChatModel } from '../utils/chatModels.js';
 import TutorialMenu from './TutorialMenu.jsx';
 import SlashCommandMenu from './SlashCommandMenu.jsx';
-import { completionText, filterSlashCommands, moveSelection, requiresArguments, slashQuery } from '../utils/slashCommands.js';
+import { applySlashCompletion, filterSlashCommands, moveSelection, requiresArguments, slashTokenAt } from '../utils/slashCommands.js';
 import { getPreference, setPreference } from '../utils/preferences.js';
 import {
   FOLLOW_BOTTOM,
@@ -542,6 +542,11 @@ export default function ChatPanel({
   const [slashCommandsError, setSlashCommandsError] = useState('');
   const [slashMenuIndex, setSlashMenuIndex] = useState(0);
   const [slashMenuDismissedFor, setSlashMenuDismissedFor] = useState(null);
+  // Where the composer's caret is, for the text it was read from: the menu
+  // completes the `/word` under it, wherever that is in the message. A text
+  // set from outside (history, a staged prompt) carries no caret, so the end
+  // of the input stands for it; -1 means a selection, which opens nothing.
+  const [chatCaret, setChatCaret] = useState({ value: '', pos: null });
   // MCP config panel state
   const [showMcpPanel, setShowMcpPanel] = useState(false);
   const [mcpUrlDraft, setMcpUrlDraft] = useState('');
@@ -819,7 +824,16 @@ export default function ChatPanel({
     });
   };
 
-  const slashToken = activeProject && !isEvolvingPrompt ? slashQuery(chatInput) : null;
+  const trackChatCaret = (el) => {
+    if (!el) return;
+    const pos = el.selectionStart === el.selectionEnd ? el.selectionStart : -1;
+    setChatCaret(prev => (prev.value === el.value && prev.pos === pos ? prev : { value: el.value, pos }));
+  };
+  const caretPos = chatCaret.value === chatInput ? chatCaret.pos : null;
+  const slashToken = activeProject && !isEvolvingPrompt && caretPos !== -1
+    ? slashTokenAt(chatInput, caretPos ?? undefined)
+    : null;
+  const slashQueryText = slashToken ? slashToken.query : null;
   const slashMenuOpen = slashToken !== null && slashMenuDismissedFor !== chatInput;
 
   // Fetched each time the menu opens, for the open project: the skills a user
@@ -844,20 +858,29 @@ export default function ChatPanel({
   }, [slashMenuOpen, slashCommands, slashProjectPath]);
 
   const slashMatches = useMemo(
-    () => (slashMenuOpen ? filterSlashCommands(slashCommands || [], slashToken) : []),
-    [slashMenuOpen, slashCommands, slashToken],
+    () => (slashMenuOpen ? filterSlashCommands(slashCommands || [], slashQueryText) : []),
+    [slashMenuOpen, slashCommands, slashQueryText],
   );
 
   // A new query starts at the best match.
-  useEffect(() => { setSlashMenuIndex(0); }, [slashToken]);
+  useEffect(() => { setSlashMenuIndex(0); }, [slashQueryText, slashToken?.start]);
 
-  // Enter on a command: run it when it has a bare form, otherwise put it in
-  // the input with room for the arguments it needs.
+  // Enter on a command line that is just the command: run it when it has a
+  // bare form. Otherwise — Tab, a command that needs arguments, or a `/word`
+  // inside a message — the name is written over the word and the caret put
+  // after it; a `/name` inside a message stays text (PROJECT_DESIGN 2.9).
   const acceptSlashCommand = (command, { run }) => {
-    if (!command) return;
-    if (!run || requiresArguments(command)) {
-      setChatInput(completionText(command));
-      inputRef.current?.focus();
+    if (!command || !slashToken) return;
+    if (!run || !slashToken.alone || requiresArguments(command)) {
+      const { text, caret } = applySlashCompletion(chatInput, slashToken, command);
+      setChatInput(text);
+      setChatCaret({ value: text, pos: caret });
+      requestAnimationFrame(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        el.focus();
+        el.setSelectionRange(caret, caret);
+      });
       return;
     }
     if (isAgentRunning) {
@@ -3323,7 +3346,8 @@ export default function ChatPanel({
             ref={inputRef}
             rows={1}
             value={chatInput}
-            onChange={(e) => setChatInput(e.target.value)}
+            onChange={(e) => { setChatInput(e.target.value); trackChatCaret(e.target); }}
+            onSelect={(e) => trackChatCaret(e.target)}
             onKeyDown={handleKeyDown}
             onPaste={handleInputPaste}
             disabled={!activeProject || isEvolvingPrompt}
