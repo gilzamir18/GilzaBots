@@ -104,3 +104,7 @@ A reference to each blocking ticket, or "None (can start immediately)". Omit thi
 </issue-template>
 
 In either form, avoid specific file paths and code snippets: they go stale fast. Exception: a snippet a prototype produced that encodes a decision more precisely than prose (a state machine, a reducer, a schema, a type shape), trimmed to the decision-rich parts and marked as coming from a prototype.
+
+## Next step
+
+After publishing, tell the user the next step is `/implement` (one ticket per chat, or the whole spec in one run). Suggest only skills of this pack (`/which-skill` lists them); no other skill name exists.

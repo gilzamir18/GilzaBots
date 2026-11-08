@@ -25,3 +25,7 @@ If the user passed a ticket reference, fetch it the way `docs/agents/issue-track
 Once the work is done, call `load_skill("code-review")` and review it against the point the work started from (the integration branch's base, or the commit before the first change). Fix what the review raises.
 
 Then commit the work to the current branch with `run_command`, with a message that names the tickets it resolves.
+
+## Next step
+
+When the work is committed, suggest `/retro` to improve the agent's environment, and the `pr` skill when the work goes up as a pull request. Suggest only skills of this pack (`/which-skill` lists them); no other skill name exists.

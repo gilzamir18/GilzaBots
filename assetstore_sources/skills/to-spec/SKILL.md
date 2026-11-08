@@ -73,3 +73,7 @@ What is out of scope for this spec.
 Any further notes about the feature.
 
 </spec-template>
+
+## Next step
+
+After publishing, tell the user the next step is `/to-tickets`, which splits this spec into tickets; for work small enough to build in one go, `/implement` can take the spec directly. Suggest only skills of this pack (`/which-skill` lists them); no other skill name exists.
