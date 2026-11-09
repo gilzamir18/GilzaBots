@@ -9,13 +9,16 @@ Config schema:
         "mcp_tool": "web_search"  # name of the tool to call on the MCP server
     }
 
-When mcp_url is empty the built-in DuckDuckGo backend is used.
-When mcp_url is set it completely replaces DuckDuckGo — no silent fallback.
+When mcp_url is empty the built-in ddgs metasearch backend is used (the
+"duckduckgo" provider: ddgs scrapes several engines, DuckDuckGo among them).
+When mcp_url is set it completely replaces ddgs — no silent fallback.
 """
 
 from __future__ import annotations
 
 import json
+import threading
+import time
 from pathlib import Path
 from typing import Any
 
@@ -66,41 +69,124 @@ def is_enabled() -> bool:
     return bool(load_config().get("enabled", True))
 
 
-# ─── DuckDuckGo backend ───────────────────────────────────────────────────────
+# ─── ddgs metasearch backend ──────────────────────────────────────────────────
+#
+# `ddgs` is a metasearch library: one text() call scrapes several engines
+# (wikipedia, brave, duckduckgo, mojeek, startpage, yahoo, ...).  Those engines
+# rate-limit and bot-block scrapers, and ddgs reports a blocked response
+# (HTTP 429, DuckDuckGo's HTTP 202, a captcha page) exactly like an empty one.
+# Bursts of searches -- e.g. an agent issuing four web_search calls in
+# parallel, each fanning out to several engines -- are what trips those blocks,
+# so searches run one at a time, a minimum interval apart, through one shared
+# DDGS client (which keeps its engines' HTTP sessions and cookies).
 
-def _ddg_search(query: str, max_results: int) -> str:
-    """Search via DuckDuckGo and return a plain-text summary of results.
+_DDGS_MIN_INTERVAL_S = 2.0   # minimum gap between the end of one search and the start of the next
+_DDGS_QUEUE_TIMEOUT_S = 15.0  # how long a search waits for earlier ones before giving up
+_DDGS_LOCK = threading.Lock()
+_ddgs_state: dict[str, Any] = {"cls": None, "client": None, "last_finished": 0.0}
 
-    Uses the `ddgs` package (formerly `duckduckgo_search`).  The context-manager
-    form of DDGS() has a known bug returning empty results in v6+; we instantiate
-    DDGS directly instead.
-    """
-    # Try the newer `ddgs` package first, fall back to the legacy name.
+
+def _ddgs_class() -> Any:
+    """Return the DDGS class from `ddgs`, or from its legacy name, or None."""
     try:
         from ddgs import DDGS
     except ImportError:
         try:
             from duckduckgo_search import DDGS
         except ImportError:
-            return (
-                "[web_search] Search package not installed. "
-                "Run: pip install ddgs"
-            )
+            return None
+    return DDGS
+
+
+def _ddgs_client(ddgs_cls: Any) -> Any:
+    """Return the shared DDGS client, creating it for *ddgs_cls* if needed.
+
+    The caller must hold _DDGS_LOCK.  The context-manager form of DDGS() has a
+    known bug returning empty results in v6+, so DDGS is instantiated directly.
+    """
+    if _ddgs_state["cls"] is not ddgs_cls:
+        _ddgs_state["client"] = ddgs_cls()
+        _ddgs_state["cls"] = ddgs_cls
+    return _ddgs_state["client"]
+
+
+def _ddgs_engine_names() -> str:
     try:
-        ddgs = DDGS()
-        raw = ddgs.text(query, max_results=max_results)
-        results = []
-        for r in (raw or []):
-            title = r.get("title", "")
-            href = r.get("href", "")
-            body = r.get("body", "")
-            results.append(f"**{title}**\n{href}\n{body}")
-        if not results:
-            return f"[web_search] No results found for: {query}"
-        header = f"Web search results for: {query}\n\n"
-        return header + "\n\n---\n\n".join(results)
-    except Exception as exc:
-        return f"[web_search] DuckDuckGo search failed: {exc}"
+        from ddgs.engines import ENGINES
+        return ", ".join(sorted(ENGINES["text"]))
+    except Exception:
+        return "its search engines"
+
+
+def _ddgs_no_results_message(query: str) -> str:
+    return (
+        f"[web_search] No results for: {query}\n"
+        f"The ddgs metasearch queried {_ddgs_engine_names()} and none returned a result. "
+        "ddgs reports blocked or rate-limited engine responses (HTTP 429/202, captcha pages) "
+        "the same way as an empty result, so this does not distinguish 'nothing matches' from "
+        "'the engines are throttling this machine'. If simple, common queries fail too, the "
+        "engines are throttling: waiting helps, while immediate or parallel retries prolong the block."
+    )
+
+
+def _ddgs_error_message(query: str, exc: Exception) -> str:
+    kind = type(exc).__name__
+    if kind == "TimeoutException":
+        return (
+            f"[web_search] Search timed out for: {query}\n"
+            f"No ddgs engine returned a result; the last engine error was: {exc}. "
+            "That error names only the last engine that failed -- the other engines returned "
+            "nothing, which ddgs also reports for blocked or rate-limited responses."
+        )
+    if kind == "RatelimitException":
+        return f"[web_search] Search engines are rate-limiting this machine ({exc}). Wait before searching again."
+    if str(exc).startswith("No results found"):
+        return _ddgs_no_results_message(query)
+    return f"[web_search] ddgs metasearch failed ({kind}): {exc}"
+
+
+def _ddg_search(query: str, max_results: int) -> str:
+    """Search via the ddgs metasearch and return a plain-text summary of results.
+
+    Searches are serialized and spaced by _DDGS_MIN_INTERVAL_S (see above).
+    """
+    ddgs_cls = _ddgs_class()
+    if ddgs_cls is None:
+        return (
+            "[web_search] Search package not installed. "
+            "Run: pip install ddgs"
+        )
+
+    if not _DDGS_LOCK.acquire(timeout=_DDGS_QUEUE_TIMEOUT_S):
+        return (
+            f"[web_search] Not run: earlier web searches were still running after "
+            f"{_DDGS_QUEUE_TIMEOUT_S:g}s. Searches run one at a time, at least "
+            f"{_DDGS_MIN_INTERVAL_S:g}s apart, so the search engines do not rate-limit them; "
+            "issue web searches one after another rather than in parallel."
+        )
+    try:
+        wait = _DDGS_MIN_INTERVAL_S - (time.monotonic() - _ddgs_state["last_finished"])
+        if wait > 0:
+            time.sleep(wait)
+        try:
+            raw = _ddgs_client(ddgs_cls).text(query, max_results=max_results)
+        except Exception as exc:
+            return _ddgs_error_message(query, exc)
+        finally:
+            _ddgs_state["last_finished"] = time.monotonic()
+    finally:
+        _DDGS_LOCK.release()
+
+    results = []
+    for r in (raw or []):
+        title = r.get("title", "")
+        href = r.get("href", "")
+        body = r.get("body", "")
+        results.append(f"**{title}**\n{href}\n{body}")
+    if not results:
+        return _ddgs_no_results_message(query)
+    header = f"Web search results for: {query}\n\n"
+    return header + "\n\n---\n\n".join(results)
 
 
 # ─── MCP backend ──────────────────────────────────────────────────────────────
@@ -217,7 +303,7 @@ async def test_mcp(mcp_url: str, mcp_tool: str, mcp_api_key: str = "") -> dict[s
 # ─── Public search dispatcher ─────────────────────────────────────────────────
 
 async def do_search(query: str, max_results: int = 5) -> str:
-    """Dispatch a search using the active backend (MCP if configured, else DuckDuckGo).
+    """Dispatch a search using the active backend (MCP if configured, else ddgs).
 
     This is the single entry point called by the `web_search` tool in tools.py.
     """

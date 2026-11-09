@@ -10,6 +10,28 @@ from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
 
+@pytest.fixture(autouse=True)
+def _fresh_ddgs_throttle(monkeypatch):
+    """Each test starts with no shared DDGS client and no inter-search delay."""
+    from gilzabots import web_search_config as wsc
+    monkeypatch.setattr(wsc, "_DDGS_MIN_INTERVAL_S", 0.0)
+    monkeypatch.setattr(wsc, "_ddgs_state", {"cls": None, "client": None, "last_finished": 0.0})
+
+
+def _ddgs_patch_target() -> str:
+    try:
+        import ddgs  # noqa: F401
+        return "ddgs.DDGS"
+    except ImportError:
+        return "duckduckgo_search.DDGS"
+
+
+def _raw_web_search():
+    """The undecorated web_search function (gilzabots_tool wraps it with functools.wraps)."""
+    from gilzabots import tools as tools_mod
+    return tools_mod.web_search._func.__wrapped__
+
+
 # ─── Config module tests ───────────────────────────────────────────────────────
 
 def test_load_config_defaults(tmp_path, monkeypatch):
@@ -94,7 +116,110 @@ def test_ddg_search_no_results():
         MockDDGS.return_value.__enter__.return_value.text.return_value = []
         from gilzabots.web_search_config import _ddg_search
         result = _ddg_search("xyzzy_nonexistent_query_12345", max_results=1)
-    assert "No results found" in result
+    assert result.startswith("[web_search] No results for: xyzzy_nonexistent_query_12345")
+    assert "429" in result
+
+
+def test_ddg_search_reports_ddgs_no_results_as_possible_throttling():
+    """ddgs raises 'No results found.' when every engine came back empty -- which
+    includes engines that answered 429/202/captcha -- so the message must say so
+    and must not blame DuckDuckGo alone."""
+    from ddgs.exceptions import DDGSException
+    with patch(_ddgs_patch_target()) as MockDDGS:
+        MockDDGS.return_value.text.side_effect = DDGSException("No results found.")
+        from gilzabots.web_search_config import _ddg_search
+        result = _ddg_search("Quem foi Machado de Assis", max_results=5)
+    assert result.startswith("[web_search] No results for: Quem foi Machado de Assis")
+    assert "throttling" in result
+    assert "DuckDuckGo search failed" not in result
+
+
+def test_ddg_search_timeout_names_last_engine_only():
+    from ddgs.exceptions import TimeoutException
+    with patch(_ddgs_patch_target()) as MockDDGS:
+        MockDDGS.return_value.text.side_effect = TimeoutException("https://www.mojeek.com/search operation timed out")
+        from gilzabots.web_search_config import _ddg_search
+        result = _ddg_search("UVA Sobral", max_results=5)
+    assert result.startswith("[web_search] Search timed out for: UVA Sobral")
+    assert "mojeek.com" in result
+    assert "only the last engine" in result
+
+
+def test_ddg_search_other_errors_name_the_exception_type():
+    with patch(_ddgs_patch_target()) as MockDDGS:
+        MockDDGS.return_value.text.side_effect = ValueError("boom")
+        from gilzabots.web_search_config import _ddg_search
+        result = _ddg_search("q", max_results=1)
+    assert result == "[web_search] ddgs metasearch failed (ValueError): boom"
+
+
+def test_ddg_search_reuses_one_client():
+    with patch(_ddgs_patch_target()) as MockDDGS:
+        MockDDGS.return_value.text.return_value = [{"title": "T", "href": "https://e.com", "body": "b"}]
+        from gilzabots.web_search_config import _ddg_search
+        _ddg_search("a", max_results=1)
+        _ddg_search("b", max_results=1)
+    assert MockDDGS.call_count == 1
+    assert MockDDGS.return_value.text.call_count == 2
+
+
+def test_ddg_searches_never_overlap():
+    """Parallel web_search calls must reach the engines one at a time."""
+    import threading
+    import time
+    active = {"now": 0, "max": 0}
+    guard = threading.Lock()
+
+    def fake_text(query, max_results):
+        with guard:
+            active["now"] += 1
+            active["max"] = max(active["max"], active["now"])
+        time.sleep(0.05)
+        with guard:
+            active["now"] -= 1
+        return [{"title": query, "href": "https://e.com", "body": "b"}]
+
+    with patch(_ddgs_patch_target()) as MockDDGS:
+        MockDDGS.return_value.text.side_effect = fake_text
+        from gilzabots.web_search_config import _ddg_search
+        results = []
+        threads = [threading.Thread(target=lambda q=q: results.append(_ddg_search(q, 1))) for q in "abcd"]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+    assert active["max"] == 1
+    assert len(results) == 4 and all(r.startswith("Web search results for:") for r in results)
+
+
+def test_ddg_searches_are_spaced_by_min_interval(monkeypatch):
+    import time
+    from gilzabots import web_search_config as wsc
+    monkeypatch.setattr(wsc, "_DDGS_MIN_INTERVAL_S", 0.3)
+    starts = []
+
+    def fake_text(query, max_results):
+        starts.append(time.monotonic())
+        return [{"title": query, "href": "https://e.com", "body": "b"}]
+
+    with patch(_ddgs_patch_target()) as MockDDGS:
+        MockDDGS.return_value.text.side_effect = fake_text
+        wsc._ddg_search("a", 1)
+        wsc._ddg_search("b", 1)
+    assert starts[1] - starts[0] >= 0.3
+
+
+def test_ddg_search_gives_up_waiting_for_earlier_searches(monkeypatch):
+    from gilzabots import web_search_config as wsc
+    monkeypatch.setattr(wsc, "_DDGS_QUEUE_TIMEOUT_S", 0.05)
+    with patch(_ddgs_patch_target()) as MockDDGS:
+        assert wsc._DDGS_LOCK.acquire(timeout=1)
+        try:
+            result = wsc._ddg_search("q", 1)
+        finally:
+            wsc._DDGS_LOCK.release()
+    assert result.startswith("[web_search] Not run: earlier web searches were still running")
+    MockDDGS.return_value.text.assert_not_called()
 
 
 # ─── MCP backend ──────────────────────────────────────────────────────────────
@@ -218,9 +343,8 @@ def test_do_search_uses_ddg_when_no_mcp(tmp_path, monkeypatch):
     monkeypatch.setattr("gilzabots.web_search_config._CONFIG_PATH", cfg_path)
 
     fake_results = [{"title": "Test", "href": "https://example.com", "body": "Example body"}]
-    with patch("duckduckgo_search.DDGS") as MockDDGS:
-        instance = MockDDGS.return_value.__enter__.return_value
-        instance.text.return_value = fake_results
+    with patch(_ddgs_patch_target()) as MockDDGS:
+        MockDDGS.return_value.text.return_value = fake_results
         from gilzabots.web_search_config import do_search
         result = asyncio.run(do_search("test query", max_results=1))
     assert "Test" in result
@@ -265,21 +389,30 @@ def test_web_search_tool_disabled(tmp_path, monkeypatch):
     original = wsc._CONFIG_PATH
     wsc._CONFIG_PATH = cfg_path
     try:
-        # Call the raw Python function that underlies the FunctionBlock
-        import inspect
-        from gilzabots import tools as tools_mod
-        fn = tools_mod.web_search
-        # FunctionBlock wraps the original; invoke its .func attribute or use the module-level fn
-        raw_fn = getattr(fn, "func", None) or getattr(fn, "__wrapped__", None)
-        if raw_fn is None:
-            # Locate by scanning module globals for the plain function definition
-            raw_fn = getattr(tools_mod, "_web_search_raw", None)
-        if raw_fn is None:
-            pytest.skip("Cannot locate raw web_search function — @as_tool may have hidden it")
-        result = raw_fn(query="test")
+        result = _raw_web_search()(query="test")
         assert "disabled" in result.lower()
     finally:
         wsc._CONFIG_PATH = original
+
+
+def test_web_search_tool_timeout_returns_promptly(tmp_path, monkeypatch):
+    """A hung backend must not hold the tool past its timeout, and the message says what happened."""
+    import time
+    cfg_path = tmp_path / "web_search.json"
+    cfg_path.write_text(json.dumps({"enabled": True, "mcp_url": "", "mcp_tool": "web_search"}))
+    monkeypatch.setattr("gilzabots.web_search_config._CONFIG_PATH", cfg_path)
+
+    async def slow_search(query, max_results=5):
+        await asyncio.sleep(1.0)
+        return "late"
+
+    from gilzabots import tools as tools_mod
+    monkeypatch.setattr("gilzabots.web_search_config.do_search", slow_search)
+    monkeypatch.setattr(tools_mod, "_WEB_SEARCH_TIMEOUT_S", 0.1)
+    started = time.monotonic()
+    result = _raw_web_search()(query="hangs")
+    assert time.monotonic() - started < 0.8
+    assert result.startswith("[web_search] Search did not finish within 0.1s")
 
 
 # ─── Context-budget truncation ────────────────────────────────────────────────
@@ -336,11 +469,7 @@ def test_web_search_tool_truncates_oversized_ddg_result(tmp_path, monkeypatch):
             MockDDGS.return_value.text.return_value = fake_results
             MockDDGS.return_value.__enter__.return_value.text.return_value = fake_results
 
-            fn = tools_mod.web_search
-            raw_fn = getattr(fn, "func", None) or getattr(fn, "__wrapped__", None) or getattr(tools_mod, "_web_search_raw", None)
-            if raw_fn is None:
-                pytest.skip("Cannot locate raw web_search function — @as_tool may have hidden it")
-            result = raw_fn(query="big query")
+            result = _raw_web_search()(query="big query")
     finally:
         tools_mod.set_project_context(None)
 

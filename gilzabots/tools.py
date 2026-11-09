@@ -3903,6 +3903,9 @@ def _truncate_to_context_budget(text: str, reserve_pct: int = 50) -> str:
     )
 
 
+_WEB_SEARCH_TIMEOUT_S = 30.0
+
+
 @gilzabots_tool(
     name="web_search",
     is_safe=True,
@@ -3915,7 +3918,7 @@ def _truncate_to_context_budget(text: str, reserve_pct: int = 50) -> str:
     ),
 )
 def web_search(query: str, max_results: int = 5) -> str:
-    """Search the web using DuckDuckGo (default) or the configured MCP server."""
+    """Search the web using the ddgs metasearch (default) or the configured MCP server."""
     AGENT_PROGRESS.update("web_search", f"query={_preview(query)}")
     try:
         from .web_search_config import is_enabled, do_search
@@ -3934,12 +3937,21 @@ def web_search(query: str, max_results: int = 5) -> str:
     # is the main thread, an async worker thread (agenticblocks), or any other
     # context.  Using asyncio.get_event_loop() in Python 3.10+ raises RuntimeError
     # when called from a thread that never had an event loop (e.g. 'asyncio_0').
+    # The pool is shut down without waiting: a `with` block would join the
+    # worker on exit and so wait out a hung search despite the timeout.
     import concurrent.futures
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(__import__("asyncio").run, do_search(query, max_results))
-            result = future.result(timeout=30)
+        future = pool.submit(__import__("asyncio").run, do_search(query, max_results))
+        result = future.result(timeout=_WEB_SEARCH_TIMEOUT_S)
+    except concurrent.futures.TimeoutError:
+        return (
+            f"[web_search] Search did not finish within {_WEB_SEARCH_TIMEOUT_S:g}s "
+            f"(query: {_preview(query)})."
+        )
     except Exception as exc:
-        return f"[web_search] Search failed: {exc}"
+        return f"[web_search] Search failed ({type(exc).__name__}): {exc}"
+    finally:
+        pool.shutdown(wait=False)
 
     return _truncate_to_context_budget(result)
