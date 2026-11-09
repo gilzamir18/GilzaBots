@@ -62,12 +62,18 @@ Write-Host "`n[3.7/4] Injetando o cliente OAuth do Google (opcional)..."
 # sincronizacao na nuvem passa a conectar em um clique. Sem ele, o app continua
 # funcionando: o usuario cadastra o proprio cliente OAuth nas configuracoes.
 # O array vazio some no splat, entao nenhum argumento vazio chega ao PyInstaller.
+# Sem a variavel, um cliente ja injetado antes (o arquivo existe) e embutido,
+# como faz o GilzaBots.spec.
+$googleClientFile = "gilzabots/cloud/providers/bundled_google_client.json"
 $googleClientArgs = @()
 if ($env:GILZABOTS_GDRIVE_CLIENT_ID) {
     python scripts/embed_google_client.py --from-env
-    $googleClientArgs = @("--add-data=gilzabots/cloud/providers/bundled_google_client.json;gilzabots/cloud/providers")
+    if ($LASTEXITCODE -ne 0) { throw "embed_google_client.py failed" }
+}
+if (Test-Path $googleClientFile) {
+    $googleClientArgs = @("--add-data=$googleClientFile;gilzabots/cloud/providers")
 } else {
-    Write-Host "GILZABOTS_GDRIVE_CLIENT_ID nao definido - build sem cliente OAuth embutido."
+    Write-Host "GILZABOTS_GDRIVE_CLIENT_ID nao definido e nenhum cliente injetado - build sem cliente OAuth embutido."
 }
 
 Write-Host "`n[4/4] Empacotando com PyInstaller..."
