@@ -95,8 +95,8 @@ if (Get-Process -Name "GilzaBots" -ErrorAction SilentlyContinue) {
     Stop-Uninstall "GilzaBots is still running. Close it and run the uninstaller again."
 }
 
-# The executables the application starts from its own directory (the embedded
-# browser's QtWebEngineProcess, tectonic, pandoc, winpty-agent) keep their files
+# The executables the application starts from its own directory (tectonic,
+# pandoc, winpty-agent; older releases also ran QtWebEngineProcess) keep their files
 # locked for as long as they run, and one can outlive the window. Deleting the
 # directory under them fails partway through.
 $installPrefix = $installDir.TrimEnd('\') + '\'

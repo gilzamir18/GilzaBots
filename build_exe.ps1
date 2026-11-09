@@ -14,11 +14,8 @@ Write-Host "`n[1/4] Instalando PyInstaller e dependencias..."
 pip install pyinstaller wheel setuptools
 pip install ".[gui]"
 
-# The Qt packaged here is the Qt every install.ps1 user gets, so the floor is
-# checked against what is actually installed before packaging starts.
-Write-Host "`n[1.5/4] Checking the Qt runtime that will be packaged..."
-python scripts/check_qt_runtime.py
-if ($LASTEXITCODE -ne 0) { throw "The installed Qt is known to break GilzaBots; see the errors above." }
+# Windows packages no Qt: the window is the system's WebView2 (PROJECT_DESIGN.md
+# 2.16.1), so the Qt runtime gate that build_exe.sh runs does not apply here.
 
 Write-Host "`n[2/4] Construindo o frontend (React/Vite)..."
 Push-Location gui_src
@@ -78,13 +75,12 @@ Write-Host "`n[4/4] Empacotando com PyInstaller..."
 $winptyAgentPath = python -c "import winpty, os; print(os.path.join(os.path.dirname(winpty.__file__), 'winpty-agent.exe'))"
 
 # A sintaxe de --add-data no Windows usa ponto-e-virgula (;)
-# Qt is collected by PyInstaller's own PyQt6 hooks, which take only the modules
-# the application imports (plus QtWebEngineProcess, its resources and every
-# locale). --collect-all "PyQt6" would copy the whole wheel instead. The QML
-# bindings are excluded because the window is widgets-based: QtWebEngineCore
-# links Qt6Qml/Qt6Quick (still bundled through that dependency), but the QtQml
-# hook would add every QML plugin and, through them, Quick3D, QuickControls2,
-# Multimedia and more. See PROJECT_DESIGN.md §2.16.1.
+# No Qt goes into the Windows bundle: the window is WebView2 through pywebview's
+# WinForms backend (--collect-all webview/pythonnet/clr_loader below; the
+# WebView2 interop DLLs ship inside the webview package). --collect-all webview
+# also collects webview.platforms.qt, whose imports would pull in PyQt6 and its
+# Chromium (~440 MB) from any environment that still has it installed, so Qt is
+# excluded explicitly. See PROJECT_DESIGN.md §2.16.1.
 pyinstaller --name "GilzaBots" `
             @googleClientArgs `
             --windowed `
@@ -115,9 +111,11 @@ pyinstaller --name "GilzaBots" `
             --collect-all "webview" `
             --collect-all "pythonnet" `
             --collect-all "clr_loader" `
-            --exclude-module "PyQt6.QtQml" `
-            --exclude-module "PyQt6.QtQuick" `
-            --exclude-module "PyQt6.QtQuickWidgets" `
+            --exclude-module "PyQt6" `
+            --exclude-module "PyQt5" `
+            --exclude-module "PySide6" `
+            --exclude-module "PySide2" `
+            --exclude-module "qtpy" `
             --collect-all "winpty" `
             --collect-all "docx" `
             --collect-all "pptx" `

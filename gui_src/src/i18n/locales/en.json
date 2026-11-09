@@ -739,6 +739,7 @@
     "graphics": "Window graphics",
     "graphicsHardwareAcceleration": "Use hardware acceleration (GPU) for the app window",
     "graphicsHint": "The app window renders through the graphics driver, which runs inside the GilzaBots process: if the driver faults, the window closes with no error message. Turn this off if GilzaBots closes by itself. Takes effect after a restart.",
+    "graphicsHintWebview2": "The app window (Microsoft Edge WebView2) runs the graphics driver in a separate process, so a driver fault does not close GilzaBots. Turn this off if the window shows rendering glitches or goes blank. Takes effect after a restart.",
     "graphicsSaveError": "Could not save the graphics setting: ",
     "graphicsRestartConfirm": "This setting only applies to a new app window. Restart GilzaBots now?",
     "graphicsRestartAlert": "The setting was saved and will apply the next time GilzaBots starts.",

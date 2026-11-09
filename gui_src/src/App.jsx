@@ -1709,8 +1709,9 @@ export default function App() {
     return () => { cancelled = true; };
   }, [activeProject?.project_path]);
 
-  // A native crash — the embedded browser faulting, most often inside the
-  // graphics driver QtWebEngine loads into the GilzaBots process itself — kills
+  // A native crash — under QtWebEngine (macOS, Linux) the embedded browser
+  // faulting, most often inside the graphics driver it loads into the GilzaBots
+  // process itself — kills
   // the application without raising a Python exception: the window disappears
   // and nothing is printed anywhere. The backend detects it on the next launch
   // from the run marker the dead process left behind, and this is where the
@@ -1731,8 +1732,10 @@ export default function App() {
             : t('app.previousRunEndedAbruptly', { when, path: failure.log_path }));
         }
         // Only offered while the GPU is actually in use: suggesting a switch
-        // that is already off would send the user after the wrong cause.
-        if (failures.some(f => f.native_fault) && data.webengine_gpu !== 'off') {
+        // that is already off would send the user after the wrong cause. Nor
+        // under WebView2 (Windows), whose GPU process is not GilzaBots: a driver
+        // fault there cannot be what ended the run.
+        if (failures.some(f => f.native_fault) && data.webengine_gpu !== 'off' && data.engine !== 'webview2') {
           addLog('warning', t('app.previousRunCrashedGpuHint'));
         }
       } catch { /* ignore */ }

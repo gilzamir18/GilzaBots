@@ -74,15 +74,21 @@ speech = ["faster-whisper>=1.1.0"]
 gui = [
     "pywebview>=4.0",
     "pywinpty>=2.0.0; sys_platform == 'win32'",
-    # Oldest Qt verified to run GilzaBots on Windows; see requirements.txt and
-    # PROJECT_DESIGN.md 2.16.1 (6.8: PDF viewer breaks; 6.10.2: agent crashes).
-    # One shared ceiling keeps all four on the same Qt minor: PyQt6-WebEngine
-    # does not constrain PyQt6-Qt6, and PyQt6 6.12 alone broke the Windows build.
-    "PyQt6>=6.11.0,<6.12",
-    "PyQt6-Qt6>=6.11.2,<6.12",
-    "PyQt6-WebEngine>=6.11.0,<6.12",
-    "PyQt6-WebEngine-Qt6>=6.11.2,<6.12",
-    "qtpy>=2.4.0",
+    # The Windows window is WebView2 through WinForms (gilzabots/windows_webview.py),
+    # and the monitors' tray icon is a WinForms NotifyIcon (monitors/tray_windows.py):
+    # both import pythonnet. pywebview already requires it on Windows; it is
+    # declared because GilzaBots imports it itself.
+    "pythonnet>=3.0.0; sys_platform == 'win32'",
+    # Qt is the window on macOS and Linux only; Windows has none (PROJECT_DESIGN.md
+    # 2.16.1). Oldest Qt verified to run GilzaBots; see requirements.txt (6.8: PDF
+    # viewer breaks; 6.10.2: agent crashes). One shared ceiling keeps all four on
+    # the same Qt minor: PyQt6-WebEngine does not constrain PyQt6-Qt6, and PyQt6
+    # 6.12 alone broke a build.
+    "PyQt6>=6.11.0,<6.12; sys_platform != 'win32'",
+    "PyQt6-Qt6>=6.11.2,<6.12; sys_platform != 'win32'",
+    "PyQt6-WebEngine>=6.11.0,<6.12; sys_platform != 'win32'",
+    "PyQt6-WebEngine-Qt6>=6.11.2,<6.12; sys_platform != 'win32'",
+    "qtpy>=2.4.0; sys_platform != 'win32'",
     "faster-whisper>=1.1.0",
 ]
 

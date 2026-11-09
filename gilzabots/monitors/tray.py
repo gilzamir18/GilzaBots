@@ -10,9 +10,12 @@ It is a process of its own, started and supervised by the daemon
 (``TraySupervisor``), for two reasons:
 
 - the daemon must keep working without a display (an SSH login, a login
-  service started before the desktop), and Qt needs one;
-- a native failure in Qt or in the desktop's tray must not take the monitors
-  down with it.
+  service started before the desktop), and the toolkit needs one;
+- a native failure in the toolkit or in the desktop's tray must not take the
+  monitors down with it.
+
+The toolkit is Qt on macOS and Linux and WinForms (through pythonnet) on
+Windows, which has no Qt (``tray_windows.py``).
 
 The icon reads everything from ``monitors.db`` and acts through it, like every
 other process (``store.py``); it needs no channel to the daemon. It exits when
@@ -239,6 +242,20 @@ def qt_available() -> tuple[bool, str]:
     return False, "PyQt6 is not installed (it comes with the desktop app's 'gui' extra)."
 
 
+def toolkit_available() -> tuple[bool, str]:
+    """Whether the toolkit that draws the icon here can be loaded, as ``(ok, reason)``.
+
+    Qt on macOS and Linux; WinForms through pythonnet on Windows, which has no
+    Qt (``tray_windows``). A missing toolkit is reported as ``STATE_NO_QT``,
+    the state the panel shows as "unavailable", with the reason naming it.
+    """
+    if sys.platform == "win32":
+        from .tray_windows import toolkit_available as windows_toolkit_available
+
+        return windows_toolkit_available()
+    return qt_available()
+
+
 # ── Supervision, inside the daemon ──────────────────────────────────────────
 
 class TraySupervisor:
@@ -253,7 +270,7 @@ class TraySupervisor:
     def __init__(self, store: st.MonitorStore, *, argv: Callable[[int], list[str]] | None = None,
                  clock=time.time, spawn=subprocess.Popen,
                  environment: Callable[[], dict | None] = graphical_environment,
-                 qt_probe: Callable[[], tuple[bool, str]] = qt_available,
+                 qt_probe: Callable[[], tuple[bool, str]] = toolkit_available,
                  status_path: str | None = None):
         from .process import gilzabots_command
 
@@ -387,6 +404,10 @@ def run_tray(daemon_pid: int) -> int:
         print("[monitors] another tray icon is already running.", flush=True)
         return EXIT_DUPLICATE
     try:
+        if sys.platform == "win32":
+            from .tray_windows import run as run_windows
+
+            return run_windows(daemon_pid)
         return _run_qt(daemon_pid)
     finally:
         lock.release()

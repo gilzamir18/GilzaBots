@@ -135,3 +135,39 @@ def test_the_base_install_carries_no_qt():
     assert _pyproject_base() == {}, (
         "Qt belongs to the 'gui' extra, not to [project].dependencies"
     )
+
+
+def _gui_requirements():
+    data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    for source, lines in (
+        ("requirements.txt", (ROOT / "requirements.txt").read_text(encoding="utf-8").splitlines()),
+        ("pyproject.toml", data["project"]["optional-dependencies"]["gui"]),
+    ):
+        reqs = []
+        for line in lines:
+            line = line.split("#", 1)[0].strip()
+            if line:
+                reqs.append(Requirement(line))
+        yield source, {re.sub(r"[-_.]+", "-", r.name).lower(): r for r in reqs}
+
+
+def test_windows_installs_no_qt_and_declares_pythonnet():
+    """The Windows window is WebView2 (PROJECT_DESIGN.md 2.16.1): no Qt there.
+
+    pythonnet is what the WebView2 window and the WinForms tray icon import;
+    it is declared, not left to arrive through pywebview's own marker.
+    """
+    windows = {"sys_platform": "win32"}
+    for os_name in ("linux", "darwin"):
+        assert Requirement("x; sys_platform != 'win32'").marker.evaluate({"sys_platform": os_name})
+    for source, reqs in _gui_requirements():
+        for name in (*VERIFIED, "qtpy"):
+            marker = reqs[name].marker
+            assert marker is not None and not marker.evaluate(windows), f"{source}: {name} must skip Windows"
+            assert marker.evaluate({"sys_platform": "linux"}) and marker.evaluate({"sys_platform": "darwin"}), (
+                f"{source}: {name} must stay on macOS and Linux"
+            )
+        pythonnet = reqs.get("pythonnet")
+        assert pythonnet is not None, f"{source} must declare pythonnet"
+        assert pythonnet.marker is not None and pythonnet.marker.evaluate(windows)
+        assert not pythonnet.marker.evaluate({"sys_platform": "linux"})
