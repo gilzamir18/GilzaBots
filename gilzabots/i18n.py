@@ -174,6 +174,9 @@ _STRINGS = {
         "tray_stop_confirm_body": "{n} active monitor(s) will not run until GilzaBots is opened again or you log in again.",
         "tray_stop_confirm_yes": "Stop",
         "tray_cancel": "Cancel",
+        "webview2_failed_title": "GilzaBots window",
+        "webview2_failed_body": "The window's browser (Microsoft Edge WebView2) stopped ({reason}). GilzaBots itself is still running.\n\nRestart GilzaBots now to get the window back?",
+        "webview2_failed_body_no_restart": "The window's browser (Microsoft Edge WebView2) stopped ({reason}). Close this window and start GilzaBots again.",
         "project_not_registered": "Project '{name}' is not registered. Create it with the create_project command before running the agent.",
 
         # -- Command-line interface (cli.py, cli_render.py, cli_commands.py)
@@ -511,6 +514,9 @@ _STRINGS = {
         "tray_stop_confirm_body": "{n} monitor(es) ativo(s) n\u00e3o v\u00e3o rodar at\u00e9 o GilzaBots ser aberto de novo ou voc\u00ea entrar na sess\u00e3o novamente.",
         "tray_stop_confirm_yes": "Encerrar",
         "tray_cancel": "Cancelar",
+        "webview2_failed_title": "Janela do GilzaBots",
+        "webview2_failed_body": "O navegador da janela (Microsoft Edge WebView2) parou ({reason}). O GilzaBots em si continua rodando.\n\nReiniciar o GilzaBots agora para recuperar a janela?",
+        "webview2_failed_body_no_restart": "O navegador da janela (Microsoft Edge WebView2) parou ({reason}). Feche esta janela e abra o GilzaBots de novo.",
         "project_not_registered": "O projeto '{name}' não está registrado. Crie-o com o comando create_project antes de executar o agente.",
 
         # -- Interface de linha de comando

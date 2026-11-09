@@ -26,6 +26,34 @@ $headers = @{
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+$webView2DownloadUrl = "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+
+# Same registry keys as gilzabots/windows_webview.py (and pywebview): the
+# EdgeUpdate client of the WebView2 runtime or a preview channel, per user or
+# per machine, at version 86.0.622.0 or newer.
+function Test-WebView2Runtime {
+    $clients = @(
+        "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+        "{2CD8A007-E189-409D-A2C8-9AF4EF3C72AA}",
+        "{0D50BFEC-CD6A-4F9A-964C-C7416E3ACB10}",
+        "{65C35B14-6C1D-4122-AC46-7148CC9D6497}"
+    )
+    $minimum = [Version]"86.0.622.0"
+    foreach ($client in $clients) {
+        foreach ($path in @(
+            "HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients\$client",
+            "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\$client"
+        )) {
+            $pv = (Get-ItemProperty -Path $path -Name "pv" -ErrorAction SilentlyContinue).pv
+            $version = $null
+            if ($pv -and [Version]::TryParse($pv, [ref]$version) -and $version -ge $minimum) {
+                return $true
+            }
+        }
+    }
+    return $false
+}
+
 function Get-GilzaBotsDownloadUrl {
     if ($env:GILZABOTS_DOWNLOAD_URL) {
         if ($env:GILZABOTS_DOWNLOAD_URL -match "/actions/runs/.*/artifacts/") {
@@ -230,3 +258,13 @@ Write-Host "==========================================" -ForegroundColor Green
 Write-Host "Terminal command: gilzabots" -ForegroundColor Cyan
 Write-Host "Shortcuts were created on the Desktop and Start menu." -ForegroundColor Cyan
 Write-Host "To uninstall, use Windows Settings > Apps > Installed apps, or the Start menu shortcut." -ForegroundColor Cyan
+
+# The desktop window is Microsoft Edge WebView2, which Windows 11 includes and
+# Windows 10 usually receives through Windows Update. The app checks for it at
+# every start (gilzabots/windows_webview.py); this only tells the user now
+# rather than on first launch. Nothing is installed on their behalf.
+if (-not (Test-WebView2Runtime)) {
+    Write-Host ""
+    Write-Warning "Microsoft Edge WebView2 Runtime was not found. The GilzaBots window needs it; without it GilzaBots opens in your web browser instead."
+    Write-Host "Install it from $webView2DownloadUrl and start GilzaBots again." -ForegroundColor Yellow
+}

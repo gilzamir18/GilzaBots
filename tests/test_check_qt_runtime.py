@@ -82,10 +82,26 @@ def test_the_import_probe_does_not_run_where_the_conflict_cannot_happen():
 
 @pytest.mark.skipif(sys.platform != "win32", reason="the runtime conflict is Windows-only")
 def test_this_environment_passes_the_real_probe():
+    # Windows installs no Qt any more (the window is WebView2); an environment
+    # that still has it, such as an older virtualenv, is still checked.
+    pytest.importorskip("PyQt6.QtWebEngineWidgets")
     assert gate.import_order_problem() is None
 
 
-@pytest.mark.parametrize("script", ["build_exe.ps1", "build_exe.sh"])
+def test_the_windows_build_packages_no_qt():
+    """Windows has no Qt (PROJECT_DESIGN.md 2.16.1): nothing to gate, nothing to bundle.
+
+    ``--collect-all webview`` collects ``webview.platforms.qt``, whose imports
+    would pull PyQt6 and its Chromium into the bundle from any environment that
+    still has it installed, so the build must exclude Qt by name.
+    """
+    text = (ROOT / "build_exe.ps1").read_text(encoding="utf-8")
+    assert "scripts/check_qt_runtime.py" not in text
+    for module in ("PyQt6", "qtpy"):
+        assert f'--exclude-module "{module}"' in text, f"build_exe.ps1 must exclude {module}"
+
+
+@pytest.mark.parametrize("script", ["build_exe.sh"])
 def test_every_build_script_runs_the_gate_before_packaging(script):
     text = (ROOT / script).read_text(encoding="utf-8")
     # The build installs the desktop extra: the base install has no Qt to gate.

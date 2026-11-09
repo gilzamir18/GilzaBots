@@ -739,6 +739,7 @@
     "graphics": "Gráficos da janela",
     "graphicsHardwareAcceleration": "Usar aceleração de hardware (GPU) na janela do aplicativo",
     "graphicsHint": "A janela do aplicativo é desenhada pelo driver gráfico, que roda dentro do processo do GilzaBots: se o driver falhar, a janela fecha sem nenhuma mensagem de erro. Desative isto se o GilzaBots fechar sozinho. Aplica-se após reiniciar.",
+    "graphicsHintWebview2": "A janela do aplicativo (Microsoft Edge WebView2) roda o driver gráfico em um processo separado, então uma falha do driver não fecha o GilzaBots. Desative isto se a janela apresentar falhas de desenho ou ficar em branco. Aplica-se após reiniciar.",
     "graphicsSaveError": "Não foi possível salvar a configuração gráfica: ",
     "graphicsRestartConfirm": "Esta configuração só vale para uma nova janela do aplicativo. Reiniciar o GilzaBots agora?",
     "graphicsRestartAlert": "A configuração foi salva e passa a valer na próxima vez que o GilzaBots iniciar.",

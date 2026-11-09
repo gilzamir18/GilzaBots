@@ -73,6 +73,9 @@ export default function SettingsModal({
   const [gilzabotsHomeError, setGilzaBotsHomeError] = React.useState('');
   const [draftSynctexEnabled, setDraftSynctexEnabled] = React.useState(false);
   const [webengineGpu, setWebengineGpu] = React.useState('off');
+  // 'webview2' on Windows, 'qtwebengine' elsewhere: the two put the graphics
+  // driver in different processes, so the hint below differs.
+  const [browserEngine, setBrowserEngine] = React.useState('');
   const [workspaceHiddenExtensions, setWorkspaceHiddenExtensions] = React.useState([]);
   const [tectonicInstallMessage, setTectonicInstallMessage] = React.useState('');
   const [pandocInstallMessage, setPandocInstallMessage] = React.useState('');
@@ -154,6 +157,7 @@ export default function SettingsModal({
       .then(r => r.ok ? r.json() : null)
       .then(cfg => {
         if (cfg?.webengine_gpu) setWebengineGpu(cfg.webengine_gpu);
+        if (cfg?.engine) setBrowserEngine(cfg.engine);
       })
       .catch(() => { });
 
@@ -247,7 +251,7 @@ export default function SettingsModal({
     }
   };
 
-  // QtWebEngine reads its graphics flags before the browser is created, so this
+  // The embedded browser reads its graphics flags before it is created, so this
   // choice reaches the window on the next launch and not before.
   const saveGraphicsSettings = async (mode) => {
     setWebengineGpu(mode);
@@ -998,10 +1002,11 @@ export default function SettingsModal({
                 <span style={{ fontSize: '11px', color: 'var(--vscode-descriptionForeground)' }}>{t('settingsModal.draftSynctexHint')}</span>
               </div>
 
-              {/* Graphics mode for the app window itself. The embedded browser
-                  loads the graphics driver into the GilzaBots process, so a
-                  driver fault closes the whole application with no message;
-                  this is the recovery for a machine where that happens. */}
+              {/* Graphics mode for the app window itself. QtWebEngine (macOS,
+                  Linux) loads the graphics driver into the GilzaBots process, so
+                  a driver fault closes the whole application with no message;
+                  this is the recovery for a machine where that happens. WebView2
+                  (Windows) keeps the driver in a process of its own. */}
               <div className="flex flex-col" style={{ gap: '6px' }}>
                 <label className="vscode-sidebar-section-title" style={{ padding: 0 }}>{t('settingsModal.graphics', 'Window graphics')}</label>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--vscode-text-fg)' }}>
@@ -1014,7 +1019,9 @@ export default function SettingsModal({
                   <span>{t('settingsModal.graphicsHardwareAcceleration', 'Use hardware acceleration (GPU) for the app window')}</span>
                 </label>
                 <span style={{ fontSize: '11px', color: 'var(--vscode-descriptionForeground)' }}>
-                  {t('settingsModal.graphicsHint', 'The app window renders through the graphics driver, which runs inside the GilzaBots process: if the driver faults, the window closes with no error message. Turn this off if GilzaBots closes by itself. Takes effect after a restart.')}
+                  {browserEngine === 'webview2'
+                    ? t('settingsModal.graphicsHintWebview2', 'The app window (Microsoft Edge WebView2) runs the graphics driver in a separate process, so a driver fault does not close GilzaBots. Turn this off if the window shows rendering glitches or goes blank. Takes effect after a restart.')
+                    : t('settingsModal.graphicsHint', 'The app window renders through the graphics driver, which runs inside the GilzaBots process: if the driver faults, the window closes with no error message. Turn this off if GilzaBots closes by itself. Takes effect after a restart.')}
                 </span>
               </div>
 

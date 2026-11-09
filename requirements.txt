@@ -16,7 +16,12 @@ tree-sitter-language-pack>=1.8.0
 chromadb>=0.4.0
 pywebview>=4.0
 pywinpty>=2.0.0; sys_platform == "win32"
-# Qt 6.11.2 is the oldest release verified to run GilzaBots on Windows. Qt 6.8
+# The Windows window is WebView2 through WinForms, and the monitors' tray icon
+# is a WinForms NotifyIcon: both import pythonnet (PROJECT_DESIGN.md 2.16.1).
+pythonnet>=3.0.0; sys_platform == "win32"
+# Qt is the window on macOS and Linux only; Windows has none (PROJECT_DESIGN.md
+# 2.16.1). The floors below were verified on Windows, where Qt was the window
+# until it moved to WebView2, and still hold where Qt is used. Qt 6.8
 # embeds Chromium 122, too old for pdf.js 5 (URL.parse): opening a PDF greys the
 # window. Qt 6.10.2 ships MSVCP140 14.26, which crashes onnxruntime on the first
 # agent message. The -Qt6 packages carry that runtime, so they are pinned to the
@@ -26,11 +31,11 @@ pywinpty>=2.0.0; sys_platform == "win32"
 # load QtWebEngineWidgets on Windows. Raise it only once the next minor of all
 # four is out and passes the same checks.
 # See PROJECT_DESIGN.md 2.16.1.
-PyQt6>=6.11.0,<6.12
-PyQt6-Qt6>=6.11.2,<6.12
-PyQt6-WebEngine>=6.11.0,<6.12
-PyQt6-WebEngine-Qt6>=6.11.2,<6.12
-qtpy>=2.4.0
+PyQt6>=6.11.0,<6.12; sys_platform != "win32"
+PyQt6-Qt6>=6.11.2,<6.12; sys_platform != "win32"
+PyQt6-WebEngine>=6.11.0,<6.12; sys_platform != "win32"
+PyQt6-WebEngine-Qt6>=6.11.2,<6.12; sys_platform != "win32"
+qtpy>=2.4.0; sys_platform != "win32"
 ddgs>=1.0.0
 pymupdf4llm>=0.0.17
 Pillow>=10.0.0

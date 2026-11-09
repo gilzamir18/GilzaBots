@@ -311,6 +311,7 @@ class TestDaemon:
 
 # ── The real icon process ───────────────────────────────────────────────────
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the Windows icon is WinForms, not Qt")
 def test_the_icon_reports_a_desktop_without_a_tray(tmp_path):
     """Qt's offscreen platform has no system tray: the icon exits with EXIT_NO_TRAY."""
     pytest.importorskip("PyQt6.QtWidgets")
@@ -336,3 +337,61 @@ def test_a_second_icon_does_not_start(tmp_path, monkeypatch):
         assert tray.run_tray(os.getpid()) == tray.EXIT_DUPLICATE
     finally:
         held.release()
+
+
+# ── Windows: the icon is WinForms, not Qt ───────────────────────────────────
+
+def test_the_toolkit_probe_follows_the_platform(monkeypatch):
+    from gilzabots.monitors import tray_windows
+
+    monkeypatch.setattr(tray_windows, "toolkit_available", lambda: (False, "pythonnet is not installed"))
+    monkeypatch.setattr(tray, "qt_available", lambda: (True, ""))
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert tray.toolkit_available() == (False, "pythonnet is not installed")
+    monkeypatch.setattr(sys, "platform", "linux")
+    assert tray.toolkit_available() == (True, "")
+
+
+def test_the_supervisor_probes_the_platform_toolkit_by_default(mstore, tmp_path):
+    supervisor = tray.TraySupervisor(mstore, status_path=str(tmp_path / "tray.json"))
+    assert supervisor.qt_probe is tray.toolkit_available
+
+
+def test_the_windows_tooltip_is_cut_to_what_notifyicon_accepts():
+    from gilzabots.monitors.tray_windows import NOTIFY_TEXT_LIMIT, notify_text
+
+    assert notify_text("GilzaBots\n2 active") == "GilzaBots\n2 active"
+    long = "x" * 200
+    assert len(notify_text(long)) == NOTIFY_TEXT_LIMIT
+    assert notify_text(long).endswith("…")
+
+
+def _run_windows_icon(tmp_path, daemon_seconds: float) -> subprocess.CompletedProcess:
+    code = (
+        "import subprocess, sys\n"
+        "from gilzabots.monitors import service, tray\n"
+        f"service.monitors_dir = lambda: {str(tmp_path)!r}\n"
+        f"daemon = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep({daemon_seconds})'])\n"
+        "if not daemon_seconds_positive:\n"
+        "    daemon.wait()\n"
+        "sys.exit(tray.run_tray(daemon.pid))\n"
+    ).replace("daemon_seconds_positive", str(daemon_seconds > 0))
+    env = {**os.environ, "GILZABOTS_HOME": str(tmp_path / "home")}
+    return subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=90,
+                          env=env, cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the WinForms icon exists only on Windows")
+def test_the_windows_icon_is_shown_and_ends_with_its_daemon(tmp_path):
+    pytest.importorskip("clr")
+    result = _run_windows_icon(tmp_path, 3)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "tray icon" in result.stdout and "shown for daemon" in result.stdout
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="the WinForms icon exists only on Windows")
+def test_the_windows_icon_does_not_start_for_a_daemon_already_gone(tmp_path):
+    pytest.importorskip("clr")
+    result = _run_windows_icon(tmp_path, 0)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "shown for daemon" not in result.stdout

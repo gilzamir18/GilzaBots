@@ -124,7 +124,9 @@ def test_schedule_app_restart_spawns_a_replacement_then_exits(monkeypatch):
 
     monkeypatch.delenv(CHROMIUM_FLAGS_VAR, raising=False)
     monkeypatch.delenv(QUICK_BACKEND_VAR, raising=False)
-    apply_webengine_environment(os.environ, "win32", {"webengine_gpu": "off"})
+    # QtWebEngine's variables (macOS/Linux); the WebView2 one is covered in
+    # test_webengine_env.
+    apply_webengine_environment(os.environ, "darwin", {"webengine_gpu": "off"})
     assert os.environ[CHROMIUM_FLAGS_VAR] == "--disable-gpu"
 
     command = schedule_app_restart(delay=0)

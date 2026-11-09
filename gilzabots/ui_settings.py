@@ -46,6 +46,8 @@ _DEFAULTS: dict[str, Any] = {
     # application, which is why "off" is the default and acceleration is
     # opt-in. Only takes effect at the next launch (see
     # gilzabots/webengine_env.py: GPU_DEFAULT, which must match this value).
+    # Windows (WebView2) reads "webview2_gpu" instead, which has no entry here:
+    # absent means its own default, "auto" (webengine_env.WEBVIEW2_GPU_DEFAULT).
     "webengine_gpu": "off",
     # Name of the project the desktop window had open last, reopened at the
     # next launch. Kept here rather than in localStorage because localStorage

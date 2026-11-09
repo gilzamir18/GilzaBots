@@ -6,6 +6,7 @@ that it happened and to offer the one control that can stop it.
 """
 
 import json
+import sys
 from unittest.mock import AsyncMock
 
 import pytest
@@ -32,8 +33,20 @@ def settings_file(tmp_path, monkeypatch):
     return tmp_path / "ui_settings.json"
 
 
+@pytest.fixture
+def qt_platform(monkeypatch):
+    """macOS/Linux: the window is QtWebEngine."""
+    monkeypatch.setattr(sys, "platform", "linux")
+
+
+@pytest.fixture
+def windows_platform(monkeypatch):
+    """Windows: the window is WebView2."""
+    monkeypatch.setattr(sys, "platform", "win32")
+
+
 @pytest.mark.asyncio
-async def test_graphics_defaults_to_hardware_acceleration_off(settings_file):
+async def test_graphics_defaults_to_hardware_acceleration_off(settings_file, qt_platform):
     server, responses = _server_with_capture()
     await server.route_api("GET", "/api/settings/graphics", {}, {}, b"", AsyncMock())
 
@@ -41,10 +54,59 @@ async def test_graphics_defaults_to_hardware_acceleration_off(settings_file):
     assert status == 200
     assert body["webengine_gpu"] == "off"
     assert body["source"] == "settings"
+    assert body["engine"] == "qtwebengine"
 
 
 @pytest.mark.asyncio
-async def test_turning_the_gpu_on_is_saved_and_asks_for_a_restart(settings_file):
+async def test_webview2_defaults_to_hardware_acceleration_on(settings_file, windows_platform):
+    """WebView2 keeps the driver in its own GPU process, so acceleration is opt-out.
+
+    A settings file always holds ``webengine_gpu: "off"`` (saving writes the
+    defaults); it is the QtWebEngine setting and must not decide for WebView2.
+    """
+    settings_file.write_text(json.dumps({"webengine_gpu": "off"}), encoding="utf-8")
+    server, responses = _server_with_capture()
+    await server.route_api("GET", "/api/settings/graphics", {}, {}, b"", AsyncMock())
+
+    status, body, _ = responses[0]
+    assert status == 200
+    assert body["webengine_gpu"] == "auto"
+    assert body["source"] == "default"
+    assert body["engine"] == "webview2"
+
+
+@pytest.mark.asyncio
+async def test_webview2_saves_its_own_setting(settings_file, windows_platform):
+    ide_server._STARTUP_DIAGNOSTICS = {"webengine_gpu": "auto"}
+    server, responses = _server_with_capture()
+    await server.route_api(
+        "POST", "/api/settings/graphics", {}, {},
+        json.dumps({"webengine_gpu": "off"}).encode(), AsyncMock(),
+    )
+
+    assert responses[0][1]["webengine_gpu"] == "off"
+    assert responses[0][1]["requiresRestart"] is True
+    saved = json.loads(settings_file.read_text(encoding="utf-8"))
+    assert saved["webview2_gpu"] == "off"
+    assert saved["webengine_gpu"] == "off"  # the untouched QtWebEngine default
+
+    await server.route_api("GET", "/api/settings/graphics", {}, {}, b"", AsyncMock())
+    assert responses[1][1]["webengine_gpu"] == "off"
+    assert responses[1][1]["source"] == "settings"
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_value_is_saved_as_the_webview2_default(settings_file, windows_platform):
+    server, responses = _server_with_capture()
+    await server.route_api(
+        "POST", "/api/settings/graphics", {}, {},
+        json.dumps({"webengine_gpu": "nonsense"}).encode(), AsyncMock(),
+    )
+    assert responses[0][1]["webengine_gpu"] == "auto"
+
+
+@pytest.mark.asyncio
+async def test_turning_the_gpu_on_is_saved_and_asks_for_a_restart(settings_file, qt_platform):
     """QtWebEngine reads its flags before the window exists, so it needs one."""
     ide_server._STARTUP_DIAGNOSTICS = {"webengine_gpu": "off"}
     server, responses = _server_with_capture()
@@ -68,7 +130,7 @@ async def test_turning_the_gpu_on_is_saved_and_asks_for_a_restart(settings_file)
 
 
 @pytest.mark.asyncio
-async def test_an_unknown_value_is_saved_as_the_default_mode(settings_file):
+async def test_an_unknown_value_is_saved_as_the_default_mode(settings_file, qt_platform):
     server, responses = _server_with_capture()
     await server.route_api(
         "POST", "/api/settings/graphics", {}, {},

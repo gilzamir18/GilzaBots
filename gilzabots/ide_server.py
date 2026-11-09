@@ -667,6 +667,15 @@ def _qt_invoke(fn):
 
 
 def _read_clipboard() -> str:
+    # Windows has no Qt in the process (the window is WebView2): Win32 directly.
+    if sys.platform == "win32":
+        from gilzabots import win_clipboard
+        try:
+            return win_clipboard.read_text()
+        except win_clipboard.ClipboardError as e:
+            print(f"[GilzaBots] clipboard read failed: {e}")
+            return ''
+
     # 1. In-process Qt (GNOME/Wayland): marshal to main thread so QClipboard is
     #    accessed safely from the asyncio background thread.
     result = _qt_invoke(lambda: __import__('PyQt6.QtWidgets', fromlist=['QApplication'])
@@ -731,8 +740,13 @@ def _read_clipboard_image() -> str:
     so a screenshot copied outside the app can be unreachable from JavaScript
     when the paste event carries no file. This mirrors the two fallbacks of
     `_read_clipboard`: in-process Qt first, then a throwaway QApplication in a
-    subprocess for the session types where that fails.
+    subprocess for the session types where that fails. Windows has no Qt and
+    reads the clipboard through Pillow (`win_clipboard`).
     """
+    if sys.platform == "win32":
+        from gilzabots import win_clipboard
+        return win_clipboard.read_image_png_b64()
+
     result = _qt_invoke(_clipboard_image_to_png_b64)
     if result:
         return result
@@ -752,6 +766,14 @@ def _read_clipboard_image() -> str:
 
 
 def _write_clipboard(text: str):
+    if sys.platform == "win32":
+        from gilzabots import win_clipboard
+        try:
+            win_clipboard.write_text(text)
+            return True, ''
+        except win_clipboard.ClipboardError as e:
+            return False, str(e)
+
     # 1. In-process Qt (GNOME/Wayland)
     def _do_write():
         from PyQt6.QtWidgets import QApplication
@@ -5870,32 +5892,38 @@ class AsyncHTTPServer:
         # 7n2. Graphics mode for the embedded browser window — GET
         elif path == '/api/settings/graphics' and method == 'GET':
             from gilzabots.ui_settings import load_ui_settings
-            from gilzabots.webengine_env import CHROMIUM_FLAGS_VAR, normalize_gpu_mode, resolve_gpu_mode
+            from gilzabots import webengine_env
             cfg = load_ui_settings()
-            saved = normalize_gpu_mode(cfg.get("webengine_gpu"))
-            effective, source = resolve_gpu_mode(settings=cfg)
+            # The field keeps its historic name; the setting behind it is the one
+            # of this platform's engine (webengine_env.gpu_setting_key).
+            saved = webengine_env.saved_gpu_mode(cfg)
+            effective, source = webengine_env.resolve_gpu_mode(settings=cfg)
+            flags_var = (webengine_env.WEBVIEW2_ARGUMENTS_VAR if webengine_env.uses_webview2()
+                         else webengine_env.CHROMIUM_FLAGS_VAR)
             self.send_response(writer, 200, json.dumps({
+                "engine": webengine_env.engine_name(),
                 "webengine_gpu": saved,
                 # What this running process actually did, which differs from the
                 # saved value while an environment override is in force or while
                 # a change is waiting for the next launch.
                 "effective_webengine_gpu": _STARTUP_DIAGNOSTICS.get("webengine_gpu", effective),
                 "source": source,
-                "chromium_flags": os.environ.get(CHROMIUM_FLAGS_VAR, ""),
+                "chromium_flags": os.environ.get(flags_var, ""),
             }).encode('utf-8'), "application/json")
 
         # 7n3. Graphics mode — POST (set; applies at the next launch)
         elif path == '/api/settings/graphics' and method == 'POST':
             from gilzabots.ui_settings import load_ui_settings, save_ui_settings
-            from gilzabots.webengine_env import normalize_gpu_mode
-            requested = normalize_gpu_mode(data.get("webengine_gpu"))
-            previous = normalize_gpu_mode(load_ui_settings().get("webengine_gpu"))
-            save_ui_settings({"webengine_gpu": requested})
+            from gilzabots import webengine_env
+            requested = webengine_env.normalize_gpu_mode(
+                data.get("webengine_gpu"), webengine_env.default_gpu_mode())
+            previous = webengine_env.saved_gpu_mode(load_ui_settings())
+            save_ui_settings({webengine_env.gpu_setting_key(): requested})
             self.send_response(writer, 200, json.dumps({
                 "success": True,
                 "webengine_gpu": requested,
-                # QtWebEngine reads its flags once, before the window exists, so
-                # a change only reaches the browser on the next launch.
+                # Both engines read their flags once, before the browser process
+                # exists, so a change only reaches the browser on the next launch.
                 "requiresRestart": requested != _STARTUP_DIAGNOSTICS.get("webengine_gpu", previous),
             }).encode('utf-8'), "application/json")
 
@@ -5905,6 +5933,7 @@ class AsyncHTTPServer:
                 "previous_run_failures": _STARTUP_DIAGNOSTICS.get("previous_run_failures", []),
                 "crash_log_path": _STARTUP_DIAGNOSTICS.get("crash_log_path", ""),
                 "webengine_gpu": _STARTUP_DIAGNOSTICS.get("webengine_gpu", "off"),
+                "engine": _STARTUP_DIAGNOSTICS.get("engine", ""),
             }).encode('utf-8'), "application/json")
 
         # 7q. LaTeX settings — GET
@@ -6596,12 +6625,13 @@ def start_gui_server(host="127.0.0.1", port=3000):
 
     ui_cfg = load_ui_settings()
 
-    # The graphics mode has to be decided before QtWebEngine reads the
-    # environment, and it is worth recording next to the run it applies to:
-    # a crash log that does not say whether the GPU was in use cannot answer
-    # whether turning it off helped.
+    # The graphics mode has to be decided before the embedded browser
+    # (QtWebEngine, or WebView2 on Windows) reads the environment, and it is
+    # worth recording next to the run it applies to: a crash log that does not
+    # say whether the GPU was in use cannot answer whether turning it off helped.
     webengine = apply_webengine_environment(settings=ui_cfg)
     crash_report.install(details={
+        "browser_engine": webengine["engine"],
         "webengine_gpu": webengine["gpu_mode"],
         "webengine_gpu_source": webengine["source"],
         "chromium_flags": webengine["chromium_flags"],
@@ -6609,7 +6639,9 @@ def start_gui_server(host="127.0.0.1", port=3000):
     })
     if webengine["reason"]:
         quick = f", QT_QUICK_BACKEND={webengine['qt_quick_backend']}" if webengine["qt_quick_backend"] else ""
-        print(f"[GilzaBots] QtWebEngine: {webengine['reason']} ({webengine['chromium_flags']}{quick})")
+        engine_label = "WebView2" if webengine["engine"] == "webview2" else "QtWebEngine"
+        print(f"[GilzaBots] {engine_label}: {webengine['reason']} "
+              f"({webengine['flags_var']}={webengine['chromium_flags']}{quick})")
 
     # A run that died leaves its marker behind; this is the only moment the
     # application can say so, since the run itself had no chance to.
@@ -6621,6 +6653,7 @@ def start_gui_server(host="127.0.0.1", port=3000):
         "previous_run_failures": previous_failures,
         "crash_log_path": str(crash_report.crash_log_path()),
         "webengine_gpu": webengine["gpu_mode"],
+        "engine": webengine["engine"],
     }
 
     saved_lang = ui_cfg.get("lang", "")
@@ -6714,9 +6747,17 @@ def start_gui_server(host="127.0.0.1", port=3000):
     try:
         import os as _os
         import sys as _sys
-        # Force Qt backend on all platforms (including Windows).
-        # PythonNet and WinForms are extremely fragile when packaged with PyInstaller on some Windows machines.
-        if 'PYWEBVIEW_GUI' not in _os.environ:
+        # The window is WebView2 on Windows (gilzabots/windows_webview.py) and
+        # QtWebEngine on macOS and Linux (PROJECT_DESIGN.md §2.16.1).
+        _use_webview2 = _sys.platform == 'win32'
+        if _use_webview2:
+            from gilzabots import windows_webview
+            # Without the runtime pywebview falls back to MSHTML (the IE engine)
+            # with only a log warning; here it is a failure to open the window,
+            # which the handler at the end of this block reports.
+            windows_webview.require_runtime()
+        elif 'PYWEBVIEW_GUI' not in _os.environ:
+            # Force the Qt backend on macOS and Linux.
             _os.environ['PYWEBVIEW_GUI'] = 'qt'
 
         import webview  # pywebview
@@ -6724,110 +6765,114 @@ def start_gui_server(host="127.0.0.1", port=3000):
         # Allow file downloads (like export markdown/pdf)
         webview.settings['ALLOW_DOWNLOADS'] = True
 
-        # Monkey-patch pywebview's Qt backend to use proper Qt enum values
-        # instead of raw ints for setFeaturePermission. Modern Qt wrappers (PyQt6/PySide6)
-        # no longer accept int in place of PermissionPolicy, causing a TypeError + crash.
-        try:
-            from webview.platforms import qt as _wv_qt
-            _QWP = _wv_qt.QWebPage
+        # Patches of pywebview's Qt backend. Windows has no Qt: WebView2 handles
+        # permissions, the context menu, printing and downloads itself, and
+        # windows_webview.install_handlers covers the rest.
+        if not _use_webview2:
+            # Monkey-patch pywebview's Qt backend to use proper Qt enum values
+            # instead of raw ints for setFeaturePermission. Modern Qt wrappers (PyQt6/PySide6)
+            # no longer accept int in place of PermissionPolicy, causing a TypeError + crash.
+            try:
+                from webview.platforms import qt as _wv_qt
+                _QWP = _wv_qt.QWebPage
 
-            if hasattr(_QWP, "PermissionPolicy"):
-                _granted = _QWP.PermissionPolicy.PermissionGrantedByUser
-                _denied = _QWP.PermissionPolicy.PermissionDeniedByUser
-            else:
-                _granted = 1
-                _denied = 2
-
-            def _onFeaturePermissionRequested(self, url, feature):
-                if feature in (
-                    _QWP.Feature.MediaAudioCapture,
-                    _QWP.Feature.MediaVideoCapture,
-                    _QWP.Feature.MediaAudioVideoCapture,
-                ):
-                    self.setFeaturePermission(url, feature, _granted)
+                if hasattr(_QWP, "PermissionPolicy"):
+                    _granted = _QWP.PermissionPolicy.PermissionGrantedByUser
+                    _denied = _QWP.PermissionPolicy.PermissionDeniedByUser
                 else:
-                    self.setFeaturePermission(url, feature, _denied)
+                    _granted = 1
+                    _denied = 2
 
-            # Patch only if the broken version (using int literals) is present
-            import inspect as _inspect
-            _src = _inspect.getsource(_wv_qt)
-            if "setFeaturePermission(url, feature, 2)" in _src:
-                if hasattr(_wv_qt, "BrowserView") and hasattr(_wv_qt.BrowserView, "WebPage"):
-                    _wv_qt.BrowserView.WebPage.onFeaturePermissionRequested = _onFeaturePermissionRequested
+                def _onFeaturePermissionRequested(self, url, feature):
+                    if feature in (
+                        _QWP.Feature.MediaAudioCapture,
+                        _QWP.Feature.MediaVideoCapture,
+                        _QWP.Feature.MediaAudioVideoCapture,
+                    ):
+                        self.setFeaturePermission(url, feature, _granted)
+                    else:
+                        self.setFeaturePermission(url, feature, _denied)
 
-        except Exception:
-            pass
+                # Patch only if the broken version (using int literals) is present
+                import inspect as _inspect
+                _src = _inspect.getsource(_wv_qt)
+                if "setFeaturePermission(url, feature, 2)" in _src:
+                    if hasattr(_wv_qt, "BrowserView") and hasattr(_wv_qt.BrowserView, "WebPage"):
+                        _wv_qt.BrowserView.WebPage.onFeaturePermissionRequested = _onFeaturePermissionRequested
 
-        # Suppress Qt's native context menu by patching BrowserView.__init__
-        # to add a second loadFinished connection that sets NoContextMenu policy.
-        try:
-            from webview.platforms import qt as _wv_qt2
-            from qtpy.QtCore import Qt as _Qt
+            except Exception:
+                pass
 
-            if hasattr(_wv_qt2, "BrowserView"):
-                _orig_init = _wv_qt2.BrowserView.__init__
+            # Suppress Qt's native context menu by patching BrowserView.__init__
+            # to add a second loadFinished connection that sets NoContextMenu policy.
+            try:
+                from webview.platforms import qt as _wv_qt2
+                from qtpy.QtCore import Qt as _Qt
 
-                def _patched_init(self, window):
-                    _orig_init(self, window)
-                    page = self.webview.page()
+                if hasattr(_wv_qt2, "BrowserView"):
+                    _orig_init = _wv_qt2.BrowserView.__init__
 
-                    def _disable_context_menu(_ok=None):
-                        self.webview.setContextMenuPolicy(_Qt.ContextMenuPolicy.NoContextMenu)
-                    page.loadFinished.connect(_disable_context_menu)
+                    def _patched_init(self, window):
+                        _orig_init(self, window)
+                        page = self.webview.page()
 
-                    # Handle window.print() triggered from JavaScript: the
-                    # embedded webview has no print dialog of its own, so the
-                    # page is saved as a PDF the user picks a path for.
-                    try:
-                        from PyQt6.QtWidgets import QFileDialog
+                        def _disable_context_menu(_ok=None):
+                            self.webview.setContextMenuPolicy(_Qt.ContextMenuPolicy.NoContextMenu)
+                        page.loadFinished.connect(_disable_context_menu)
 
-                        def _handle_print():
-                            try:
-                                file_path, _ = QFileDialog.getSaveFileName(
-                                    self.webview, "Save PDF", "", "PDF Files (*.pdf)"
-                                )
-                                if not file_path:
-                                    return
-                                if not file_path.lower().endswith('.pdf'):
-                                    file_path += '.pdf'
-                                self.webview.page().printToPdf(file_path)
-                            except Exception as e:
-                                print(f"[GilzaBots] print to PDF failed: {type(e).__name__}: {e}")
-
-                        page.printRequested.connect(_handle_print)
-                    except Exception as pe:
-                        print(f"[GilzaBots] could not install the print handler: "
-                              f"{type(pe).__name__}: {pe}")
-
-                _wv_qt2.BrowserView.__init__ = _patched_init
-                
-                # Patch on_download_requested for PyQt6 compatibility
-                _orig_on_download_requested = getattr(_wv_qt2.BrowserView, "on_download_requested", None)
-                if _orig_on_download_requested:
-                    def _patched_on_download_requested(self, download):
+                        # Handle window.print() triggered from JavaScript: the
+                        # embedded webview has no print dialog of its own, so the
+                        # page is saved as a PDF the user picks a path for.
                         try:
                             from PyQt6.QtWidgets import QFileDialog
-                            import os
-                            old_path = download.url().path() if hasattr(download, 'url') else ""
-                            if hasattr(download, 'suggestedFileName'):
-                                default_name = download.suggestedFileName()
-                            else:
-                                default_name = os.path.basename(old_path)
-                            path, _ = QFileDialog.getSaveFileName(
-                                self, getattr(self, 'localization', {}).get('global.saveFile', 'Salvar Arquivo'), default_name
-                            )
-                            if path:
-                                if hasattr(download, 'setDownloadDirectory') and hasattr(download, 'setDownloadFileName'):
-                                    download.setDownloadDirectory(os.path.dirname(path))
-                                    download.setDownloadFileName(os.path.basename(path))
-                                elif hasattr(download, 'setPath'):
-                                    download.setPath(path)
-                                download.accept()
-                        except Exception as e:
-                            print('[patch download] FAILED:', e)
-                    _wv_qt2.BrowserView.on_download_requested = _patched_on_download_requested
-        except Exception as e:
-            print('[patch init] FAILED:', e)
+
+                            def _handle_print():
+                                try:
+                                    file_path, _ = QFileDialog.getSaveFileName(
+                                        self.webview, "Save PDF", "", "PDF Files (*.pdf)"
+                                    )
+                                    if not file_path:
+                                        return
+                                    if not file_path.lower().endswith('.pdf'):
+                                        file_path += '.pdf'
+                                    self.webview.page().printToPdf(file_path)
+                                except Exception as e:
+                                    print(f"[GilzaBots] print to PDF failed: {type(e).__name__}: {e}")
+
+                            page.printRequested.connect(_handle_print)
+                        except Exception as pe:
+                            print(f"[GilzaBots] could not install the print handler: "
+                                  f"{type(pe).__name__}: {pe}")
+
+                    _wv_qt2.BrowserView.__init__ = _patched_init
+                
+                    # Patch on_download_requested for PyQt6 compatibility
+                    _orig_on_download_requested = getattr(_wv_qt2.BrowserView, "on_download_requested", None)
+                    if _orig_on_download_requested:
+                        def _patched_on_download_requested(self, download):
+                            try:
+                                from PyQt6.QtWidgets import QFileDialog
+                                import os
+                                old_path = download.url().path() if hasattr(download, 'url') else ""
+                                if hasattr(download, 'suggestedFileName'):
+                                    default_name = download.suggestedFileName()
+                                else:
+                                    default_name = os.path.basename(old_path)
+                                path, _ = QFileDialog.getSaveFileName(
+                                    self, getattr(self, 'localization', {}).get('global.saveFile', 'Salvar Arquivo'), default_name
+                                )
+                                if path:
+                                    if hasattr(download, 'setDownloadDirectory') and hasattr(download, 'setDownloadFileName'):
+                                        download.setDownloadDirectory(os.path.dirname(path))
+                                        download.setDownloadFileName(os.path.basename(path))
+                                    elif hasattr(download, 'setPath'):
+                                        download.setPath(path)
+                                    download.accept()
+                            except Exception as e:
+                                print('[patch download] FAILED:', e)
+                        _wv_qt2.BrowserView.on_download_requested = _patched_on_download_requested
+            except Exception as e:
+                print('[patch init] FAILED:', e)
 
         # Ensure WebKit2GTK GObject introspection is available on Linux
         try:
@@ -6837,7 +6882,8 @@ def start_gui_server(host="127.0.0.1", port=3000):
             pass
 
         # Determine screen dimensions dynamically if possible
-        os.environ["QT_LOGGING_RULES"] = "*.debug=false;qt.qpa.*=false"
+        if not _use_webview2:
+            os.environ["QT_LOGGING_RULES"] = "*.debug=false;qt.qpa.*=false"
         width = 1000
         height = 650
         try:
@@ -6869,6 +6915,10 @@ def start_gui_server(host="127.0.0.1", port=3000):
             zoomable=True,
             background_color=SPLASH_BACKGROUND,
         )
+        if _use_webview2:
+            # The restart is what brings a window back whose browser process
+            # died (windows_webview.failure_action); the same relaunch Settings uses.
+            windows_webview.install_handlers(window, restart=lambda: schedule_app_restart(delay=0.2))
 
         def _boot():
             def report(phase):
@@ -6909,7 +6959,7 @@ def start_gui_server(host="127.0.0.1", port=3000):
         storage_path = os.path.expanduser("~/.gilzabots/webview")
         os.makedirs(storage_path, exist_ok=True)
         
-        gui_engine = 'qt' if getattr(sys, 'frozen', False) and sys.platform == 'win32' else None
+        gui_engine = 'edgechromium' if _use_webview2 else None
         webview.start(
             func=_boot if splash else None,
             gui=gui_engine, debug=False, icon=icon_path, private_mode=False, storage_path=storage_path,
