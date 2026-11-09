@@ -650,6 +650,24 @@ def _inherit_chat_reasoning_effort(conn, name: str, source_chat_id: str, new_cha
 CHAT_MODEL_ROLES = ("model", "worker_model")
 
 
+def _validated_chat_model(role: str, model_id) -> str:
+    """Return the id to store as a chat's *role* model, or raise ``ValueError``.
+
+    An empty id is valid (the chat follows the default); a non-empty one must
+    name a catalog entry, since a chat pointed at an unknown model would fail
+    on its next turn while the selector looked saved.
+    """
+    if role not in CHAT_MODEL_ROLES:
+        raise ValueError(f"Unknown chat model role '{role}'")
+    stored = str(model_id or "").strip()
+    if stored:
+        from .models_store import get_model
+
+        if get_model(stored) is None:
+            raise ValueError(f"Model '{stored}' is not in the model catalog")
+    return stored
+
+
 @dataclass(frozen=True)
 class ChatModelResolution:
     """Which model a chat runs on, and where that choice came from.
@@ -2031,14 +2049,7 @@ class ProjectStore:
         Raises ``ValueError`` for an unknown role or model and
         :class:`ChatNotFoundError` for an unknown chat.
         """
-        if role not in CHAT_MODEL_ROLES:
-            raise ValueError(f"Unknown chat model role '{role}'")
-        stored = str(model_id or "").strip()
-        if stored:
-            from .models_store import get_model
-
-            if get_model(stored) is None:
-                raise ValueError(f"Model '{stored}' is not in the model catalog")
+        stored = _validated_chat_model(role, model_id)
         with _conn(self.db_path) as conn:
             cursor = conn.execute(
                 f"UPDATE project_chats SET {role} = ? WHERE project = ? AND id = ?",
@@ -2054,14 +2065,26 @@ class ProjectStore:
         with _conn(self.db_path) as conn:
             conn.execute("UPDATE project_chats SET core_memory = ? WHERE project = ? AND id = ?", (core_memory, name, chat_id))
 
-    def create_chat(self, name: str, chat_id: str, chat_name: str) -> str:
-        """Create an empty chat and return the reasoning effort it starts with."""
+    def create_chat(
+        self, name: str, chat_id: str, chat_name: str,
+        model: str = "", worker_model: str = "",
+    ) -> str:
+        """Create an empty chat and return the reasoning effort it starts with.
+
+        *model* / *worker_model* are the chat's own models, empty by default so
+        the chat follows the project's default. They let a model picked before
+        the chat existed (the first message is what creates it) be stored with
+        the chat itself. Both are validated like :meth:`set_chat_model` before
+        anything is written, so a refused id leaves no chat behind.
+        """
+        stored_model = _validated_chat_model("model", model)
+        stored_worker = _validated_chat_model("worker_model", worker_model)
         now = datetime.now(timezone.utc).isoformat()
         effort = NEW_CHAT_REASONING_EFFORT
         with _conn(self.db_path) as conn:
             conn.execute(
-                "INSERT INTO project_chats (id, project, name, created_at, core_memory, reasoning_effort) VALUES (?,?,?,?,?,?)",
-                (chat_id, name, chat_name, now, "", effort),
+                "INSERT INTO project_chats (id, project, name, created_at, core_memory, reasoning_effort, model, worker_model) VALUES (?,?,?,?,?,?,?,?)",
+                (chat_id, name, chat_name, now, "", effort, stored_model, stored_worker),
             )
         return effort
 

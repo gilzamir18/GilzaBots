@@ -183,12 +183,27 @@ export default function ChatPanel({
   globalModels = [],
   onRefreshModels,
   onEditModels,
+  // The models picked while no chat is open, `{ model, worker_model }`. The
+  // first message creates the chat with them (App: `createChatForTask`).
+  pendingChatModels = null,
+  onPendingChatModelChange,
 }) {
   const { t, i18n } = useTranslation();
   const { showPrompt, showAlert, showConfirm } = useCustomDialog();
   // The models this chat runs on: its own choice, else the project's default,
   // else the catalog's global default (backend: `resolve_chat_models`).
-  const chatModels = resolveChatModels({ chats, chatId: activeChatId, project: activeProject, globalModels });
+  const chatModels = resolveChatModels({
+    chats,
+    chatId: activeChatId,
+    project: activeProject,
+    globalModels,
+    chatChoice: activeChatId ? undefined : (pendingChatModels || {}),
+  });
+  // The selector value for one role: the open chat's own model, or, with no
+  // chat open, the choice waiting for the chat the first message creates.
+  const chatModelSelection = (role) => (activeChatId
+    ? chatModelChoice(chats, activeChatId, role)
+    : String(pendingChatModels?.[role] || ''));
   const historyRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -1160,7 +1175,11 @@ export default function ChatPanel({
       const res = await fetch('/api/chat/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ project_name: activeProject.name, chat_name: newChatName.trim() })
+        body: JSON.stringify({
+          project_name: activeProject.name,
+          chat_name: newChatName.trim(),
+          ...(pendingChatModels || {}),
+        })
       });
       if (!res.ok) throw new Error('Failed to create chat');
       const data = await res.json();
@@ -1624,9 +1643,15 @@ export default function ChatPanel({
   };
 
   // The model of this one chat, per role. Stored on the chat like its reasoning
-  // effort; empty hands the chat back to the project's / global default.
+  // effort; empty hands the chat back to the project's / global default. With
+  // no chat open there is nothing to store it on yet, so the choice is held
+  // until the first message creates the chat with it.
   const handleChatModelChange = async (role, modelId) => {
-    if (!activeProject || !activeChatId) return;
+    if (!activeProject) return;
+    if (!activeChatId) {
+      onPendingChatModelChange?.(role, modelId);
+      return;
+    }
     if (modelId === chatModelChoice(chats, activeChatId, role)) return;
     try {
       const res = await fetch('/api/chat/model', {
@@ -2207,12 +2232,12 @@ export default function ChatPanel({
           <span style={modelSelectorLabelStyle}>{t('chatPanel.orchestrator', 'Orchestrator')}:</span>
           <ModelSelect
             style={modelSelectorInputStyle}
-            value={chatModelChoice(chats, activeChatId, 'model')}
+            value={chatModelSelection('model')}
             onChange={(val) => handleChatModelChange('model', val)}
             globalModels={globalModels}
             onEditModels={onEditModels}
             onRefreshModels={onRefreshModels}
-            disabled={!activeProject || !activeChatId}
+            disabled={!activeProject}
             placeholder={orchestratorDefaultLabel}
           />
         </div>
@@ -2221,12 +2246,12 @@ export default function ChatPanel({
           <span style={modelSelectorLabelStyle}>{t('chatPanel.worker', 'Worker')}:</span>
           <ModelSelect
             style={modelSelectorInputStyle}
-            value={chatModelChoice(chats, activeChatId, 'worker_model')}
+            value={chatModelSelection('worker_model')}
             onChange={(val) => handleChatModelChange('worker_model', val)}
             globalModels={globalModels}
             onEditModels={onEditModels}
             onRefreshModels={onRefreshModels}
-            disabled={!activeProject || !activeChatId}
+            disabled={!activeProject}
             placeholder={workerDefaultLabel}
           />
         </div>

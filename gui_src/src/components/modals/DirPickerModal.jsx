@@ -39,6 +39,12 @@ export default function DirPickerModal({ dirPicker, onNavigate, onConfirm, onClo
           {dirPicker.current}
         </div>
 
+        {dirPicker.error && (
+          <div role="alert" style={{ color: 'var(--vscode-errorForeground, #f48771)', fontSize: '12px' }}>
+            {dirPicker.error}
+          </div>
+        )}
+
         {/* Directory list */}
         <div style={{
           overflowY: 'auto',
@@ -47,7 +53,7 @@ export default function DirPickerModal({ dirPicker, onNavigate, onConfirm, onClo
           borderRadius: '3px',
           background: 'var(--vscode-input-bg, #252526)'
         }}>
-          {dirPicker.dirs.length === 0 && (
+          {dirPicker.dirs.length === 0 && !dirPicker.error && (
             <div style={{ color: 'var(--vscode-descriptionForeground, var(--vscode-text-muted))', fontSize: '12px', padding: '12px', textAlign: 'center' }}>{t('dirPickerModal.noSubdirs')}</div>
           )}
           {dirPicker.dirs.map(d => (

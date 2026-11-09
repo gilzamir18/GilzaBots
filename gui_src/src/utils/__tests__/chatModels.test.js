@@ -76,3 +76,31 @@ test('chatsUsingModel lists each chat and role that names a model', () => {
   ]);
   assert.deepEqual(chatsUsingModel(CHATS, ''), []);
 });
+
+test('with no chat open, the pending choice stands in for the chat models', () => {
+  const r = resolveChatModels({
+    chats: CHATS,
+    chatId: '',
+    project: { model: '' },
+    globalModels: [{ id: 'ollama/chat', name: 'chat' }],
+    chatChoice: { model: 'ollama/chat', worker_model: '' },
+  });
+  assert.equal(r.model, 'ollama/chat');
+  assert.equal(r.modelSource, 'chat');
+  assert.equal(r.defaultSource, '');
+  assert.equal(r.workerModel, '');
+  assert.equal(r.workerSource, 'orchestrator');
+});
+
+test('an empty pending choice follows the defaults like a new chat would', () => {
+  const r = resolveChatModels({
+    chats: CHATS,
+    chatId: 'c2',
+    project: { model: 'ollama/project' },
+    globalModels: MODELS,
+    chatChoice: {},
+  });
+  // The choice replaces the lookup: chat c2's own models are not consulted.
+  assert.equal(r.model, 'ollama/project');
+  assert.equal(r.modelSource, 'project');
+});

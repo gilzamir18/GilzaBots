@@ -104,6 +104,7 @@ const AGENT_WRITE_TOOLS = new Set(['write_file', 'write_content_pos', 'replace_c
 // PDF included; below the backend's IDE_COMMAND_TIMEOUT, so the agent hears
 // this reason rather than "the window did not answer".
 const PDF_REVEAL_TIMEOUT_MS = 12000;
+const EMPTY_PENDING_CHAT_MODELS = Object.freeze({ model: '', worker_model: '' });
 
 const normalizeEditorPathKey = (filePath, caseInsensitive = false) => {
   if (!filePath) return '';
@@ -660,6 +661,19 @@ export default function App() {
   // would render a selector value that matches no option while the body showed
   // whatever chat the server fell back to.
   const [activeChatId, setActiveChatId] = useState('');
+  // Models picked in the chat toolbar while no chat is open. A chat model is
+  // stored on the chat, and a project may have none until the first message
+  // creates one, so the choice waits here and that chat is created with it.
+  const [pendingChatModels, setPendingChatModels] = useState(EMPTY_PENDING_CHAT_MODELS);
+  const handlePendingChatModelChange = useCallback((role, modelId) => {
+    setPendingChatModels(prev => ({ ...prev, [role]: String(modelId || '').trim() }));
+  }, []);
+  // The pending choice belongs to the chat about to be created in this
+  // project: it is dropped once a chat is open (that chat now holds its own
+  // models) or when another project is opened.
+  useEffect(() => {
+    setPendingChatModels(EMPTY_PENDING_CHAT_MODELS);
+  }, [activeProject?.name, activeChatId]);
   // Read by asynchronous loads to discard a result that arrives after the user
   // has already moved to another chat.
   const activeChatIdRef = useRef('');
@@ -1181,7 +1195,7 @@ export default function App() {
     const res = await fetch('/api/chat/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ project_name: activeProject.name, chat_name: chatName }),
+      body: JSON.stringify({ project_name: activeProject.name, chat_name: chatName, ...pendingChatModels }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
@@ -3030,21 +3044,36 @@ export default function App() {
   };
 
   // ── Dir picker ────────────────────────────────────────────────────────────
+  // The server returns the parent/drive entries even when the folder itself
+  // cannot be listed, plus an error describing why the listing failed.
+  const fetchDirListing = async (path) => {
+    const res = await fetch('/api/fs/dirs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) });
+    const data = await res.json();
+    let error = '';
+    if (!res.ok) {
+      error = res.status === 403
+        ? t('dirPickerModal.permissionDenied')
+        : t('dirPickerModal.listError', { error: data.error || t('app.unknownError') });
+    }
+    return { current: data.current || path, dirs: data.dirs || [], error };
+  };
+
   const openDirPicker = async (target, startPath) => {
     const path = startPath || '~';
     try {
-      const res = await fetch('/api/fs/dirs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) });
-      const data = await res.json();
-      setDirPicker({ target, current: data.current, dirs: data.dirs || [] });
-    } catch (e) { setDirPicker({ target, current: path, dirs: [] }); }
+      setDirPicker({ target, ...(await fetchDirListing(path)) });
+    } catch (e) {
+      setDirPicker({ target, current: path, dirs: [], error: t('dirPickerModal.listError', { error: e.message }) });
+    }
   };
 
   const navigateDirPicker = async (path) => {
     try {
-      const res = await fetch('/api/fs/dirs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path }) });
-      const data = await res.json();
-      setDirPicker(prev => ({ ...prev, current: data.current, dirs: data.dirs || [] }));
-    } catch (e) { }
+      const listing = await fetchDirListing(path);
+      setDirPicker(prev => ({ ...prev, ...listing }));
+    } catch (e) {
+      setDirPicker(prev => ({ ...prev, error: t('dirPickerModal.listError', { error: e.message }) }));
+    }
   };
 
   const updateActiveGitRoot = async (gitRootPath) => {
@@ -5392,6 +5421,8 @@ export default function App() {
               globalModels={globalModels}
               onRefreshModels={fetchGlobalModels}
               onEditModels={() => setShowEditModelsModal(true)}
+              pendingChatModels={pendingChatModels}
+              onPendingChatModelChange={handlePendingChatModelChange}
             />
           )}
           <div
@@ -5491,6 +5522,8 @@ export default function App() {
               globalModels={globalModels}
               onRefreshModels={fetchGlobalModels}
               onEditModels={() => setShowEditModelsModal(true)}
+              pendingChatModels={pendingChatModels}
+              onPendingChatModelChange={handlePendingChatModelChange}
             />
 
             {(isLoadingChat || isPending) && (

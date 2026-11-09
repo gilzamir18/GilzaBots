@@ -373,3 +373,59 @@ def test_the_default_endpoint_marks_the_global_default(api, catalog):
     status, body = api("GET", "/api/settings/models")
     assert status == 200
     assert {m["id"]: m["is_default"] for m in body["models"]}["ollama/project"] is True
+
+
+# ── A model picked before the chat exists ────────────────────────────────────
+#
+# A project may have no chat until the first message creates one, and a chat's
+# model is stored on the chat. The toolbar holds the choice made with no chat
+# open and creates the chat with it, so the store and the create endpoint take
+# the initial models.
+
+
+def test_a_chat_can_be_created_with_its_own_models(store):
+    store.create_chat("p", "c3", "Chat 3", model="ollama/chat", worker_model="ollama/worker")
+
+    resolution = resolve_chat_models(store.load("p", chat_id="c3"))
+    assert (resolution.model, resolution.model_source) == ("ollama/chat", "chat")
+    assert (resolution.worker_model, resolution.worker_source) == ("ollama/worker", "chat")
+    assert store.load("p").model == ""   # the project's default is untouched
+
+
+def test_creating_a_chat_with_an_unknown_model_leaves_no_chat(store):
+    with pytest.raises(ValueError):
+        store.create_chat("p", "c3", "Chat 3", model="ollama/not-registered")
+    with pytest.raises(ValueError):
+        store.create_chat("p", "c3", "Chat 3", worker_model="ollama/not-registered")
+    assert "c3" not in store.list_chat_models("p")
+
+
+def test_the_create_endpoint_stores_the_models_picked_before_the_chat(api, store):
+    status, body = api("POST", "/api/chat/create", {
+        "project_name": "p", "chat_name": "New Chat",
+        "model": "ollama/chat", "worker_model": "ollama/worker",
+    })
+
+    assert status == 200
+    assert (body["model"], body["worker_model"]) == ("ollama/chat", "ollama/worker")
+    assert store.list_chat_models("p")[body["id"]] == {
+        "model": "ollama/chat", "worker_model": "ollama/worker",
+    }
+
+
+def test_the_create_endpoint_without_models_follows_the_default(api, store):
+    status, body = api("POST", "/api/chat/create", {"project_name": "p", "chat_name": "New Chat"})
+
+    assert status == 200
+    assert (body["model"], body["worker_model"]) == ("", "")
+    assert store.load("p", chat_id=body["id"]).active_model == "ollama/global"
+
+
+def test_the_create_endpoint_refuses_an_unknown_model(api, store):
+    before = set(store.list_chat_models("p"))
+    status, body = api("POST", "/api/chat/create", {
+        "project_name": "p", "chat_name": "New Chat", "model": "ollama/unknown",
+    })
+
+    assert status == 400 and "not in the model catalog" in body["error"]
+    assert set(store.list_chat_models("p")) == before

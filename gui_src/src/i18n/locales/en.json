@@ -1083,7 +1083,9 @@
     "title": "Select Directory",
     "noSubdirs": "No subdirectories",
     "cancel": "Cancel",
-    "selectFolder": "Select this folder"
+    "selectFolder": "Select this folder",
+    "permissionDenied": "You do not have permission to list this folder. Use \"..\" to go back.",
+    "listError": "Unable to list this folder: {{error}}"
   },
   "moveToModal": {
     "title": "Move to...",

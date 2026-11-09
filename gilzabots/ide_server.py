@@ -160,6 +160,23 @@ async def _chat_context_usage(store, project, chat_id: str) -> dict | None:
         return None
 
 
+def _prefetch_local_ollama_model(model_id: str) -> None:
+    """Start pulling *model_id* when it is served by the local Ollama.
+
+    Same pre-fetch as a project model change (PROJECT_DESIGN §2.8); callers
+    invoke it only when a chat's model actually changes.
+    """
+    if not model_id or not model_id.startswith("ollama/"):
+        return
+    from gilzabots.config import is_local_model
+    from gilzabots.models_store import get_model
+
+    entry = get_model(model_id) or {}
+    if is_local_model(model_id, entry.get("api_base", "")):
+        from gilzabots.ollama_manager import pull_model_in_background
+        pull_model_in_background(model_id.split("ollama/", 1)[1])
+
+
 def _ollama_tags_url_for_model_info(model_name: str, api_base: str | None = "") -> str:
     """Return the Ollama /api/tags URL for model validation."""
     from gilzabots.config import (
@@ -2296,22 +2313,26 @@ class AsyncHTTPServer:
                 if not os.path.exists(req_path) or not os.path.isdir(req_path):
                     req_path = os.path.expanduser("~")
 
-            try:
-                entries = []
-                # Parent directory entry (except filesystem root)
-                parent = os.path.dirname(req_path)
-                if parent != req_path:
-                    entries.append({"name": "..", "path": parent})
-                else:
-                    # At filesystem root. If Windows, list available drives so user can switch.
-                    import sys
-                    if sys.platform == 'win32':
-                        import string
-                        for d in string.ascii_uppercase:
-                            drive = f"{d}:\\"
-                            if drive != req_path and os.path.exists(drive):
-                                entries.append({"name": f".. (Unidade {d}:)", "path": drive})
+            # Navigation entries do not depend on reading req_path, so they are
+            # built first and returned even when the listing fails. Otherwise an
+            # unreadable folder (e.g. the Windows "My Documents" compatibility
+            # junction, whose ACL denies listing) leaves the picker with no way out.
+            nav_entries = []
+            parent = os.path.dirname(req_path)
+            if parent != req_path:
+                nav_entries.append({"name": "..", "path": parent})
+            else:
+                # At filesystem root. If Windows, list available drives so user can switch.
+                import sys
+                if sys.platform == 'win32':
+                    import string
+                    for d in string.ascii_uppercase:
+                        drive = f"{d}:\\"
+                        if drive != req_path and os.path.exists(drive):
+                            nav_entries.append({"name": f".. (Unidade {d}:)", "path": drive})
 
+            try:
+                entries = list(nav_entries)
                 for name in sorted(os.listdir(req_path)):
                     if name.startswith('.'):
                         continue
@@ -2320,9 +2341,9 @@ class AsyncHTTPServer:
                         entries.append({"name": name, "path": full})
                 self.send_response(writer, 200, json.dumps({"current": req_path, "dirs": entries}).encode('utf-8'), "application/json")
             except PermissionError:
-                self.send_response(writer, 403, json.dumps({"error": "Permission denied", "current": req_path, "dirs": []}).encode('utf-8'), "application/json")
+                self.send_response(writer, 403, json.dumps({"error": "Permission denied", "current": req_path, "dirs": nav_entries}).encode('utf-8'), "application/json")
             except Exception as e:
-                self.send_response(writer, 500, json.dumps({"error": str(e), "current": req_path, "dirs": []}).encode('utf-8'), "application/json")
+                self.send_response(writer, 500, json.dumps({"error": str(e), "current": req_path, "dirs": nav_entries}).encode('utf-8'), "application/json")
 
         # Hardware Inference Endpoints
         elif path == '/api/monitors' or path.startswith('/api/monitors/'):
@@ -2988,15 +3009,8 @@ class AsyncHTTPServer:
             except ValueError as e:
                 self.send_response(writer, 400, json.dumps({"error": str(e)}).encode(), "application/json")
                 return
-            # Same pre-fetch as a project model change (§2.8): only on an actual
-            # change, and only for a model served by the local Ollama.
-            if stored and stored != previous and stored.startswith("ollama/"):
-                from gilzabots.config import is_local_model
-                from gilzabots.models_store import get_model
-                entry = get_model(stored) or {}
-                if is_local_model(stored, entry.get("api_base", "")):
-                    from gilzabots.ollama_manager import pull_model_in_background
-                    pull_model_in_background(stored.split("ollama/", 1)[1])
+            if stored != previous:
+                _prefetch_local_ollama_model(stored)
             self.send_response(writer, 200, json.dumps({
                 "status": "ok", "chat_id": chat_id, "role": role, "model": stored,
             }).encode(), "application/json")
@@ -3309,11 +3323,26 @@ class AsyncHTTPServer:
                 self.send_response(writer, 400, b'{"error":"project_name and chat_name required"}', "application/json")
                 return
             chat_id = str(uuid.uuid4())
-            effort = store.create_chat(project_name, chat_id, chat_name)
-            # A new chat names no model: it follows the project's default.
+            # A new chat names no model unless the caller supplies one: the
+            # model picked in the chat toolbar before the chat existed (the
+            # first message is what creates it). Empty follows the default.
+            try:
+                effort = store.create_chat(
+                    project_name, chat_id, chat_name,
+                    model=data.get("model") or "",
+                    worker_model=data.get("worker_model") or "",
+                )
+            except ValueError as e:
+                self.send_response(writer, 400, json.dumps({"error": str(e)}).encode(), "application/json")
+                return
+            chat_models = store.list_chat_models(project_name).get(chat_id, {})
+            model = chat_models.get("model", "")
+            worker_model = chat_models.get("worker_model", "")
+            for stored in (model, worker_model):
+                _prefetch_local_ollama_model(stored)
             self.send_response(writer, 200, json.dumps({
                 "id": chat_id, "name": chat_name, "reasoning_effort": effort,
-                "model": "", "worker_model": "",
+                "model": model, "worker_model": worker_model,
             }).encode(), "application/json")
 
         # 6a-bis. Built-in tutorial chat.

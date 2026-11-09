@@ -1083,7 +1083,9 @@
     "title": "Selecionar Diretório",
     "noSubdirs": "Nenhum subdiretório",
     "cancel": "Cancelar",
-    "selectFolder": "Selecionar esta pasta"
+    "selectFolder": "Selecionar esta pasta",
+    "permissionDenied": "Sem permissão para listar esta pasta. Use \"..\" para voltar.",
+    "listError": "Não foi possível listar esta pasta: {{error}}"
   },
   "moveToModal": {
     "title": "Mover para...",

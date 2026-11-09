@@ -50,9 +50,16 @@ export function chatsUsingModel(chats, modelId) {
  * 'orchestrator' (worker: follows the orchestrator). `defaultModel` and
  * `defaultSource` describe what the chat falls back to when it names no model,
  * so a selector can say which default it is using.
+ *
+ * `chatChoice` (`{ model, worker_model }`) stands in for the chat's own
+ * models when there is no chat yet: the choice made in the toolbar before the
+ * first message creates the chat, which then stores it.
  */
-export function resolveChatModels({ chats, chatId, project, globalModels }) {
-  const chatModel = chatModelChoice(chats, chatId, 'model');
+export function resolveChatModels({ chats, chatId, project, globalModels, chatChoice }) {
+  const choiceFor = role => (chatChoice
+    ? String(chatChoice[role] || '').trim()
+    : chatModelChoice(chats, chatId, role));
+  const chatModel = choiceFor('model');
   const projectModel = String(project?.model || '').trim();
   const globalModel = globalDefaultModelId(globalModels);
 
@@ -61,7 +68,7 @@ export function resolveChatModels({ chats, chatId, project, globalModels }) {
   const model = chatModel || defaultModel;
   const modelSource = chatModel ? 'chat' : defaultSource;
 
-  const chatWorker = chatModelChoice(chats, chatId, 'worker_model');
+  const chatWorker = choiceFor('worker_model');
   const projectWorker = String(project?.worker_model || '').trim();
   const workerDefault = projectWorker;
   const workerDefaultSource = projectWorker ? 'project' : 'orchestrator';
