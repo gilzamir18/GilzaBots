@@ -83,7 +83,7 @@ def is_enabled() -> bool:
 _DDGS_MIN_INTERVAL_S = 2.0   # minimum gap between the end of one search and the start of the next
 _DDGS_QUEUE_TIMEOUT_S = 15.0  # how long a search waits for earlier ones before giving up
 _DDGS_LOCK = threading.Lock()
-_ddgs_state: dict[str, Any] = {"cls": None, "client": None, "last_finished": 0.0}
+_ddgs_state: dict[str, Any] = {"cls": None, "client": None, "last_finished": float("-inf")}
 
 
 def _ddgs_class() -> Any:
@@ -165,7 +165,7 @@ def _ddg_search(query: str, max_results: int) -> str:
             "issue web searches one after another rather than in parallel."
         )
     try:
-        wait = _DDGS_MIN_INTERVAL_S - (time.monotonic() - _ddgs_state["last_finished"])
+        wait = _DDGS_MIN_INTERVAL_S - (time.perf_counter() - _ddgs_state["last_finished"])
         if wait > 0:
             time.sleep(wait)
         try:
@@ -173,7 +173,7 @@ def _ddg_search(query: str, max_results: int) -> str:
         except Exception as exc:
             return _ddgs_error_message(query, exc)
         finally:
-            _ddgs_state["last_finished"] = time.monotonic()
+            _ddgs_state["last_finished"] = time.perf_counter()
     finally:
         _DDGS_LOCK.release()
 

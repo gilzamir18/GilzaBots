@@ -199,7 +199,7 @@ def test_ddg_searches_are_spaced_by_min_interval(monkeypatch):
     starts = []
 
     def fake_text(query, max_results):
-        starts.append(time.monotonic())
+        starts.append(time.perf_counter())
         return [{"title": query, "href": "https://e.com", "body": "b"}]
 
     with patch(_ddgs_patch_target()) as MockDDGS:
