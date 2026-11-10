@@ -26,15 +26,25 @@ def _parse_arguments(arguments: Any) -> Optional[Dict[str, Any]]:
     return parsed if isinstance(parsed, dict) else None
 
 
-def tools_accepting_arguments(arguments: Any, tool_schemas: Iterable[Dict[str, Any]]) -> List[str]:
+def tools_accepting_arguments(
+    arguments: Any,
+    tool_schemas: Iterable[Dict[str, Any]],
+    *,
+    include_optional_only: bool = False,
+) -> List[str]:
     """Return the names of the tools whose parameters exactly fit ``arguments``.
 
     A tool fits when every key of the argument object is one of its declared
-    parameters and every required parameter is present. Tools that declare no
-    required parameter never fit: almost any object is a subset of their
-    optional keys, so a match would carry no information. ``arguments`` may be
-    a dict or a JSON string; anything that is not a non-empty object fits
-    nothing.
+    parameters and every required parameter is present. By default, tools that
+    declare no required parameter never fit: almost any object is a subset of
+    their optional keys, so a match would carry no information. ``arguments``
+    may be a dict or a JSON string; anything that is not a non-empty object
+    fits nothing.
+
+    ``include_optional_only=True`` lets such tools fit too, on the same
+    every-key-declared rule. Use it only when other evidence already says the
+    object stands for a call -- for example, when it is the *whole* of a
+    model's reply rather than a fragment found inside prose.
 
     This identifies which tool an argument object was written for. It is a
     diagnostic, not a dispatcher: callers must not execute a tool on its answer.
@@ -49,7 +59,9 @@ def tools_accepting_arguments(arguments: Any, tool_schemas: Iterable[Dict[str, A
         parameters = (schema.get("function") or {}).get("parameters") or {}
         properties = set((parameters.get("properties") or {}).keys())
         required = set(parameters.get("required") or [])
-        if name and required and required <= keys <= properties:
+        if not name or not (required or include_optional_only):
+            continue
+        if required <= keys <= properties:
             matches.append(name)
     return matches
 

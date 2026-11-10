@@ -1118,6 +1118,13 @@ def _has_unfenced_tool_call_payload(response: str, tool_schemas=()) -> bool:
     tool-call markers at all, so it is recognized by fitting a tool's parameter
     schema exactly (`tools_accepting_arguments`) -- and, like the other two
     encodings, it is never executed on that basis.
+
+    A tool with only optional parameters is not matched against objects found
+    inside prose, where any small object would fit it. It is matched when the
+    unfenced response *is* that object and nothing else: observed with
+    ``ollama_chat/gpt-oss:120b-cloud``, whose whole answer was
+    ``{"max_depth": 3}`` -- the arguments of ``get_project_overview``, whose
+    one parameter is optional.
     """
     from agenticblocks.utils.tool_calls import tools_accepting_arguments
     from gilzabots.memgpt_runtime import _iter_json_spans, _strip_serialized_tool_calls
@@ -1136,7 +1143,11 @@ def _has_unfenced_tool_call_payload(response: str, tool_schemas=()) -> bool:
             continue
         if tools_accepting_arguments(parsed, schemas):
             return True
-    return False
+    try:
+        whole = json.loads(unfenced.strip())
+    except Exception:
+        return False
+    return bool(tools_accepting_arguments(whole, schemas, include_optional_only=True))
 
 
 def _agent_tool_schemas(agent) -> list[dict]:

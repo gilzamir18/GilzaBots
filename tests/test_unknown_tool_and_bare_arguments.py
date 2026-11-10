@@ -262,3 +262,60 @@ def test_unknown_tool_is_reported_in_problems_only(monkeypatch):
 
     assert [event for event, _ in events] == ["problem"], "never in the Thinking stream"
     assert "expressions?" in events[0][1]["message"]
+
+
+# ── 4. A whole answer that is the arguments of an optional-only tool ─────────
+#
+# Observed with `ollama_chat/gpt-oss:120b-cloud`: the chat orchestrator's whole
+# answer (and its Reflection entry) was `{"max_depth": 3}`, the arguments of
+# `get_project_overview`, whose only parameter is optional. The strict fit above
+# rejects optional-only tools, so the object reached the chat.
+
+OBSERVED_OPTIONAL_ONLY = '{\n  "max_depth": 3\n}'
+
+
+def test_optional_only_tools_fit_when_asked_to(schemas):
+    assert tools_accepting_arguments('{"limit": 3}', schemas, include_optional_only=True) == ["list_things"]
+    assert tools_accepting_arguments('{"limit": 3, "x": 1}', schemas, include_optional_only=True) == []
+    assert tools_accepting_arguments("{}", schemas, include_optional_only=True) == []
+
+
+def test_include_optional_only_keeps_the_required_rule(schemas):
+    assert tools_accepting_arguments('{"options": ["a"]}', schemas, include_optional_only=True) == []
+    assert tools_accepting_arguments(OBSERVED_ARGUMENTS, schemas, include_optional_only=True) == ["ask_question"]
+
+
+def test_detector_catches_the_observed_optional_only_answer():
+    from gilzabots.agent_stdin import _has_unfenced_tool_call_payload, wrap_tool
+    from gilzabots.tools import get_project_overview
+
+    real = [block_to_tool_schema(wrap_tool(get_project_overview))]
+
+    assert _has_unfenced_tool_call_payload(OBSERVED_OPTIONAL_ONLY, real)
+    assert _has_unfenced_tool_call_payload("  " + OBSERVED_OPTIONAL_ONLY + "\n", real)
+
+
+@pytest.mark.parametrize("response", [
+    'The limit is {"limit": 3}.',                # inside prose: still not a call
+    'Use {"limit": 3}\nas the default.',
+    "```json\n{\"limit\": 3}\n```",              # shown on purpose, fenced
+    '{"limit": 3, "debug": true}',               # an undeclared key
+    '{"retries": 3}',                            # fits no tool
+])
+def test_optional_only_fit_needs_the_whole_unfenced_answer(schemas, response):
+    from gilzabots.agent_stdin import _has_unfenced_tool_call_payload
+
+    assert not _has_unfenced_tool_call_payload(response, schemas)
+
+
+def test_optional_only_arguments_as_the_answer_are_pushed_back(monkeypatch):
+    corrected, agent = _correct('{"limit": 3}', ["Here are the things."], monkeypatch)
+
+    assert corrected == "Here are the things."
+    assert len(agent.prompts) == 1
+    assert agent.prompts[0].role == "system"
+
+
+def test_optional_only_arguments_that_never_go_away_fail_loudly(monkeypatch):
+    with pytest.raises(RuntimeError):
+        _correct('{"limit": 3}', ['{"limit": 3}'] * 5, monkeypatch)
